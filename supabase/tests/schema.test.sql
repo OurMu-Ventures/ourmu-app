@@ -1,8 +1,11 @@
 begin;
-select plan(24);
+select plan(27);
 select has_schema('private','private identity schema exists');
 select has_table('public','profiles','profiles exists');
 select has_table('private','investor_identities','identities are isolated');
+select ok(has_schema_privilege('authenticated','private','USAGE'),'authenticated users can resolve the admin policy helper');
+select ok(has_schema_privilege('service_role','private','USAGE'),'service role can run maintenance against private identity data');
+select ok(not has_schema_privilege('anon','private','USAGE'),'anonymous users cannot resolve the private schema');
 select has_table('public','investment_cycles','cycles exist');
 select has_table('public','investments','investments exist');
 select has_table('public','bank_receipts','bank receipts exist');
