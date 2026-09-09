@@ -21,6 +21,11 @@ import { activateInvestment, requestInvestment } from "@/actions/investments";
 import { requestAccountClosure, saveNextOfKin } from "@/actions/profile";
 import { ActionButton } from "@/components/ActionButton";
 import { StateMessage } from "@/components/StateMessage";
+import {
+  AGREEMENT_TEMPLATE,
+  AGREEMENT_TITLE,
+  LEGAL_CONTENT_VERSION,
+} from "@/content/legal";
 import { initialActionState } from "@/lib/validation";
 
 export function MagicLinkForm() {
@@ -197,7 +202,7 @@ export function NextOfKinForm({
           required
         />
       </label>
-      <ActionButton>Save next of kin</ActionButton>
+      <ActionButton>Save beneficiary contact</ActionButton>
       <StateMessage state={state} />
     </form>
   );
@@ -309,15 +314,21 @@ export function AgreementVersionForm() {
     <form className="form" action={action}>
       <label>
         Version
-        <input name="version" placeholder="2026-01" required />
+        <input name="version" defaultValue={LEGAL_CONTENT_VERSION} required />
       </label>
       <label>
         Agreement title
-        <input name="title" required />
+        <input name="title" defaultValue={AGREEMENT_TITLE} required />
       </label>
       <label>
         Approved template
-        <textarea name="template" minLength={500} required />
+        <textarea
+          name="template"
+          minLength={500}
+          defaultValue={AGREEMENT_TEMPLATE}
+          rows={24}
+          required
+        />
       </label>
       <label className="checkbox">
         <input name="legalConfirmation" type="checkbox" value="yes" required />

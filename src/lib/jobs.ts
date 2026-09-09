@@ -75,7 +75,7 @@ async function generateAgreement(investmentId: string) {
   const { data: investment } = await admin
     .from("investments")
     .select(
-      "id,units,principal_ugx,projected_value_ugx,maturity_date,investor_id",
+      "id,units,principal_ugx,projected_return_ugx,projected_value_ugx,maturity_date,investor_id",
     )
     .eq("id", investmentId)
     .single();
@@ -107,8 +107,10 @@ async function generateAgreement(investmentId: string) {
     title: version.title,
     template: version.template_markdown,
     investorName: profile.legal_name,
+    investorEmail: profile.email,
     units: investment.units,
     principalUgx: Number(investment.principal_ugx),
+    projectedReturnUgx: Number(investment.projected_return_ugx),
     projectedValueUgx: Number(investment.projected_value_ugx),
     maturityDate: investment.maturity_date,
     acceptedAt: acceptance.accepted_at,
