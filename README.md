@@ -41,6 +41,6 @@ npm run test:e2e
 
 `npm run release:check` intentionally fails until all legal and operational launch-gate variables are supplied. This is not a defect: counsel-approved agreement/privacy/risk text and verified production services are required before promoting `our-mu.com`.
 
-Supabase's built-in email service is temporary and must not be used for external investor onboarding: it is restricted to project-team recipients, rate-limited, and has no delivery SLA. Keep invitations internal until Resend custom SMTP and transactional email are configured.
+Supabase's built-in email service is temporary: it is restricted to project-team recipients, rate-limited, and has no delivery SLA. A deliberately enabled manual-link mode may be used for one controlled external acceptance tester. It displays each application or first-login link once to an MFA-authenticated administrator; links must be shared privately and never logged. Disable this mode and configure Resend custom SMTP and transactional email before general investor onboarding.
 
 Never commit `.env.local`, service-role keys, database URLs, age identities, invite tokens, magic links, bank references, or plaintext NIN values. Do not paste them into issues, logs, CI output, or chat.
