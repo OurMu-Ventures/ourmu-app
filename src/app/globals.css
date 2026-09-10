@@ -22,7 +22,8 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family:
-    Inter,
+    "Open Sans",
+    var(--font-open-sans),
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -430,10 +431,15 @@ th {
   font-weight: 700;
 }
 .legal {
-  font-family: Georgia, serif;
+  font-family:
+    "Open Sans",
+    var(--font-open-sans),
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
 }
 .legal h1 {
-  font-family: var(--font-geist-sans);
+  font-family: var(--font-open-sans);
   font-size: clamp(2.2rem, 5vw, 4rem);
 }
 .legal-banner {
@@ -441,7 +447,7 @@ th {
   border: 1px solid #d8b865;
   padding: 1rem;
   border-radius: 0.8rem;
-  font-family: var(--font-geist-sans);
+  font-family: var(--font-open-sans);
 }
 @media (max-width: 850px) {
   .hero {

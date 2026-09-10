@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
+import { Open_Sans } from "next/font/google";
 import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
+
+const openSans = Open_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-open-sans",
+});
 
 export const metadata: Metadata = {
   title: { default: "OURMU Investor Portal", template: "%s · OURMU" },
@@ -10,8 +17,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className={openSans.variable}>
+      <body className={openSans.className}>
         <a className="skip-link" href="#main">
           Skip to content
         </a>
