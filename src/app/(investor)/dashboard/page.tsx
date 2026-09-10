@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requireInvestor } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { LinkStatus } from "@/components/ui/link-status";
 import { date, dateTime, ugx, units } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -53,7 +55,9 @@ export default async function DashboardPage() {
         <div className="notice">
           <strong>Finish onboarding.</strong> KYC verification and next-of-kin
           details are required before requesting an investment.{" "}
-          <Link href="/profile">Complete profile</Link>
+          <Link href="/profile">
+            Complete profile <LinkStatus label="Opening profile" />
+          </Link>
         </div>
       )}
       <div className="portfolio-summary">
@@ -89,9 +93,12 @@ export default async function DashboardPage() {
             <h2>{cycle?.name ?? "No cycle is open"}</h2>
           </div>
           {cycle && eligible && (
-            <Link className="button" href="/investments/new">
-              Request investment
-            </Link>
+            <Button asChild>
+              <Link href="/investments/new">
+                Request investment{" "}
+                <LinkStatus label="Opening investment form" />
+              </Link>
+            </Button>
           )}
         </div>
         {cycle && (
@@ -114,9 +121,12 @@ export default async function DashboardPage() {
             <p className="eyebrow">Placement history</p>
             <h2>Your active and past cycles</h2>
           </div>
-          <Link className="button-secondary" href="/investments">
-            View all placements
-          </Link>
+          <Button asChild variant="secondary">
+            <Link href="/investments">
+              View all placements{" "}
+              <LinkStatus label="Opening investments" />
+            </Link>
+          </Button>
         </div>
         <div className="cycle-list">
           {(investments ?? []).map((item) => {
@@ -150,7 +160,10 @@ export default async function DashboardPage() {
                       )}
                     </strong>
                   </p>
-                  <Link href={`/investments/${item.id}`}>View details</Link>
+                  <Link href={`/investments/${item.id}`}>
+                    View details{" "}
+                    <LinkStatus label="Opening investment details" />
+                  </Link>
                 </div>
               </article>
             );

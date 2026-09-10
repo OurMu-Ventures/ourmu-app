@@ -1,22 +1,23 @@
 import Link from "next/link";
-const investorLinks = [
-  ["/dashboard", "Overview"],
-  ["/profile", "Profile"],
-  ["/investments/new", "Invest"],
-  ["/investments", "Investments"],
-  ["/account/closure", "Close account"],
+import { LinkStatus } from "@/components/ui/link-status";
+const investorLinks: [string, string, string][] = [
+  ["/dashboard", "Overview", "Opening overview"],
+  ["/profile", "Profile", "Opening profile"],
+  ["/investments/new", "Invest", "Opening investment form"],
+  ["/investments", "Investments", "Opening investments"],
+  ["/account/closure", "Close account", "Opening account closure"],
 ];
-const adminLinks = [
-  ["/admin", "Admin overview"],
-  ["/admin/invitations", "Invitations"],
-  ["/admin/applications", "Applications"],
-  ["/admin/investors", "Investors"],
-  ["/admin/imports", "Imports"],
-  ["/admin/cycles", "Cycles"],
-  ["/admin/investments", "Activations"],
-  ["/admin/audit", "Audit"],
-  ["/admin/jobs", "Jobs"],
-  ["/admin/settings", "Settings"],
+const adminLinks: [string, string, string][] = [
+  ["/admin", "Admin overview", "Opening admin overview"],
+  ["/admin/invitations", "Invitations", "Opening invitations"],
+  ["/admin/applications", "Applications", "Opening applications"],
+  ["/admin/investors", "Investors", "Opening investors"],
+  ["/admin/imports", "Imports", "Opening imports"],
+  ["/admin/cycles", "Cycles", "Opening cycles"],
+  ["/admin/investments", "Activations", "Opening activations"],
+  ["/admin/audit", "Audit", "Opening audit log"],
+  ["/admin/jobs", "Jobs", "Opening jobs"],
+  ["/admin/settings", "Settings", "Opening settings"],
 ];
 export function AppShell({
   children,
@@ -32,9 +33,9 @@ export function AppShell({
         className="side-nav"
         aria-label={admin ? "Administration" : "Investor portal"}
       >
-        {links.map(([href, label]) => (
+        {links.map(([href, label, status]) => (
           <Link href={href} key={href}>
-            {label}
+            {label} <LinkStatus label={status} />
           </Link>
         ))}
       </nav>

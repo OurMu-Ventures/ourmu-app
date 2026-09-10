@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { cancelInvestment } from "@/actions/investments";
+import { Button } from "@/components/ui/button";
+import { LinkStatus } from "@/components/ui/link-status";
 import { requireInvestor } from "@/lib/auth";
 import { date, dateTime, ugx, units } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -19,9 +21,11 @@ export default async function InvestmentsPage() {
           <p className="eyebrow">Portfolio records</p>
           <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investments</h1>
         </div>
-        <Link className="button" href="/investments/new">
-          Request investment
-        </Link>
+        <Button asChild>
+          <Link href="/investments/new">
+            Request investment <LinkStatus label="Opening investment form" />
+          </Link>
+        </Button>
       </div>
       <div className="table-wrap">
         <table>
@@ -56,7 +60,9 @@ export default async function InvestmentsPage() {
                     : date(item.maturity_date)}
                 </td>
                 <td>
-                  <Link href={`/investments/${item.id}`}>View</Link>
+                  <Link href={`/investments/${item.id}`}>
+                    View <LinkStatus label="Opening investment details" />
+                  </Link>
                   {item.status === "reserved" && (
                     <form
                       action={cancelInvestment}

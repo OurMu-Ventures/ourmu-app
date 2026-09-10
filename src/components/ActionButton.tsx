@@ -1,6 +1,5 @@
 "use client";
-import { useFormStatus } from "react-dom";
-import { Button } from "@/components/ui/button";
+import { PendingButton } from "@/components/ui/pending-button";
 export function ActionButton({
   children,
   danger = false,
@@ -8,10 +7,12 @@ export function ActionButton({
   children: React.ReactNode;
   danger?: boolean;
 }) {
-  const { pending } = useFormStatus();
   return (
-    <Button variant={danger ? "danger" : "default"} disabled={pending} type="submit">
-      {pending ? "Working…" : children}
-    </Button>
+    <PendingButton
+      variant={danger ? "danger" : "default"}
+      pendingLabel="Working…"
+    >
+      {children}
+    </PendingButton>
   );
 }
