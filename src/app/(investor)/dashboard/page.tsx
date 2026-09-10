@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireInvestor } from "@/lib/auth";
-import { date, dateTime, ugx } from "@/lib/format";
+import { date, dateTime, ugx, units } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -33,20 +33,25 @@ export default async function DashboardPage() {
     (sum, item) => sum + Number(item.projected_value_ugx),
     0,
   );
+  const totalUnits = (investments ?? []).reduce(
+    (sum, item) => sum + Number(item.units),
+    0,
+  );
+  const eligible = profile.kyc_status === "verified" && Boolean(kin);
   return (
     <>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Welcome back.</h1>
-      {!kin && (
+      {!eligible && (
         <div className="notice">
-          <strong>Finish onboarding.</strong> Add next-of-kin details before
-          requesting an investment.{" "}
+          <strong>Finish onboarding.</strong> KYC verification and next-of-kin
+          details are required before requesting an investment.{" "}
           <Link href="/profile">Complete profile</Link>
         </div>
       )}
       <div className="grid">
         <article className="card">
-          <p className="muted">Reserved + active</p>
-          <p className="stat">{investments?.length ?? 0}</p>
+          <p className="muted">Reserved + active units</p>
+          <p className="stat">{units(totalUnits)}</p>
         </article>
         <article className="card">
           <p className="muted">Principal</p>
@@ -63,9 +68,9 @@ export default async function DashboardPage() {
             <p className="eyebrow">Current opportunity</p>
             <h2>{cycle?.name ?? "No cycle is open"}</h2>
           </div>
-          {cycle && kin && (
+          {cycle && eligible && (
             <Link className="button" href="/investments/new">
-              Request units
+              Request investment
             </Link>
           )}
         </div>

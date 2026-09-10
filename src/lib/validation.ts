@@ -29,13 +29,21 @@ export const nextOfKinSchema = z.object({
 });
 export const investmentRequestSchema = z.object({
   cycleId: z.uuid(),
-  units: z.coerce.number().int().min(1).max(500),
+  principalUgx: z
+    .string()
+    .trim()
+    .regex(/^\d+(?:\.\d{1,2})?$/)
+    .refine((value) => Number(value) >= 125_000 && Number(value) <= 62_500_000),
   agreementAccepted: z.literal("yes"),
 });
 export const activationSchema = z.object({
   investmentId: z.uuid(),
   bankReference: z.string().trim().min(3).max(120),
-  receivedAmountUgx: z.coerce.number().int().positive().safe(),
+  receivedAmountUgx: z
+    .string()
+    .trim()
+    .regex(/^\d+(?:\.\d{1,8})?$/)
+    .refine((value) => Number(value) > 0),
   receivedDate: z.iso.date(),
   confirmation: z.literal("ACTIVATE"),
 });

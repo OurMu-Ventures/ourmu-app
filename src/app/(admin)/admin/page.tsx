@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/purity -- server page computes a request-time 24-hour cutoff */
 import { resolveClosure } from "@/actions/admin";
 import { requireAdmin } from "@/lib/auth";
-import { ugx } from "@/lib/format";
+import { ugx, units } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function AdminPage() {
@@ -40,15 +40,21 @@ export default async function AdminPage() {
       .eq("status", "requested"),
     admin
       .from("investment_cycles")
-      .select("id,name,capacity_units")
+      .select("id,name,capacity_units,capacity_ugx")
       .eq("status", "open")
       .maybeSingle(),
     admin
       .from("investments")
-      .select("units,principal_ugx")
+      .select("cycle_id,units,principal_ugx")
       .in("status", ["reserved", "active"]),
   ]);
-  const used = (reserved ?? []).reduce((sum, item) => sum + item.units, 0);
+  const openCycleInvestments = cycle
+    ? (reserved ?? []).filter((item) => item.cycle_id === cycle.id)
+    : [];
+  const used = openCycleInvestments.reduce(
+    (sum, item) => sum + Number(item.units),
+    0,
+  );
   return (
     <>
       <p className="eyebrow">Operations</p>
@@ -73,7 +79,9 @@ export default async function AdminPage() {
         <article className="card">
           <p className="muted">Open-cycle capacity</p>
           <p className="stat">
-            {cycle ? `${used}/${cycle.capacity_units}` : "—"}
+            {cycle
+              ? `${units(used)} / ${units(cycle.capacity_units ?? 0)} units`
+              : "—"}
           </p>
         </article>
         <article className="card">

@@ -6,7 +6,7 @@ import {
   Tabs,
 } from "@/components/forms";
 import { requireAdmin } from "@/lib/auth";
-import { dateTime } from "@/lib/format";
+import { dateTime, ugx, units } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 export default async function CyclesPage() {
   await requireAdmin();
@@ -44,7 +44,10 @@ export default async function CyclesPage() {
                 <h2>{item.name}</h2>
                 <p className="muted">
                   {dateTime(item.opens_at)} – {dateTime(item.closes_at)} ·{" "}
-                  {item.capacity_units} units · {item.status}
+                  {item.capacity_ugx === null
+                    ? "Historical capacity not recorded"
+                    : `${ugx(item.capacity_ugx)} · ${units(item.capacity_units ?? 0)} units`}{" "}
+                  · {item.status}
                 </p>
               </div>
               {next && (
@@ -55,7 +58,7 @@ export default async function CyclesPage() {
                 </form>
               )}
             </div>
-            {item.status === "draft" && (
+            {item.status === "draft" && item.record_origin === "portal" && (
               <details>
                 <summary>Edit draft</summary>
                 <CycleEditForm cycle={item} agreements={agreements ?? []} />

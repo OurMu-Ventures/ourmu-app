@@ -5,6 +5,8 @@ import { useActionState, useState } from "react";
 import {
   createAgreementVersion,
   createCycle,
+  acceptPartnerImport,
+  claimLegacyPartner,
   revealNin,
   saveBankInstructions,
   updateCycle,
@@ -220,15 +222,19 @@ export function InvestmentRequestForm({
     <form className="form" action={action}>
       <input type="hidden" name="cycleId" value={cycleId} />
       <label>
-        Units (1–500)
+        Investment amount (UGX)
         <input
-          name="units"
+          name="principalUgx"
           type="number"
-          min="1"
-          max="500"
-          defaultValue="1"
+          min="125000"
+          max="62500000"
+          step="0.01"
+          defaultValue="125000"
           required
         />
+        <small className="muted">
+          Minimum UGX 125,000. Fractional units are calculated automatically.
+        </small>
       </label>
       <label className="checkbox">
         <input name="agreementAccepted" type="checkbox" value="yes" required />
@@ -237,7 +243,7 @@ export function InvestmentRequestForm({
           significant acceptance receipt.
         </span>
       </label>
-      <ActionButton>Reserve units for 48 hours</ActionButton>
+      <ActionButton>Reserve investment for 48 hours</ActionButton>
       <StateMessage state={state} />
     </form>
   );
@@ -266,6 +272,7 @@ export function ActivationForm({
         <input
           name="receivedAmountUgx"
           type="number"
+          step="0.00000001"
           defaultValue={expectedAmount}
           required
         />
@@ -279,6 +286,50 @@ export function ActivationForm({
         <input name="confirmation" autoComplete="off" required />
       </label>
       <ActionButton>Activate investment</ActionButton>
+      <StateMessage state={state} />
+    </form>
+  );
+}
+
+export function ImportAcceptanceForm({ batchId }: { batchId: string }) {
+  const [state, action] = useActionState(
+    acceptPartnerImport,
+    initialActionState,
+  );
+  return (
+    <form className="form" action={action}>
+      <input type="hidden" name="batchId" value={batchId} />
+      <label>
+        Type ACCEPT IMPORT
+        <input name="confirmation" autoComplete="off" required />
+      </label>
+      <ActionButton>Accept reconciled import</ActionButton>
+      <StateMessage state={state} />
+    </form>
+  );
+}
+
+export function LegacyClaimForm({ partnerId }: { partnerId: string }) {
+  const [state, action] = useActionState(
+    claimLegacyPartner,
+    initialActionState,
+  );
+  return (
+    <form className="form" action={action}>
+      <input type="hidden" name="partnerId" value={partnerId} />
+      <label>
+        Verified email
+        <input name="email" type="email" required />
+      </label>
+      <label>
+        Phone (optional)
+        <input name="phone" type="tel" />
+      </label>
+      <label>
+        Type LINK PARTNER
+        <input name="confirmation" autoComplete="off" required />
+      </label>
+      <ActionButton>Link login without emailing</ActionButton>
       <StateMessage state={state} />
     </form>
   );
@@ -368,8 +419,14 @@ export function CycleForm({
           <input name="maturityDate" type="date" required />
         </label>
         <label>
-          Capacity units
-          <input name="capacityUnits" type="number" min="1" required />
+          Capacity (UGX)
+          <input
+            name="capacityUgx"
+            type="number"
+            min="125000"
+            step="0.01"
+            required
+          />
         </label>
       </div>
       <label>
@@ -399,8 +456,8 @@ export function CycleEditForm({
     opens_at: string;
     closes_at: string;
     maturity_date: string;
-    capacity_units: number;
-    agreement_version_id: string;
+    capacity_ugx: number | string | null;
+    agreement_version_id: string | null;
   };
   agreements: { id: string; title: string; version: string }[];
 }) {
@@ -453,12 +510,13 @@ export function CycleEditForm({
           />
         </label>
         <label>
-          Capacity units
+          Capacity (UGX)
           <input
-            name="capacityUnits"
+            name="capacityUgx"
             type="number"
-            min="1"
-            defaultValue={cycle.capacity_units}
+            min="125000"
+            step="0.01"
+            defaultValue={cycle.capacity_ugx ?? ""}
             required
           />
         </label>
@@ -467,7 +525,7 @@ export function CycleEditForm({
         Agreement
         <select
           name="agreementVersionId"
-          defaultValue={cycle.agreement_version_id}
+          defaultValue={cycle.agreement_version_id ?? ""}
           required
         >
           {agreements.map((a) => (

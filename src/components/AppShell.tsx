@@ -11,6 +11,7 @@ const adminLinks = [
   ["/admin/invitations", "Invitations"],
   ["/admin/applications", "Applications"],
   ["/admin/investors", "Investors"],
+  ["/admin/imports", "Imports"],
   ["/admin/cycles", "Cycles"],
   ["/admin/investments", "Activations"],
   ["/admin/audit", "Audit"],

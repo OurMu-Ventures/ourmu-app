@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireInvestor } from "@/lib/auth";
-import { date, dateTime, ugx } from "@/lib/format";
+import { date, dateTime, ugx, units } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentPage({
@@ -26,7 +26,7 @@ export default async function InvestmentPage({
     <>
       <p className="eyebrow">Investment record</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
-        {data.units} units · {data.status}
+        {units(data.units ?? 0)} units · {data.status}
       </h1>
       <div className="grid">
         <article className="card">
@@ -34,27 +34,44 @@ export default async function InvestmentPage({
           <p className="stat">{ugx(data.principal_ugx)}</p>
         </article>
         <article className="card">
-          <p className="muted">Projected return</p>
-          <p className="stat">{ugx(data.projected_return_ugx)}</p>
+          <p className="muted">
+            {data.payout_basis === "reported_paid"
+              ? "Reported return paid"
+              : "Projected return"}
+          </p>
+          <p className="stat">
+            {ugx(data.reported_return_ugx ?? data.projected_return_ugx)}
+          </p>
         </article>
         <article className="card">
-          <p className="muted">Projected value</p>
-          <p className="stat">{ugx(data.projected_value_ugx)}</p>
+          <p className="muted">
+            {data.payout_basis === "reported_paid"
+              ? "Reported payout"
+              : "Projected value"}
+          </p>
+          <p className="stat">
+            {ugx(data.reported_payout_ugx ?? data.projected_value_ugx)}
+          </p>
         </article>
       </div>
       <div className="card" style={{ marginTop: "1rem" }}>
         <p>
           Maturity: <strong>{date(data.maturity_date)}</strong>
         </p>
-        {data.status === "reserved" && (
+        {data.status === "reserved" && data.reservation_expires_at && (
           <p>
             Reservation expires:{" "}
             <strong>{dateTime(data.reservation_expires_at)}</strong>
           </p>
         )}
         <p>
+          Record source: <span className="badge">{data.record_origin}</span>
+        </p>
+        <p>
           Agreement status:{" "}
-          <span className="badge">{agreement?.pdf_status ?? "accepted"}</span>
+          <span className="badge">
+            {agreement?.pdf_status ?? "legacy agreement not digitized"}
+          </span>
         </p>
         {agreement && (
           <Link

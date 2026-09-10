@@ -1,5 +1,14 @@
 export function ugx(value: number | string | bigint) {
-  return `UGX ${Number(value).toLocaleString("en-UG")}`;
+  return `UGX ${Number(value).toLocaleString("en-UG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+export function units(value: number | string) {
+  return Number(value).toLocaleString("en-UG", {
+    minimumFractionDigits: 6,
+    maximumFractionDigits: 6,
+  });
 }
 export function date(value: string) {
   return new Intl.DateTimeFormat("en-UG", { dateStyle: "medium" }).format(

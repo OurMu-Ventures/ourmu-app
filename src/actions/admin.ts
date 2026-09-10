@@ -9,7 +9,7 @@ import { audit, requestId } from "@/lib/db";
 import { decryptNin } from "@/lib/security/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type { ActionState } from "@/lib/validation";
+import { emailSchema, type ActionState } from "@/lib/validation";
 
 const cycleSchema = z
   .object({
@@ -17,7 +17,11 @@ const cycleSchema = z
     opensAt: z.string().min(16),
     closesAt: z.string().min(16),
     maturityDate: z.iso.date(),
-    capacityUnits: z.coerce.number().int().positive(),
+    capacityUgx: z
+      .string()
+      .trim()
+      .regex(/^\d+(?:\.\d{1,2})?$/)
+      .refine((value) => Number(value) >= 125_000),
     agreementVersionId: z.uuid(),
   })
   .transform((cycle, context) => {
@@ -50,7 +54,7 @@ export async function createCycle(
     opensAt: formData.get("opensAt"),
     closesAt: formData.get("closesAt"),
     maturityDate: formData.get("maturityDate"),
-    capacityUnits: formData.get("capacityUnits"),
+    capacityUgx: formData.get("capacityUgx"),
     agreementVersionId: formData.get("agreementVersionId"),
   });
   if (!parsed.success)
@@ -66,7 +70,7 @@ export async function createCycle(
       opens_at: parsed.data.opensAt,
       closes_at: parsed.data.closesAt,
       maturity_date: parsed.data.maturityDate,
-      capacity_units: parsed.data.capacityUnits,
+      capacity_ugx: Number(parsed.data.capacityUgx),
       agreement_version_id: parsed.data.agreementVersionId,
       created_by: adminProfile.id,
     })
@@ -95,7 +99,7 @@ export async function updateCycle(
     opensAt: formData.get("opensAt"),
     closesAt: formData.get("closesAt"),
     maturityDate: formData.get("maturityDate"),
-    capacityUnits: formData.get("capacityUnits"),
+    capacityUgx: formData.get("capacityUgx"),
     agreementVersionId: formData.get("agreementVersionId"),
   });
   if (!cycleId.success || !parsed.success)
@@ -111,7 +115,7 @@ export async function updateCycle(
       opens_at: parsed.data.opensAt,
       closes_at: parsed.data.closesAt,
       maturity_date: parsed.data.maturityDate,
-      capacity_units: parsed.data.capacityUnits,
+      capacity_ugx: Number(parsed.data.capacityUgx),
       agreement_version_id: parsed.data.agreementVersionId,
     })
     .eq("id", cycleId.data)
@@ -153,6 +157,10 @@ export async function setCycleStatus(formData: FormData) {
       `The ${current.status} cycle cannot transition to ${status}.`,
     );
   if (status === "open") {
+    if (!current.agreement_version_id)
+      throw new Error(
+        "An approved agreement is required before opening a cycle.",
+      );
     const { data: agreement } = await admin
       .from("agreement_versions")
       .select("is_legally_approved,published_at,template_markdown")
@@ -384,5 +392,110 @@ export async function revealNin(
     ok: true,
     value,
     message: "Shown once. Do not copy it into notes or messages.",
+  };
+}
+
+export async function acceptPartnerImport(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireAdmin();
+  const batchId = z.uuid().safeParse(formData.get("batchId"));
+  const confirmation = String(formData.get("confirmation") ?? "").trim();
+  if (!batchId.success || confirmation !== "ACCEPT IMPORT")
+    return { ok: false, message: "Type ACCEPT IMPORT exactly." };
+  const supabase = await createClient();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("accept_partner_import", {
+    p_admin_id: profile.id,
+    p_batch_id: batchId.data,
+    p_confirmation: confirmation,
+    p_admin_aal2: aal?.currentLevel === "aal2",
+    p_request_id: requestId(),
+  });
+  if (error)
+    return {
+      ok: false,
+      message: "Import acceptance failed. No access was enabled.",
+    };
+  revalidatePath("/admin/imports");
+  revalidatePath("/admin/investors");
+  revalidatePath("/admin/investments");
+  revalidatePath("/admin/cycles");
+  return {
+    ok: true,
+    message: "Import accepted and reconciled records enabled.",
+  };
+}
+
+export async function claimLegacyPartner(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireAdmin();
+  const partnerId = z.uuid().safeParse(formData.get("partnerId"));
+  const email = emailSchema.safeParse(formData.get("email"));
+  const phone = String(formData.get("phone") ?? "").trim();
+  const confirmation = String(formData.get("confirmation") ?? "").trim();
+  if (!partnerId.success || !email.success || confirmation !== "LINK PARTNER")
+    return {
+      ok: false,
+      message: "Enter a valid email and type LINK PARTNER exactly.",
+    };
+  const supabase = await createClient();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal?.currentLevel !== "aal2")
+    return { ok: false, message: "A current AAL2 session is required." };
+  const admin = createAdminClient();
+  const { data: party } = await admin
+    .from("legacy_partner_identities")
+    .select("canonical_name,profile_id")
+    .eq("id", partnerId.data)
+    .single();
+  if (!party || party.profile_id)
+    return {
+      ok: false,
+      message: "This legacy partner is unavailable or already linked.",
+    };
+  let authUserId: string | undefined;
+  const created = await admin.auth.admin.createUser({
+    email: email.data,
+    email_confirm: false,
+    user_metadata: { legal_name: party.canonical_name },
+  });
+  authUserId = created.data.user?.id;
+  if (created.error || !authUserId) {
+    const listed = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    authUserId = listed.data.users.find(
+      (user) => user.email?.toLowerCase() === email.data,
+    )?.id;
+  }
+  if (!authUserId)
+    return {
+      ok: false,
+      message: "The login account could not be created or safely reused.",
+    };
+  const { error } = await admin.rpc("link_legacy_partner", {
+    p_admin_id: profile.id,
+    p_legacy_partner_id: partnerId.data,
+    p_auth_user_id: authUserId,
+    p_email: email.data,
+    p_phone: phone,
+    p_confirmation: confirmation,
+    p_admin_aal2: true,
+    p_request_id: requestId(),
+  });
+  if (error)
+    return {
+      ok: false,
+      message: "The account exists but the legacy history was not linked.",
+    };
+  revalidatePath("/admin/investors");
+  return {
+    ok: true,
+    message: "Legacy history linked. No email was sent automatically.",
   };
 }

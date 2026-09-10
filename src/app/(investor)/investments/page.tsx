@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cancelInvestment } from "@/actions/investments";
 import { requireInvestor } from "@/lib/auth";
-import { date, dateTime, ugx } from "@/lib/format";
+import { date, dateTime, ugx, units } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentsPage() {
@@ -20,7 +20,7 @@ export default async function InvestmentsPage() {
           <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investments</h1>
         </div>
         <Link className="button" href="/investments/new">
-          Request units
+          Request investment
         </Link>
       </div>
       <div className="table-wrap">
@@ -41,11 +41,17 @@ export default async function InvestmentsPage() {
                 <td>
                   <span className="badge">{item.status}</span>
                 </td>
-                <td>{item.units}</td>
+                <td>{units(item.units ?? 0)}</td>
                 <td>{ugx(item.principal_ugx)}</td>
-                <td>{ugx(item.projected_value_ugx)}</td>
                 <td>
-                  {item.status === "reserved"
+                  {ugx(
+                    item.payout_basis === "reported_paid"
+                      ? (item.reported_payout_ugx ?? item.projected_value_ugx)
+                      : item.projected_value_ugx,
+                  )}
+                </td>
+                <td>
+                  {item.status === "reserved" && item.reservation_expires_at
                     ? dateTime(item.reservation_expires_at)
                     : date(item.maturity_date)}
                 </td>
