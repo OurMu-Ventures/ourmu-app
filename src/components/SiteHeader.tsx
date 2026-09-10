@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 export function SiteHeader() {
   return (
     <header className="site-header">
@@ -20,9 +21,9 @@ export function SiteHeader() {
         <Link className="optional" href="/privacy">
           Privacy
         </Link>
-        <Link className="button-secondary" href="/login">
-          Investor login
-        </Link>
+        <Button asChild variant="secondary">
+          <Link href="/login">Investor login</Link>
+        </Button>
       </nav>
     </header>
   );

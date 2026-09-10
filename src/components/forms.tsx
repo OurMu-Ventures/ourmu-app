@@ -23,6 +23,7 @@ import { activateInvestment, requestInvestment } from "@/actions/investments";
 import { requestAccountClosure, saveNextOfKin } from "@/actions/profile";
 import { ActionButton } from "@/components/ActionButton";
 import { StateMessage } from "@/components/StateMessage";
+import { Button } from "@/components/ui/button";
 import {
   AGREEMENT_TEMPLATE,
   AGREEMENT_TITLE,
@@ -615,8 +616,8 @@ export function Tabs({
     <div>
       <div className="hero-actions" role="tablist">
         {labels.map((label, index) => (
-          <button
-            className={active === index ? "button" : "button-secondary"}
+          <Button
+            variant={active === index ? "default" : "secondary"}
             type="button"
             role="tab"
             aria-selected={active === index}
@@ -624,7 +625,7 @@ export function Tabs({
             key={label}
           >
             {label}
-          </button>
+          </Button>
         ))}
       </div>
       <div role="tabpanel" className="card" style={{ marginTop: "1rem" }}>

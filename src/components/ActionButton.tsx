@@ -1,5 +1,6 @@
 "use client";
 import { useFormStatus } from "react-dom";
+import { Button } from "@/components/ui/button";
 export function ActionButton({
   children,
   danger = false,
@@ -9,12 +10,8 @@ export function ActionButton({
 }) {
   const { pending } = useFormStatus();
   return (
-    <button
-      className={danger ? "button-danger" : "button"}
-      disabled={pending}
-      type="submit"
-    >
+    <Button variant={danger ? "danger" : "default"} disabled={pending} type="submit">
       {pending ? "Working…" : children}
-    </button>
+    </Button>
   );
 }
