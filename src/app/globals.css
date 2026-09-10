@@ -95,6 +95,11 @@ button {
 .brand img {
   object-fit: contain;
 }
+/* White-background mark: multiply drops the white out against the cream
+   header so only the brand mark shows. */
+.brand-mark {
+  mix-blend-mode: multiply;
+}
 .top-nav {
   display: flex;
   align-items: center;
