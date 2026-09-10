@@ -10,9 +10,8 @@ export default async function DashboardPage() {
     await Promise.all([
       supabase
         .from("investments")
-        .select("*")
+        .select("*,investment_cycles(name,status,maturity_date)")
         .eq("investor_id", profile.id)
-        .in("status", ["reserved", "active"])
         .order("requested_at", { ascending: false }),
       supabase
         .from("investment_cycles")
@@ -25,22 +24,31 @@ export default async function DashboardPage() {
         .eq("user_id", profile.id)
         .maybeSingle(),
     ]);
-  const principal = (investments ?? []).reduce(
+  const activeInvestments = (investments ?? []).filter((item) =>
+    ["reserved", "active"].includes(item.status),
+  );
+  const maturedInvestments = (investments ?? []).filter(
+    (item) => item.status === "matured",
+  );
+  const principal = activeInvestments.reduce(
     (sum, item) => sum + Number(item.principal_ugx),
     0,
   );
-  const projected = (investments ?? []).reduce(
+  const projected = activeInvestments.reduce(
     (sum, item) => sum + Number(item.projected_value_ugx),
     0,
   );
-  const totalUnits = (investments ?? []).reduce(
+  const totalUnits = activeInvestments.reduce(
     (sum, item) => sum + Number(item.units),
     0,
   );
   const eligible = profile.kyc_status === "verified" && Boolean(kin);
   return (
     <>
-      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Welcome back.</h1>
+      <p className="eyebrow">Your portfolio</p>
+      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
+        Good day, {profile.legal_name.split(" ")[0]}.
+      </h1>
       {!eligible && (
         <div className="notice">
           <strong>Finish onboarding.</strong> KYC verification and next-of-kin
@@ -48,18 +56,30 @@ export default async function DashboardPage() {
           <Link href="/profile">Complete profile</Link>
         </div>
       )}
-      <div className="grid">
-        <article className="card">
-          <p className="muted">Reserved + active units</p>
-          <p className="stat">{units(totalUnits)}</p>
-        </article>
-        <article className="card">
-          <p className="muted">Principal</p>
-          <p className="stat">{ugx(principal)}</p>
-        </article>
-        <article className="card">
-          <p className="muted">Projected value</p>
+      <div className="portfolio-summary">
+        <article className="card portfolio-hero-card">
+          <p className="muted">Active portfolio value at maturity</p>
           <p className="stat">{ugx(projected)}</p>
+          <div className="portfolio-hero-breakdown">
+            <p>
+              <span>Principal</span>
+              <strong>{ugx(principal)}</strong>
+            </p>
+            <p>
+              <span>Projected return</span>
+              <strong>{ugx(projected - principal)}</strong>
+            </p>
+          </div>
+        </article>
+        <article className="card">
+          <p className="muted">Active placements</p>
+          <p className="stat">{activeInvestments.length}</p>
+          <p className="muted">{units(totalUnits)} units</p>
+        </article>
+        <article className="card">
+          <p className="muted">Past placements</p>
+          <p className="stat">{maturedInvestments.length}</p>
+          <p className="muted">Reported paid records</p>
         </article>
       </div>
       <section style={{ marginTop: "2rem" }}>
@@ -87,6 +107,60 @@ export default async function DashboardPage() {
             </p>
           </div>
         )}
+      </section>
+      <section style={{ marginTop: "2rem" }}>
+        <div className="page-head">
+          <div>
+            <p className="eyebrow">Placement history</p>
+            <h2>Your active and past cycles</h2>
+          </div>
+          <Link className="button-secondary" href="/investments">
+            View all placements
+          </Link>
+        </div>
+        <div className="cycle-list">
+          {(investments ?? []).map((item) => {
+            const itemCycle = item.investment_cycles;
+            const paid = item.payout_basis === "reported_paid";
+            return (
+              <article className="card cycle-row" key={item.id}>
+                <div>
+                  <p className="eyebrow">
+                    {itemCycle?.name ?? "OURMU placement"}
+                  </p>
+                  <h3>
+                    {paid ? "Reported paid" : item.status === "active" ? "Active" : item.status}
+                  </h3>
+                  <p className="muted">
+                    {units(item.units ?? 0)} units · matures {date(item.maturity_date)}
+                  </p>
+                </div>
+                <div className="cycle-row-values">
+                  <p>
+                    <span>Principal</span>
+                    <strong>{ugx(item.principal_ugx)}</strong>
+                  </p>
+                  <p>
+                    <span>{paid ? "Reported payout" : "Projected value"}</span>
+                    <strong>
+                      {ugx(
+                        paid
+                          ? (item.reported_payout_ugx ?? item.projected_value_ugx)
+                          : item.projected_value_ugx,
+                      )}
+                    </strong>
+                  </p>
+                  <Link href={`/investments/${item.id}`}>View details</Link>
+                </div>
+              </article>
+            );
+          })}
+          {!investments?.length && (
+            <article className="card">
+              <p className="muted">Your placements will appear here once recorded.</p>
+            </article>
+          )}
+        </div>
       </section>
     </>
   );

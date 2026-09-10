@@ -219,6 +219,65 @@ p {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
+.portfolio-summary {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 1rem;
+}
+.portfolio-hero-card {
+  background:
+    linear-gradient(135deg, rgba(12, 86, 84, 0.96), rgba(7, 47, 49, 0.96)),
+    var(--lake);
+  border-color: transparent;
+  color: #f9f5e9;
+}
+.portfolio-hero-card .muted,
+.portfolio-hero-card .portfolio-hero-breakdown span {
+  color: #c9ddd6;
+}
+.portfolio-hero-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+.portfolio-hero-breakdown p,
+.cycle-row-values p {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+}
+.portfolio-hero-breakdown span,
+.cycle-row-values span {
+  font-size: 0.75rem;
+}
+.cycle-list {
+  display: grid;
+  gap: 0.8rem;
+}
+.cycle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+.cycle-row h3 {
+  font-size: 1.2rem;
+}
+.cycle-row-values {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  align-items: center;
+  gap: 1.5rem;
+  text-align: right;
+}
+.cycle-row-values a {
+  color: var(--gold-dark);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
 .card {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -395,6 +454,18 @@ th {
   }
   .grid {
     grid-template-columns: 1fr;
+  }
+  .portfolio-summary {
+    grid-template-columns: 1fr;
+  }
+  .cycle-row,
+  .cycle-row-values {
+    align-items: flex-start;
+    grid-template-columns: 1fr;
+    text-align: left;
+  }
+  .cycle-row {
+    flex-direction: column;
   }
   .shell {
     grid-template-columns: 1fr;
