@@ -7,14 +7,11 @@ const FishCanvas = dynamic(() => import("@/components/FishCanvas"), {
 export function FishExperience() {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
-    const desktop = window.matchMedia("(min-width: 851px)");
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setEnabled(desktop.matches && !reduced.matches);
+    const update = () => setEnabled(!reduced.matches);
     update();
-    desktop.addEventListener("change", update);
     reduced.addEventListener("change", update);
     return () => {
-      desktop.removeEventListener("change", update);
       reduced.removeEventListener("change", update);
     };
   }, []);

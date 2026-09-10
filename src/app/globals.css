@@ -466,10 +466,15 @@ a:focus-visible {
   border-right: 1px solid var(--line);
   box-shadow: 0 0 60px rgba(16, 41, 35, 0.25);
   transform: translateX(-105%);
-  transition: transform 0.2s ease;
+  visibility: hidden;
+  transition:
+    transform 0.2s ease,
+    visibility 0s linear 0.2s;
 }
 .side-nav.open {
   transform: none;
+  visibility: visible;
+  transition-delay: 0s;
 }
 .nav-close {
   align-self: flex-end;
@@ -792,6 +797,7 @@ th {
     border-bottom: 0;
     box-shadow: none;
     transform: none;
+    visibility: visible;
   }
   .shell-bar,
   .nav-scrim,
