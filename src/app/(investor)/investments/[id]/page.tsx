@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireInvestor } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { LinkStatus } from "@/components/ui/link-status";
 import { date, dateTime, ugx, units } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -74,12 +76,11 @@ export default async function InvestmentPage({
           </span>
         </p>
         {agreement && (
-          <Link
-            className="button-secondary"
-            href={`/agreements/${agreement.id}`}
-          >
-            Open agreement
-          </Link>
+          <Button asChild variant="secondary">
+            <Link href={`/agreements/${agreement.id}`}>
+              Open agreement <LinkStatus label="Opening agreement" />
+            </Link>
+          </Button>
         )}
       </div>
     </>
