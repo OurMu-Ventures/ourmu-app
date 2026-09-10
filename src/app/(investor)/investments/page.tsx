@@ -28,41 +28,45 @@ export default async function InvestmentsPage() {
         </Button>
       </div>
       <div className="cycle-list">
-        {(data ?? []).map((item) => (
-          <InvestmentCard
-            key={item.id}
-            item={{
-              name: Array.isArray(item.investment_cycles)
-                ? (item.investment_cycles[0]?.name ?? "OURMU placement")
-                : (item.investment_cycles?.name ?? "OURMU placement"),
-              status: item.status,
-              statusLabel: item.status,
-              principalUgx: item.principal_ugx,
-              unitsValue: item.units ?? 0,
-              profitUgx:
-                Number(item.projected_value_ugx ?? 0) -
-                Number(item.principal_ugx),
-              payoutUgx: item.projected_value_ugx ?? 0,
-              maturityDate: item.maturity_date,
-              startIso: item.requested_at,
-              detailHref: `/investments/${item.id}`,
-              detailLabel: "View",
-              detailStatus: "Opening investment details",
-            }}
-            actions={
-              item.status === "reserved" ? (
-                <form action={cancelInvestment}>
-                  <input
-                    type="hidden"
-                    name="investmentId"
-                    value={item.id}
-                  />
-                  <button type="submit">Cancel</button>
-                </form>
-              ) : undefined
-            }
-          />
-        ))}
+        {(data ?? []).map((item) => {
+          const payout =
+            item.payout_basis === "reported_paid"
+              ? (item.reported_payout_ugx ?? item.projected_value_ugx)
+              : item.projected_value_ugx;
+          return (
+            <InvestmentCard
+              key={item.id}
+              item={{
+                name: Array.isArray(item.investment_cycles)
+                  ? (item.investment_cycles[0]?.name ?? "OURMU placement")
+                  : (item.investment_cycles?.name ?? "OURMU placement"),
+                status: item.status,
+                statusLabel: item.status,
+                principalUgx: item.principal_ugx,
+                unitsValue: item.units ?? 0,
+                profitUgx: Number(payout ?? 0) - Number(item.principal_ugx),
+                payoutUgx: payout ?? 0,
+                maturityDate: item.maturity_date,
+                startIso: item.requested_at,
+                detailHref: `/investments/${item.id}`,
+                detailLabel: "View",
+                detailStatus: "Opening investment details",
+              }}
+              actions={
+                item.status === "reserved" ? (
+                  <form action={cancelInvestment}>
+                    <input
+                      type="hidden"
+                      name="investmentId"
+                      value={item.id}
+                    />
+                    <button type="submit">Cancel</button>
+                  </form>
+                ) : undefined
+              }
+            />
+          );
+        })}
         {!data?.length && (
           <p className="muted">No investment records yet.</p>
         )}

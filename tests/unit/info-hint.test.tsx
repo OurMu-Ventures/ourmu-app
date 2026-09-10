@@ -22,4 +22,16 @@ describe("InfoHint", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
+
+  it("reveals its explainer on hover and hides it when the pointer leaves", async () => {
+    const user = userEvent.setup();
+    render(<InfoHint label="About profit" text="Fixed return." />);
+    const button = screen.getByRole("button", { name: "About profit" });
+
+    await user.hover(button);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Fixed return.");
+
+    await user.unhover(button);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
 });
