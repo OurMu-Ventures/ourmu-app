@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireInvestor } from "@/lib/auth";
+import { InvestmentCard } from "@/components/InvestmentCard";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { date, dateTime, ugx, units } from "@/lib/format";
@@ -132,40 +133,31 @@ export default async function DashboardPage() {
           {(investments ?? []).map((item) => {
             const itemCycle = item.investment_cycles;
             const paid = item.payout_basis === "reported_paid";
+            const payout = paid
+              ? (item.reported_payout_ugx ?? item.projected_value_ugx)
+              : item.projected_value_ugx;
             return (
-              <article className="card cycle-row" key={item.id}>
-                <div>
-                  <p className="eyebrow">
-                    {itemCycle?.name ?? "OURMU placement"}
-                  </p>
-                  <h3>
-                    {paid ? "Reported paid" : item.status === "active" ? "Active" : item.status}
-                  </h3>
-                  <p className="muted">
-                    {units(item.units ?? 0)} units · matures {date(item.maturity_date)}
-                  </p>
-                </div>
-                <div className="cycle-row-values">
-                  <p>
-                    <span>Principal</span>
-                    <strong>{ugx(item.principal_ugx)}</strong>
-                  </p>
-                  <p>
-                    <span>{paid ? "Reported payout" : "Projected value"}</span>
-                    <strong>
-                      {ugx(
-                        paid
-                          ? (item.reported_payout_ugx ?? item.projected_value_ugx)
-                          : item.projected_value_ugx,
-                      )}
-                    </strong>
-                  </p>
-                  <Link href={`/investments/${item.id}`}>
-                    View details{" "}
-                    <LinkStatus label="Opening investment details" />
-                  </Link>
-                </div>
-              </article>
+              <InvestmentCard
+                key={item.id}
+                item={{
+                  name: itemCycle?.name ?? "OURMU placement",
+                  status: item.status,
+                  statusLabel: paid
+                    ? "Reported paid"
+                    : item.status === "active"
+                      ? "Active"
+                      : item.status,
+                  principalUgx: item.principal_ugx,
+                  unitsValue: item.units ?? 0,
+                  profitUgx: Number(payout ?? 0) - Number(item.principal_ugx),
+                  payoutUgx: payout ?? 0,
+                  maturityDate: item.maturity_date,
+                  startIso: item.requested_at,
+                  detailHref: `/investments/${item.id}`,
+                  detailLabel: "View details",
+                  detailStatus: "Opening investment details",
+                }}
+              />
             );
           })}
           {!investments?.length && (
