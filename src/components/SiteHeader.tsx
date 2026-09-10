@@ -7,11 +7,12 @@ export function SiteHeader() {
     <header className="site-header">
       <Link className="brand" href="/">
         <Image
-          src="/logos/ourmu-color.png"
-          alt="OURMU"
-          width={46}
-          height={46}
+          src="/logos/ourmu-mark-white.jpg"
+          alt=""
+          width={29}
+          height={40}
           priority
+          className="brand-mark"
         />
         <span>OURMU</span>
         <LinkStatus label="Loading homepage" />
