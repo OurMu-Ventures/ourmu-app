@@ -246,22 +246,20 @@ p {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
+  margin-top: 2rem;
 }
 .portfolio-summary {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
+  margin-top: 2rem;
 }
 .portfolio-hero-card {
-  background:
-    linear-gradient(135deg, rgba(12, 86, 84, 0.96), rgba(7, 47, 49, 0.96)),
-    var(--lake);
-  border-color: transparent;
-  color: #f9f5e9;
+  background: var(--paper);
+  border-left: 4px solid var(--gold);
 }
-.portfolio-hero-card .muted,
-.portfolio-hero-card .portfolio-hero-breakdown span {
-  color: #c9ddd6;
+.portfolio-hero-card .stat {
+  color: var(--lake);
 }
 .portfolio-hero-breakdown {
   display: grid;
@@ -269,7 +267,7 @@ p {
   gap: 1rem;
   margin-top: 1.1rem;
   padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1px solid var(--line);
 }
 .portfolio-hero-breakdown p,
 .cycle-row-values p {
@@ -284,6 +282,7 @@ p {
 .cycle-list {
   display: grid;
   gap: 0.8rem;
+  margin-top: 2rem;
 }
 .cycle-row {
   display: flex;
@@ -504,6 +503,29 @@ a:focus-visible {
 }
 .side-nav a[aria-current="page"] .nav-icon {
   color: var(--ink);
+}
+.nav-signout {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.nav-signout button {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.68rem 0.8rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: none;
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: left;
+}
+.nav-signout button:hover {
+  background: #f7e4e1;
 }
 .shell-content {
   min-width: 0;

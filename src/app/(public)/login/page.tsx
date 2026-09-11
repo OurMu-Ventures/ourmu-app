@@ -17,7 +17,6 @@ export default async function LoginPage({
           <h1>Sign in without a password.</h1>
           <p className="lead">
             We will email a time-limited magic link to an approved account.
-            Unrestricted sign-up is disabled.
           </p>
           {params.disabled && (
             <p className="error">

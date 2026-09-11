@@ -9,6 +9,7 @@ import {
   History,
   Inbox,
   LayoutDashboard,
+  LogOut,
   Mail,
   Menu,
   RefreshCw,
@@ -25,6 +26,7 @@ import {
 
 import { LinkStatus } from "@/components/ui/link-status";
 import { cn } from "@/lib/utils";
+import { signOut } from "@/actions/auth";
 
 export type ShellLink = {
   href: string;
@@ -155,6 +157,12 @@ export function ShellNav({
             </Link>
           );
         })}
+        <form action={signOut} className="nav-signout">
+          <button type="submit">
+            <LogOut className="nav-icon" aria-hidden="true" />
+            Sign out
+          </button>
+        </form>
       </nav>
     </>
   );

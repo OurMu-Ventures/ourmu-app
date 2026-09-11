@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/investments" }));
 vi.mock("@/components/ui/link-status", () => ({
   LinkStatus: () => null,
 }));
+vi.mock("@/actions/auth", () => ({ signOut: vi.fn() }));
 
 const links: ShellLink[] = [
   { href: "/dashboard", label: "Overview", status: "Opening overview" },
@@ -77,5 +78,15 @@ describe("ShellNav", () => {
     await user.click(screen.getByRole("link", { name: "Overview" }));
 
     expect(nav.className).not.toMatch(/open/);
+  });
+
+  it("offers sign out inside the drawer", async () => {
+    const user = userEvent.setup();
+    renderNav();
+    await user.click(screen.getByRole("button", { name: "Open navigation" }));
+
+    expect(
+      screen.getByRole("button", { name: "Sign out" }),
+    ).toBeInTheDocument();
   });
 });
