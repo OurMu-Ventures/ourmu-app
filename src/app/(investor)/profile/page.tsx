@@ -56,7 +56,12 @@ export default async function ProfilePage() {
         </article>
       </div>
       <section style={{ marginTop: "2rem" }}>
-        <h2>Next of kin</h2>
+        <h2>Beneficiary and estate contact</h2>
+        <p className="muted">
+          This person is your intended beneficiary and estate contact. Any
+          release remains subject to applicable succession law and proof of
+          authority.
+        </p>
         <div className="card">
           <NextOfKinForm current={kin ?? undefined} />
         </div>

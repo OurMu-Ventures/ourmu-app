@@ -1,21 +1,42 @@
-import Link from "next/link";
-const investorLinks = [
-  ["/dashboard", "Overview"],
-  ["/profile", "Profile"],
-  ["/investments/new", "Invest"],
-  ["/investments", "Investments"],
-  ["/account/closure", "Close account"],
+import { ShellNav, type ShellLink } from "@/components/ShellNav";
+const investorLinks: ShellLink[] = [
+  { href: "/dashboard", label: "Overview", status: "Opening overview" },
+  { href: "/profile", label: "Profile", status: "Opening profile" },
+  {
+    href: "/investments/new",
+    label: "Invest",
+    status: "Opening investment form",
+  },
+  { href: "/investments", label: "Investments", status: "Opening investments" },
+  {
+    href: "/account/closure",
+    label: "Close account",
+    status: "Opening account closure",
+  },
 ];
-const adminLinks = [
-  ["/admin", "Admin overview"],
-  ["/admin/invitations", "Invitations"],
-  ["/admin/applications", "Applications"],
-  ["/admin/investors", "Investors"],
-  ["/admin/cycles", "Cycles"],
-  ["/admin/investments", "Activations"],
-  ["/admin/audit", "Audit"],
-  ["/admin/jobs", "Jobs"],
-  ["/admin/settings", "Settings"],
+const adminLinks: ShellLink[] = [
+  { href: "/admin", label: "Admin overview", status: "Opening admin overview" },
+  {
+    href: "/admin/invitations",
+    label: "Invitations",
+    status: "Opening invitations",
+  },
+  {
+    href: "/admin/applications",
+    label: "Applications",
+    status: "Opening applications",
+  },
+  { href: "/admin/investors", label: "Investors", status: "Opening investors" },
+  { href: "/admin/imports", label: "Imports", status: "Opening imports" },
+  { href: "/admin/cycles", label: "Cycles", status: "Opening cycles" },
+  {
+    href: "/admin/investments",
+    label: "Activations",
+    status: "Opening activations",
+  },
+  { href: "/admin/audit", label: "Audit", status: "Opening audit log" },
+  { href: "/admin/jobs", label: "Jobs", status: "Opening jobs" },
+  { href: "/admin/settings", label: "Settings", status: "Opening settings" },
 ];
 export function AppShell({
   children,
@@ -24,19 +45,12 @@ export function AppShell({
   children: React.ReactNode;
   admin?: boolean;
 }) {
-  const links = admin ? adminLinks : investorLinks;
   return (
     <main id="main" className="shell">
-      <nav
-        className="side-nav"
-        aria-label={admin ? "Administration" : "Investor portal"}
-      >
-        {links.map(([href, label]) => (
-          <Link href={href} key={href}>
-            {label}
-          </Link>
-        ))}
-      </nav>
+      <ShellNav
+        links={admin ? adminLinks : investorLinks}
+        label={admin ? "Administration" : "Investor portal"}
+      />
       <section className="shell-content">{children}</section>
     </main>
   );

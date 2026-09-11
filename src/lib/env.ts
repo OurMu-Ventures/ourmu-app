@@ -14,6 +14,7 @@ const serverSchema = publicSchema.extend({
   CRON_SECRET: z.string().min(32),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().min(3),
+  ALLOW_MANUAL_TEST_LINKS: z.enum(["true", "false"]).default("false"),
   LEGAL_PRIVACY_VERSION: z.string().min(1),
   AGREEMENT_PLACEHOLDER_BLOCK: z.enum(["true", "false"]).default("true"),
 });

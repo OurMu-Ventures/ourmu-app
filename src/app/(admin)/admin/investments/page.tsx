@@ -1,13 +1,15 @@
 import { ActivationForm } from "@/components/forms";
 import { requireAdmin } from "@/lib/auth";
-import { dateTime, ugx } from "@/lib/format";
+import { dateTime, ugx, units } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 export default async function AdminInvestmentsPage() {
   await requireAdmin();
   const admin = createAdminClient();
   const { data } = await admin
     .from("investments")
-    .select("*,profiles(legal_name,email),investment_cycles(name)")
+    .select(
+      "*,profiles(legal_name,email),investment_cycles(name),legacy_partner_identities(canonical_name,normalized_email)",
+    )
     .order("requested_at", { ascending: false })
     .limit(100);
   return (
@@ -30,18 +32,22 @@ export default async function AdminInvestmentsPage() {
           <div className="page-head">
             <div>
               <h2>
-                {Array.isArray(item.profiles)
+                {(Array.isArray(item.profiles)
                   ? item.profiles[0]?.legal_name
-                  : item.profiles?.legal_name}
+                  : item.profiles?.legal_name) ??
+                  (Array.isArray(item.legacy_partner_identities)
+                    ? item.legacy_partner_identities[0]?.canonical_name
+                    : item.legacy_partner_identities?.canonical_name) ??
+                  "Unclaimed partner"}
               </h2>
               <p>
-                {item.units} units · {ugx(item.principal_ugx)} · requested{" "}
-                {dateTime(item.requested_at)}
+                {units(item.units ?? 0)} units · {ugx(item.principal_ugx)} ·
+                requested {dateTime(item.requested_at)}
               </p>
             </div>
             <span className="badge">{item.status}</span>
           </div>
-          {item.status === "reserved" && (
+          {item.status === "reserved" && item.record_origin === "portal" && (
             <ActivationForm
               investmentId={item.id}
               expectedAmount={Number(item.principal_ugx)}

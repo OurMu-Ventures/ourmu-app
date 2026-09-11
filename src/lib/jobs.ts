@@ -75,7 +75,7 @@ async function generateAgreement(investmentId: string) {
   const { data: investment } = await admin
     .from("investments")
     .select(
-      "id,units,principal_ugx,projected_value_ugx,maturity_date,investor_id",
+      "id,units,principal_ugx,projected_return_ugx,projected_value_ugx,maturity_date,investor_id",
     )
     .eq("id", investmentId)
     .single();
@@ -85,6 +85,7 @@ async function generateAgreement(investmentId: string) {
     .eq("investment_id", investmentId)
     .single();
   if (!investment || !acceptance) throw new Error("AGREEMENT_DATA_MISSING");
+  if (!investment.investor_id) throw new Error("AGREEMENT_INVESTOR_MISSING");
   const [{ data: profile }, { data: version }] = await Promise.all([
     admin
       .from("profiles")
@@ -107,8 +108,10 @@ async function generateAgreement(investmentId: string) {
     title: version.title,
     template: version.template_markdown,
     investorName: profile.legal_name,
-    units: investment.units,
+    investorEmail: profile.email,
+    units: Number(investment.units),
     principalUgx: Number(investment.principal_ugx),
+    projectedReturnUgx: Number(investment.projected_return_ugx),
     projectedValueUgx: Number(investment.projected_value_ugx),
     maturityDate: investment.maturity_date,
     acceptedAt: acceptance.accepted_at,
@@ -132,14 +135,12 @@ async function generateAgreement(investmentId: string) {
     })
     .eq("id", acceptance.id);
   if (updateError) throw new Error("PDF_RECORD_FAILED");
-  await admin
-    .from("jobs")
-    .insert({
-      kind: "send_email",
-      entity_type: "investment",
-      entity_id: investment.id,
-      payload: { template: "agreement_ready" },
-    });
+  await admin.from("jobs").insert({
+    kind: "send_email",
+    entity_type: "investment",
+    entity_id: investment.id,
+    payload: { template: "agreement_ready" },
+  });
 }
 
 async function deliverJobEmail(
@@ -155,7 +156,7 @@ async function deliverJobEmail(
       .select("investor_id")
       .eq("id", entityId)
       .single();
-    const { data: profile } = investment
+    const { data: profile } = investment?.investor_id
       ? await admin
           .from("profiles")
           .select("email")

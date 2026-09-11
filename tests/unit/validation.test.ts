@@ -15,13 +15,25 @@ describe("server input validation", () => {
     });
     expect(parsed.email).toBe("test@example.com");
   });
-  it("rejects out-of-range units", () => {
+  it("accepts a cash-first investment request with two decimal places", () => {
     expect(
       investmentRequestSchema.safeParse({
         cycleId: "a1b2c3d4-e5f6-47a8-9123-abcdef123456",
-        units: 501,
+        principalUgx: "125000.50",
         agreementAccepted: "yes",
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
+  it.each(["124999.99", "62500000.01", "125000.001", "not-money"])(
+    "rejects invalid portal principal %s",
+    (principalUgx) => {
+      expect(
+        investmentRequestSchema.safeParse({
+          cycleId: "a1b2c3d4-e5f6-47a8-9123-abcdef123456",
+          principalUgx,
+          agreementAccepted: "yes",
+        }).success,
+      ).toBe(false);
+    },
+  );
 });

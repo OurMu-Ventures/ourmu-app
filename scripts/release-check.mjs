@@ -15,6 +15,8 @@ for (const name of ["RECEIVING_BANK_CONFIRMED", "RESEND_DOMAIN_VERIFIED"])
   if (process.env[name] !== "true") missing.push(`${name}=true`);
 if (process.env.AGREEMENT_PLACEHOLDER_BLOCK !== "false")
   missing.push("AGREEMENT_PLACEHOLDER_BLOCK=false");
+if (process.env.ALLOW_MANUAL_TEST_LINKS === "true")
+  missing.push("ALLOW_MANUAL_TEST_LINKS=false");
 if (missing.length) {
   console.error(`Release blocked: ${[...new Set(missing)].join(", ")}`);
   process.exit(1);
