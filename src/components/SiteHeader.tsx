@@ -26,7 +26,7 @@ export function SiteHeader() {
         </Link>
         <Button asChild variant="secondary">
           <Link href="/login">
-            Investor login <LinkStatus label="Opening login" />
+            Partner login <LinkStatus label="Opening login" />
           </Link>
         </Button>
       </nav>

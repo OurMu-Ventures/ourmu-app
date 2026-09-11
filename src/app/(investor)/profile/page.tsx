@@ -42,7 +42,7 @@ export default async function ProfilePage() {
             NIN: <strong>{maskNin(identity?.nin_last_four ?? null)}</strong>
           </p>
           <p className="muted">
-            Reveal requires a fresh emailed sign-in (investor) or AAL2
+            Reveal requires a fresh emailed sign-in (partner) or AAL2
             (administrator) and is audited.
           </p>
           <NinReveal userId={profile.id} />

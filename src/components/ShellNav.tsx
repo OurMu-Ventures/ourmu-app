@@ -41,7 +41,7 @@ const icons: Record<string, LucideIcon> = {
   "/admin": LayoutDashboard,
   "/admin/invitations": Mail,
   "/admin/applications": Inbox,
-  "/admin/investors": Users,
+  "/admin/partners": Users,
   "/admin/imports": Upload,
   "/admin/cycles": RefreshCw,
   "/admin/investments": BadgeCheck,

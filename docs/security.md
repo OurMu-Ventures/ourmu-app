@@ -4,7 +4,7 @@ NIN input is normalized and encrypted server-side with AES-256-GCM, a random 96-
 
 Only ciphertext, IV, authentication tag, keyed fingerprint, last four characters, and key version enter PostgreSQL. The envelope lives in the non-exposed `private` schema. Rejected applications lose ciphertext and uniqueness fingerprint immediately. A scheduled task anonymizes rejected/abandoned applications after 30 days.
 
-Investor reveal requires a fresh email-authenticated session (within ten minutes). Administrator reveal requires TOTP AAL2. Every reveal produces an append-only audit event, and the response is not cached.
+Partner reveal requires a fresh email-authenticated session (within ten minutes). Administrator reveal requires TOTP AAL2. Every reveal produces an append-only audit event, and the response is not cached.
 
 ## Authorization
 

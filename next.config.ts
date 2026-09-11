@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "1mb",
     },
   },
+  async redirects() {
+    return [
+      {
+        source: "/admin/investors",
+        destination: "/admin/partners",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

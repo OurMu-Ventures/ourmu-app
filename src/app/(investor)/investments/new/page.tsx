@@ -28,7 +28,7 @@ export default async function NewInvestmentPage() {
       <>
         <h1 style={{ fontSize: "3rem" }}>No cycle is open.</h1>
         <p>
-          OURMU will email approved investors when a new cycle is available.
+          OURMU will email approved partners when a new cycle is available.
         </p>
       </>
     );

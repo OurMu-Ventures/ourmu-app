@@ -1,5 +1,5 @@
 import { ShellNav, type ShellLink } from "@/components/ShellNav";
-const investorLinks: ShellLink[] = [
+const partnerLinks: ShellLink[] = [
   { href: "/dashboard", label: "Overview", status: "Opening overview" },
   { href: "/profile", label: "Profile", status: "Opening profile" },
   {
@@ -26,7 +26,7 @@ const adminLinks: ShellLink[] = [
     label: "Applications",
     status: "Opening applications",
   },
-  { href: "/admin/investors", label: "Investors", status: "Opening investors" },
+  { href: "/admin/partners", label: "Partners", status: "Opening partners" },
   { href: "/admin/imports", label: "Imports", status: "Opening imports" },
   { href: "/admin/cycles", label: "Cycles", status: "Opening cycles" },
   {
@@ -48,8 +48,8 @@ export function AppShell({
   return (
     <main id="main" className="shell">
       <ShellNav
-        links={admin ? adminLinks : investorLinks}
-        label={admin ? "Administration" : "Investor portal"}
+        links={admin ? adminLinks : partnerLinks}
+        label={admin ? "Administration" : "Partner portal"}
       />
       <section className="shell-content">{children}</section>
     </main>

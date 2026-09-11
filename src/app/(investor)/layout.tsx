@@ -2,7 +2,7 @@ import { signOut } from "@/actions/auth";
 import { AppShell } from "@/components/AppShell";
 import { requireInvestor } from "@/lib/auth";
 
-export default async function InvestorLayout({
+export default async function PartnerLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -12,7 +12,7 @@ export default async function InvestorLayout({
     <AppShell>
       <div className="page-head">
         <div>
-          <p className="eyebrow">Investor portal</p>
+          <p className="eyebrow">Partner portal</p>
           <strong>{profile.legal_name}</strong>
         </div>
         <form action={signOut}>

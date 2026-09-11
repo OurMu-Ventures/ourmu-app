@@ -16,8 +16,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: { default: "OURMU Investor Portal", template: "%s · OURMU" },
-  description: "Private, invite-only investor access for OURMU Ventures.",
+  title: { default: "OURMU Partner Portal", template: "%s · OURMU" },
+  description: "Private, invite-only partner access for OURMU Ventures.",
   robots: { index: false, follow: false },
 };
 
@@ -32,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <footer className="site-footer">
           <span>© {new Date().getFullYear()} OURMU Ventures</span>
-          <span>Private investor portal · Investments involve risk</span>
+          <span>Private partner portal · Investments involve risk</span>
         </footer>
       </body>
     </html>
