@@ -7,16 +7,24 @@ import { Info } from "lucide-react";
 // Tap or hover to reveal; Escape or tapping elsewhere dismisses.
 export function InfoHint({ label, text }: { label: string; text: string }) {
   const [open, setOpen] = useState(false);
+  const [transientOpen, setTransientOpen] = useState(false);
+  const visible = open || transientOpen;
   const tipId = useId();
   const wrapRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!visible) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        setTransientOpen(false);
+      }
     };
     const onPointer = (event: PointerEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!wrapRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setTransientOpen(false);
+      }
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onPointer);
@@ -24,21 +32,32 @@ export function InfoHint({ label, text }: { label: string; text: string }) {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointer);
     };
-  }, [open ]);
+  }, [visible]);
 
   return (
-    <span ref={wrapRef} className="info-hint">
+    <span
+      ref={wrapRef}
+      className="info-hint"
+      onMouseEnter={() => setTransientOpen(true)}
+      onMouseLeave={() => setTransientOpen(false)}
+      onFocus={() => setTransientOpen(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setTransientOpen(false);
+        }
+      }}
+    >
       <button
         type="button"
         className="info-hint-button"
         aria-label={label}
-        aria-expanded={open}
-        aria-describedby={tipId}
+        aria-expanded={visible}
+        aria-describedby={visible ? tipId : undefined}
         onClick={() => setOpen((value) => !value)}
       >
         <Info aria-hidden="true" />
       </button>
-      {open && (
+      {visible && (
         <span role="tooltip" id={tipId} className="info-tip">
           {text}
         </span>
