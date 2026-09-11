@@ -3,7 +3,7 @@ import { applicationSchema, investmentRequestSchema } from "@/lib/validation";
 describe("server input validation", () => {
   it("normalizes applicant email", () => {
     const parsed = applicationSchema.parse({
-      legalName: "Test Investor",
+      legalName: "Test Partner",
       email: " TEST@Example.COM ",
       phone: "+256700000000",
       dateOfBirth: "1990-01-01",

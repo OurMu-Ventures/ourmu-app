@@ -324,7 +324,7 @@ export async function approveApplication(
     kyc_verified_at: now,
   });
   if (profileError)
-    return { ok: false, message: "The investor profile could not be created." };
+    return { ok: false, message: "The partner profile could not be created." };
   await admin
     .schema("private")
     .from("investor_identities")

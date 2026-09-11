@@ -2,7 +2,7 @@ import { LegacyClaimForm, NinReveal } from "@/components/forms";
 import { requireAdmin } from "@/lib/auth";
 import { maskNin } from "@/lib/security/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-export default async function InvestorsPage() {
+export default async function PartnersPage() {
   await requireAdmin();
   const admin = createAdminClient();
   const [{ data: profiles }, { data: identities }, { data: unclaimed }] =
@@ -27,8 +27,8 @@ export default async function InvestorsPage() {
   );
   return (
     <>
-      <p className="eyebrow">Investor records</p>
-      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investors</h1>
+      <p className="eyebrow">Partner records</p>
+      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Partners</h1>
       <div className="table-wrap">
         <table>
           <thead>

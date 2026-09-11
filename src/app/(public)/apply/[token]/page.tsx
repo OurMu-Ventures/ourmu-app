@@ -33,7 +33,7 @@ export default async function ApplyPage({
   return (
     <main id="main" className="narrow">
       <p className="eyebrow">Confidential application</p>
-      <h1>Apply to become an OURMU investor.</h1>
+      <h1>Apply to become an OURMU partner.</h1>
       <p className="lead">
         Your email is fixed to this invitation. KYC review happens offline; do
         not upload identity documents.

@@ -421,7 +421,7 @@ export async function acceptPartnerImport(
       message: "Import acceptance failed. No access was enabled.",
     };
   revalidatePath("/admin/imports");
-  revalidatePath("/admin/investors");
+    revalidatePath("/admin/partners");
   revalidatePath("/admin/investments");
   revalidatePath("/admin/cycles");
   return {
@@ -493,7 +493,7 @@ export async function claimLegacyPartner(
       ok: false,
       message: "The account exists but the legacy history was not linked.",
     };
-  revalidatePath("/admin/investors");
+    revalidatePath("/admin/partners");
   return {
     ok: true,
     message: "Legacy history linked. No email was sent automatically.",

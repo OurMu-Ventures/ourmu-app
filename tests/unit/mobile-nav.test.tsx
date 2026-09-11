@@ -16,10 +16,10 @@ const links: ShellLink[] = [
 ];
 
 function renderNav() {
-  render(<ShellNav links={links} label="Investor portal" />);
+  render(<ShellNav links={links} label="Partner portal" />);
   return {
     toggle: screen.getByRole("button", { name: "Open navigation" }),
-    nav: screen.getByRole("navigation", { name: "Investor portal" }),
+    nav: screen.getByRole("navigation", { name: "Partner portal" }),
   };
 }
 
