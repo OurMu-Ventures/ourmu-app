@@ -15,14 +15,14 @@ env:
   IDENTITY_MASTER_KEY_BASE64: BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
   CRON_SECRET: ci-cron-secret-000000000000000000000000
   RESEND_FROM_EMAIL: OURMU <ci@example.com>
-  LEGAL_PRIVACY_VERSION: ci-draft
+  LEGAL_PRIVACY_VERSION: 2026-09-09
   AGREEMENT_PLACEHOLDER_BLOCK: "true"
 jobs:
   application:
     name: application
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - run: npm ci
@@ -35,7 +35,7 @@ jobs:
     name: database
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: supabase/setup-cli@v1
         with: { version: 2.113.0 }
       - run: supabase start
@@ -46,7 +46,7 @@ jobs:
     name: browser
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - run: npm ci

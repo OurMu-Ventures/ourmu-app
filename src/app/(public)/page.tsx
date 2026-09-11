@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { FishExperience } from "@/components/FishExperience";
+import { Button } from "@/components/ui/button";
+import { LinkStatus } from "@/components/ui/link-status";
 
 export default function HomePage() {
   return (
@@ -14,12 +16,17 @@ export default function HomePage() {
             externally verified bank-transfer investment.
           </p>
           <div className="hero-actions">
-            <Link className="button" href="/login">
-              Investor login
-            </Link>
-            <Link className="button-secondary" href="/risk-disclosure">
-              Read the risk disclosure
-            </Link>
+            <Button asChild>
+              <Link href="/login">
+                Investor login <LinkStatus label="Opening login" />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/risk-disclosure">
+                Read the risk disclosure{" "}
+                <LinkStatus label="Opening risk disclosure" />
+              </Link>
+            </Button>
           </div>
         </div>
         <FishExperience />

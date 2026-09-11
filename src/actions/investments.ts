@@ -21,13 +21,14 @@ export async function requestInvestment(
   const profile = await requireInvestor();
   const parsed = investmentRequestSchema.safeParse({
     cycleId: formData.get("cycleId"),
-    units: formData.get("units"),
+    principalUgx: formData.get("principalUgx"),
     agreementAccepted: formData.get("agreementAccepted"),
   });
   if (!parsed.success)
     return {
       ok: false,
-      message: "Choose 1–500 units and accept the current agreement.",
+      message:
+        "Enter UGX 125,000–62,500,000 with at most two decimals and accept the current agreement.",
     };
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
@@ -35,7 +36,7 @@ export async function requestInvestment(
   const { error } = await admin.rpc("request_investment", {
     p_investor_id: profile.id,
     p_cycle_id: parsed.data.cycleId,
-    p_units: parsed.data.units,
+    p_principal_ugx: Number(parsed.data.principalUgx),
     p_request_id: requestId(),
     p_user_agent: requestHeaders.get("user-agent") ?? "unknown",
     p_ip_fingerprint: toBytea(fingerprintRequestValue("ip", ip)),
@@ -50,7 +51,7 @@ export async function requestInvestment(
   return {
     ok: true,
     message:
-      "Units reserved for 48 hours. Use the displayed bank instructions to transfer the exact amount.",
+      "Investment reserved for 48 hours. Use the displayed bank instructions to transfer the exact amount.",
   };
 }
 
@@ -93,7 +94,7 @@ export async function activateInvestment(
     p_admin_id: profile.id,
     p_investment_id: parsed.data.investmentId,
     p_bank_reference: parsed.data.bankReference,
-    p_received_amount_ugx: parsed.data.receivedAmountUgx,
+    p_received_amount_ugx: Number(parsed.data.receivedAmountUgx),
     p_received_date: parsed.data.receivedDate,
     p_confirmation: parsed.data.confirmation,
     p_admin_aal2: aal?.currentLevel === "aal2",

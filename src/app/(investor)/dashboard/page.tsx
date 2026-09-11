@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { requireInvestor } from "@/lib/auth";
-import { date, dateTime, ugx } from "@/lib/format";
+import { InvestmentCard } from "@/components/InvestmentCard";
+import { Button } from "@/components/ui/button";
+import { LinkStatus } from "@/components/ui/link-status";
+import { date, dateTime, ugx, units } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -10,9 +13,8 @@ export default async function DashboardPage() {
     await Promise.all([
       supabase
         .from("investments")
-        .select("*")
+        .select("*,investment_cycles(name,status,maturity_date)")
         .eq("investor_id", profile.id)
-        .in("status", ["reserved", "active"])
         .order("requested_at", { ascending: false }),
       supabase
         .from("investment_cycles")
@@ -25,36 +27,64 @@ export default async function DashboardPage() {
         .eq("user_id", profile.id)
         .maybeSingle(),
     ]);
-  const principal = (investments ?? []).reduce(
+  const activeInvestments = (investments ?? []).filter((item) =>
+    ["reserved", "active"].includes(item.status),
+  );
+  const maturedInvestments = (investments ?? []).filter(
+    (item) => item.status === "matured",
+  );
+  const principal = activeInvestments.reduce(
     (sum, item) => sum + Number(item.principal_ugx),
     0,
   );
-  const projected = (investments ?? []).reduce(
+  const projected = activeInvestments.reduce(
     (sum, item) => sum + Number(item.projected_value_ugx),
     0,
   );
+  const totalUnits = activeInvestments.reduce(
+    (sum, item) => sum + Number(item.units),
+    0,
+  );
+  const eligible = profile.kyc_status === "verified" && Boolean(kin);
   return (
     <>
-      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Welcome back.</h1>
-      {!kin && (
+      <p className="eyebrow">Your portfolio</p>
+      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
+        Good day, {profile.legal_name.split(" ")[0]}.
+      </h1>
+      {!eligible && (
         <div className="notice">
-          <strong>Finish onboarding.</strong> Add next-of-kin details before
-          requesting an investment.{" "}
-          <Link href="/profile">Complete profile</Link>
+          <strong>Finish onboarding.</strong> KYC verification and next-of-kin
+          details are required before requesting an investment.{" "}
+          <Link href="/profile">
+            Complete profile <LinkStatus label="Opening profile" />
+          </Link>
         </div>
       )}
-      <div className="grid">
-        <article className="card">
-          <p className="muted">Reserved + active</p>
-          <p className="stat">{investments?.length ?? 0}</p>
-        </article>
-        <article className="card">
-          <p className="muted">Principal</p>
-          <p className="stat">{ugx(principal)}</p>
-        </article>
-        <article className="card">
-          <p className="muted">Projected value</p>
+      <div className="portfolio-summary">
+        <article className="card portfolio-hero-card">
+          <p className="muted">Active portfolio value at maturity</p>
           <p className="stat">{ugx(projected)}</p>
+          <div className="portfolio-hero-breakdown">
+            <p>
+              <span>Principal</span>
+              <strong>{ugx(principal)}</strong>
+            </p>
+            <p>
+              <span>Projected return</span>
+              <strong>{ugx(projected - principal)}</strong>
+            </p>
+          </div>
+        </article>
+        <article className="card">
+          <p className="muted">Active placements</p>
+          <p className="stat">{activeInvestments.length}</p>
+          <p className="muted">{units(totalUnits)} units</p>
+        </article>
+        <article className="card">
+          <p className="muted">Past placements</p>
+          <p className="stat">{maturedInvestments.length}</p>
+          <p className="muted">Reported paid records</p>
         </article>
       </div>
       <section style={{ marginTop: "2rem" }}>
@@ -63,10 +93,13 @@ export default async function DashboardPage() {
             <p className="eyebrow">Current opportunity</p>
             <h2>{cycle?.name ?? "No cycle is open"}</h2>
           </div>
-          {cycle && kin && (
-            <Link className="button" href="/investments/new">
-              Request units
-            </Link>
+          {cycle && eligible && (
+            <Button asChild>
+              <Link href="/investments/new">
+                Request investment{" "}
+                <LinkStatus label="Opening investment form" />
+              </Link>
+            </Button>
           )}
         </div>
         {cycle && (
@@ -82,6 +115,57 @@ export default async function DashboardPage() {
             </p>
           </div>
         )}
+      </section>
+      <section style={{ marginTop: "2rem" }}>
+        <div className="page-head">
+          <div>
+            <p className="eyebrow">Placement history</p>
+            <h2>Your active and past cycles</h2>
+          </div>
+          <Button asChild variant="secondary">
+            <Link href="/investments">
+              View all placements{" "}
+              <LinkStatus label="Opening investments" />
+            </Link>
+          </Button>
+        </div>
+        <div className="cycle-list">
+          {(investments ?? []).map((item) => {
+            const itemCycle = item.investment_cycles;
+            const paid = item.payout_basis === "reported_paid";
+            const payout = paid
+              ? (item.reported_payout_ugx ?? item.projected_value_ugx)
+              : item.projected_value_ugx;
+            return (
+              <InvestmentCard
+                key={item.id}
+                item={{
+                  name: itemCycle?.name ?? "OURMU placement",
+                  status: item.status,
+                  statusLabel: paid
+                    ? "Reported paid"
+                    : item.status === "active"
+                      ? "Active"
+                      : item.status,
+                  principalUgx: item.principal_ugx,
+                  unitsValue: item.units ?? 0,
+                  profitUgx: Number(payout ?? 0) - Number(item.principal_ugx),
+                  payoutUgx: payout ?? 0,
+                  maturityDate: item.maturity_date,
+                  startIso: item.requested_at,
+                  detailHref: `/investments/${item.id}`,
+                  detailLabel: "View details",
+                  detailStatus: "Opening investment details",
+                }}
+              />
+            );
+          })}
+          {!investments?.length && (
+            <article className="card">
+              <p className="muted">Your placements will appear here once recorded.</p>
+            </article>
+          )}
+        </div>
       </section>
     </>
   );

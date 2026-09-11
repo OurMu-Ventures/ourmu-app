@@ -42,19 +42,24 @@ export async function createInvitation(
     .single();
   if (error || !data)
     return { ok: false, message: "The invitation could not be issued." };
-  const url = `${getServerEnv().NEXT_PUBLIC_APP_URL}/apply/${token.token}`;
+  const env = getServerEnv();
+  const url = `${env.NEXT_PUBLIC_APP_URL}/apply/${token.token}`;
+  const manualDelivery =
+    env.ALLOW_MANUAL_TEST_LINKS === "true" && !env.RESEND_API_KEY;
   try {
-    await sendTransactionalEmail({
-      to: parsed.data.email,
-      template: "application_invitation",
-      actionUrl: url,
-    });
+    if (!manualDelivery)
+      await sendTransactionalEmail({
+        to: parsed.data.email,
+        template: "application_invitation",
+        actionUrl: url,
+      });
     await audit({
       actorId: adminProfile.id,
       action: "invitation.issued",
       entityType: "application_invitation",
       entityId: data.id,
       requestId: id,
+      metadata: { delivery: manualDelivery ? "manual_test" : "email" },
     });
   } catch {
     await admin
@@ -70,7 +75,12 @@ export async function createInvitation(
   revalidatePath("/admin/invitations");
   return {
     ok: true,
-    message: "Invitation sent. The raw token was not stored.",
+    message: manualDelivery
+      ? "Invitation created for controlled testing. The raw token was not stored."
+      : "Invitation sent. The raw token was not stored.",
+    sensitiveAction: manualDelivery
+      ? { url, label: "Open or copy the one-time application link" }
+      : undefined,
   };
 }
 
@@ -333,14 +343,29 @@ export async function approveApplication(
     .eq("id", applicationId)
     .eq("status", "submitted");
   if (error) return { ok: false, message: "Approval could not be finalized." };
-  const supabase = await createClient();
-  await supabase.auth.signInWithOtp({
-    email: application.email,
-    options: {
-      shouldCreateUser: false,
-      emailRedirectTo: `${getServerEnv().NEXT_PUBLIC_APP_URL}/auth/confirm`,
-    },
-  });
+  const env = getServerEnv();
+  const redirectTo = `${env.NEXT_PUBLIC_APP_URL}/auth/confirm`;
+  const manualLinkMode =
+    env.ALLOW_MANUAL_TEST_LINKS === "true" && !env.RESEND_API_KEY;
+  let manualMagicLink: string | undefined;
+  if (manualLinkMode) {
+    const { data: linkData, error: linkError } =
+      await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email: application.email,
+        options: { redirectTo },
+      });
+    if (!linkError) manualMagicLink = linkData.properties.action_link;
+  } else {
+    const supabase = await createClient();
+    await supabase.auth.signInWithOtp({
+      email: application.email,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: redirectTo,
+      },
+    });
+  }
   await audit({
     actorId: reviewer.id,
     action: "application.approved",
@@ -352,7 +377,14 @@ export async function approveApplication(
   revalidatePath("/admin/applications");
   return {
     ok: true,
-    message: "Application approved and the first magic link requested.",
+    message: manualMagicLink
+      ? "Application approved. Use the one-time test sign-in link below."
+      : manualLinkMode
+        ? "Application approved, but a test sign-in link could not be generated."
+        : "Application approved and the first magic link requested.",
+    sensitiveAction: manualMagicLink
+      ? { url: manualMagicLink, label: "Open or copy the test sign-in link" }
+      : undefined,
   };
 }
 

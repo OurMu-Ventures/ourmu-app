@@ -39,6 +39,16 @@ export default async function NewInvestmentPage() {
         <p>Next-of-kin details are required for the final agreement.</p>
       </>
     );
+  if (profile.kyc_status !== "verified")
+    return (
+      <>
+        <h1 style={{ fontSize: "3rem" }}>KYC verification is required.</h1>
+        <p>
+          An administrator must complete offline verification before you can
+          invest.
+        </p>
+      </>
+    );
   const agreement = Array.isArray(cycle.agreement_versions)
     ? cycle.agreement_versions[0]
     : cycle.agreement_versions;
@@ -62,6 +72,11 @@ export default async function NewInvestmentPage() {
       </div>
       <section className="card" style={{ marginTop: "1rem" }}>
         <h2>Request and accept</h2>
+        <p className="muted">
+          Each request creates a separate investment placement. You may make
+          multiple placements in this monthly cycle, subject to your cumulative
+          cycle limit and the remaining cycle capacity.
+        </p>
         <InvestmentRequestForm
           cycleId={cycle.id}
           agreementTitle={agreement?.title ?? "Current agreement"}

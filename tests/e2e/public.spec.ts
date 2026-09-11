@@ -17,9 +17,22 @@ test("login does not offer unrestricted sign-up", async ({ page }) => {
     page.getByText(/unrestricted sign-up is disabled/i),
   ).toBeVisible();
 });
-test("legal launch gates are visible", async ({ page }) => {
+test("versioned legal content and compliance gates are visible", async ({
+  page,
+}) => {
   for (const path of ["/privacy", "/terms", "/risk-disclosure"]) {
     await page.goto(path);
-    await expect(page.getByText(/launch gate/i)).toBeVisible();
+    await expect(page.getByText(/compliance notice/i)).toBeVisible();
   }
+  await page.goto("/risk-disclosure");
+  await expect(page.getByText(/30% return is a projection/i)).toBeVisible();
+  await expect(page.getByText(/contractually guarantees/i)).toBeVisible();
+  await page.goto("/privacy");
+  await expect(
+    page.getByText(/normally retained for five years/i),
+  ).toBeVisible();
+  await page.goto("/terms");
+  await expect(
+    page.getByText(/private investment-club arrangement/i),
+  ).toBeVisible();
 });
