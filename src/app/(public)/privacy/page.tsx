@@ -9,11 +9,6 @@ export default function PrivacyPage() {
     <main id="main" className="narrow legal">
       <p className="eyebrow">Version {LEGAL_CONTENT_VERSION}</p>
       <h1>Privacy policy</h1>
-      <p className="legal-banner">
-        <strong>Compliance notice:</strong> This owner-approved version remains
-        subject to legal review, PDPO registration, designation of a privacy
-        contact, and confirmation of international processing safeguards.
-      </p>
       <h2>Who controls your information</h2>
       <p>
         OURMU Ventures Ltd is responsible for personal information collected
