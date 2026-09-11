@@ -23,9 +23,11 @@ test("login does not offer unrestricted sign-up", async ({ page }) => {
 test("versioned legal content and compliance gates are visible", async ({
   page,
 }) => {
-  for (const path of ["/privacy", "/terms", "/risk-disclosure"]) {
+  await page.goto("/terms");
+  await expect(page.getByText(/compliance notice/i)).toBeVisible();
+  for (const path of ["/privacy", "/risk-disclosure"]) {
     await page.goto(path);
-    await expect(page.getByText(/compliance notice/i)).toBeVisible();
+    await expect(page.getByText(/compliance notice/i)).toHaveCount(0);
   }
   await page.goto("/risk-disclosure");
   await expect(page.getByText(/30% return is a projection/i)).toBeVisible();

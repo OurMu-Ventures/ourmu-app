@@ -9,10 +9,6 @@ export default function RiskPage() {
     <main id="main" className="narrow legal">
       <p className="eyebrow">Version {LEGAL_CONTENT_VERSION}</p>
       <h1>Investment risk disclosure</h1>
-      <p className="legal-banner">
-        <strong>Compliance notice:</strong> This owner-approved version remains
-        subject to legal and regulatory review before broader enrolment.
-      </p>
       <h2>Projected return</h2>
       <p>
         The displayed 30% return is a projection, not a guarantee. Actual return
