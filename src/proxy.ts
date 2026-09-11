@@ -42,6 +42,24 @@ export async function proxy(request: NextRequest) {
     login.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(login);
   }
+  // Administrators must hold AAL2 for /admin routes. Bounce AAL1 sessions
+  // to MFA carrying the requested page; the MFA page re-verifies the admin
+  // role, so investors loop out to /dashboard without seeing anything.
+  const pathname = request.nextUrl.pathname;
+  const isAdminRoute =
+    pathname === "/admin" || pathname.startsWith("/admin/");
+  const isMfaPage =
+    pathname === "/admin/mfa" || pathname.startsWith("/admin/mfa/");
+  if (data?.claims && isAdminRoute && !isMfaPage) {
+    const { data: aal } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal?.currentLevel !== "aal2") {
+      const mfa = request.nextUrl.clone();
+      mfa.pathname = "/admin/mfa";
+      mfa.searchParams.set("next", pathname);
+      return NextResponse.redirect(mfa);
+    }
+  }
   return response;
 }
 

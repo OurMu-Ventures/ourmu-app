@@ -31,10 +31,13 @@ import {
 } from "@/content/legal";
 import { initialActionState } from "@/lib/validation";
 
-export function MagicLinkForm() {
+export function MagicLinkForm({ next }: { next?: string }) {
   const [state, action] = useActionState(requestMagicLink, initialActionState);
   return (
     <form className="form" action={action}>
+      {typeof next === "string" && next.length > 0 && (
+        <input type="hidden" name="next" value={next} />
+      )}
       <label>
         Email address
         <input name="email" type="email" autoComplete="email" required />

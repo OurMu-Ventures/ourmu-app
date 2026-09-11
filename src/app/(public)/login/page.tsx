@@ -1,14 +1,20 @@
 import type { Metadata } from "next";
+
 import { FishExperience } from "@/components/FishExperience";
 import { MagicLinkForm } from "@/components/forms";
+import { LOGIN_ERROR_MESSAGES, parseLoginError } from "@/lib/redirect";
 
 export const metadata: Metadata = { title: "Partner login" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ disabled?: string }>;
+  searchParams: Promise<{ disabled?: string; error?: string; next?: string }>;
 }) {
   const params = await searchParams;
+  const errorCode = parseLoginError(params.error);
+  // The requested destination is opaque here: it is validated in the login
+  // action and re-validated at the callback, never rendered as content.
+  const next = typeof params.next === "string" ? params.next : undefined;
   return (
     <main id="main">
       <section className="container hero">
@@ -18,13 +24,15 @@ export default async function LoginPage({
           <p className="lead">
             We will email a time-limited magic link to an approved account.
           </p>
-          {params.disabled && (
-            <p className="error">
-              This account does not currently have portal access.
+          {(params.disabled || errorCode) && (
+            <p className="error" role="alert">
+              {errorCode
+                ? LOGIN_ERROR_MESSAGES[errorCode]
+                : "This account does not currently have portal access."}
             </p>
           )}
           <div className="card">
-            <MagicLinkForm />
+            <MagicLinkForm next={next} />
           </div>
         </div>
         <FishExperience />

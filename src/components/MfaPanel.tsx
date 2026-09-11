@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 
-export function MfaPanel() {
+export function MfaPanel({ target }: { target: string }) {
   const router = useRouter();
   const [factorId, setFactorId] = useState("");
   const [qr, setQr] = useState("");
@@ -50,7 +50,12 @@ export function MfaPanel() {
       code,
     });
     if (result.error) setMessage("That code was not accepted.");
-    else router.push("/admin");
+    else {
+      // Replace so the MFA page leaves no history entry, then refresh so
+      // the verified session is reflected immediately.
+      router.replace(target);
+      router.refresh();
+    }
   }
   return (
     <div className="card form">
