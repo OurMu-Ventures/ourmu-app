@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 export function SiteHeader() {
   return (
@@ -24,11 +23,6 @@ export function SiteHeader() {
         <Link className="optional" href="/privacy">
           Privacy <LinkStatus label="Opening privacy notice" />
         </Link>
-        <Button asChild variant="secondary">
-          <Link href="/login">
-            Partner login <LinkStatus label="Opening login" />
-          </Link>
-        </Button>
       </nav>
     </header>
   );

@@ -1,4 +1,3 @@
-import { signOut } from "@/actions/auth";
 import { AppShell } from "@/components/AppShell";
 import { requireInvestor } from "@/lib/auth";
 
@@ -15,11 +14,6 @@ export default async function PartnerLayout({
           <p className="eyebrow">Partner portal</p>
           <strong>{profile.legal_name}</strong>
         </div>
-        <form action={signOut}>
-          <button className="button-secondary" type="submit">
-            Sign out
-          </button>
-        </form>
       </div>
       {children}
     </AppShell>

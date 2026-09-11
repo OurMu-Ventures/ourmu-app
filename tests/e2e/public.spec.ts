@@ -14,8 +14,11 @@ test("login does not offer unrestricted sign-up", async ({ page }) => {
     page.getByRole("heading", { name: /without a password/i }),
   ).toBeVisible();
   await expect(
-    page.getByText(/unrestricted sign-up is disabled/i),
-  ).toBeVisible();
+    page.getByRole("link", { name: /sign up|register|create account/i }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /sign up|register|create account/i }),
+  ).toHaveCount(0);
 });
 test("versioned legal content and compliance gates are visible", async ({
   page,
