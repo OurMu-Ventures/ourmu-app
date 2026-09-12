@@ -1,12 +1,13 @@
 import { MfaPanel } from "@/components/MfaPanel";
-import { requireAdmin } from "@/lib/auth";
 import { resolveNextPath } from "@/lib/redirect";
+
+// Rendered under the minimal admin outer layout (role gate only), outside
+// the navigation shell, so AAL1 rendering issues no admin prefetches.
 export default async function AdminMfaPage({
   searchParams,
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
-  await requireAdmin({ aal2: false });
   const params = await searchParams;
   const target = resolveNextPath(params.next, "admin");
   return (
