@@ -59,6 +59,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      is_accepted_import_batch: {
+        Args: { check_batch_id: string }
+        Returns: boolean
+      }
       is_admin: { Args: { check_user_id?: string }; Returns: boolean }
     }
     Enums: {
@@ -589,6 +593,7 @@ export type Database = {
           id: string
           import_batch_id: string | null
           investor_id: string | null
+          is_test: boolean
           legacy_partner_id: string | null
           matured_at: string | null
           maturity_date: string
@@ -617,6 +622,7 @@ export type Database = {
           id?: string
           import_batch_id?: string | null
           investor_id?: string | null
+          is_test?: boolean
           legacy_partner_id?: string | null
           matured_at?: string | null
           maturity_date: string
@@ -645,6 +651,7 @@ export type Database = {
           id?: string
           import_batch_id?: string | null
           investor_id?: string | null
+          is_test?: boolean
           legacy_partner_id?: string | null
           matured_at?: string | null
           maturity_date?: string
@@ -987,6 +994,7 @@ export type Database = {
           email: string
           id: string
           import_batch_id: string | null
+          is_test: boolean
           kyc_status: string
           kyc_verified_at: string | null
           legal_name: string
@@ -1005,6 +1013,7 @@ export type Database = {
           email: string
           id: string
           import_batch_id?: string | null
+          is_test?: boolean
           kyc_status?: string
           kyc_verified_at?: string | null
           legal_name: string
@@ -1023,6 +1032,7 @@ export type Database = {
           email?: string
           id?: string
           import_batch_id?: string | null
+          is_test?: boolean
           kyc_status?: string
           kyc_verified_at?: string | null
           legal_name?: string

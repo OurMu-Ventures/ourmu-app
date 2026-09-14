@@ -52,6 +52,13 @@ export default async function DashboardPage() {
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
         Good day, {profile.legal_name.split(" ")[0]}.
       </h1>
+      {profile.is_test && (
+        <div className="notice">
+          <strong>Test account.</strong> All amounts and placements shown for
+          this account are sample data and are excluded from OURMU financial
+          totals and cycle capacity.
+        </div>
+      )}
       {!eligible && (
         <div className="notice">
           <strong>Finish onboarding.</strong> KYC verification and next-of-kin

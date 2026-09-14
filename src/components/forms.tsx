@@ -18,7 +18,7 @@ import {
   rejectApplication,
   submitApplication,
 } from "@/actions/applications";
-import { requestMagicLink } from "@/actions/auth";
+import { requestMagicLink, signInTestAccount } from "@/actions/auth";
 import { activateInvestment, requestInvestment } from "@/actions/investments";
 import { requestAccountClosure, saveNextOfKin } from "@/actions/profile";
 import { ActionButton } from "@/components/ActionButton";
@@ -43,6 +43,36 @@ export function MagicLinkForm({ next }: { next?: string }) {
         <input name="email" type="email" autoComplete="email" required />
       </label>
       <ActionButton>Email me a secure link</ActionButton>
+      <StateMessage state={state} />
+    </form>
+  );
+}
+
+export function TestAccountLoginForm({ next }: { next?: string }) {
+  const [state, action] = useActionState(
+    signInTestAccount,
+    initialActionState,
+  );
+  return (
+    <form className="form" action={action}>
+      {typeof next === "string" && next.length > 0 && (
+        <input type="hidden" name="next" value={next} />
+      )}
+      <label>
+        Test account email
+        <input name="email" type="email" autoComplete="username" required />
+      </label>
+      <label>
+        Password
+        <input
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          minLength={12}
+          required
+        />
+      </label>
+      <ActionButton>Sign in to test account</ActionButton>
       <StateMessage state={state} />
     </form>
   );

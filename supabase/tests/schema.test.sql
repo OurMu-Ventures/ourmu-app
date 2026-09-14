@@ -1,5 +1,5 @@
 begin;
-select plan(40);
+select plan(43);
 select has_schema('private','private identity schema exists');
 select has_table('public','profiles','profiles exists');
 select has_table('private','investor_identities','identities are isolated');
@@ -31,6 +31,9 @@ select col_type_is('public','investments','projected_value_ugx','numeric(28,8)',
 select col_type_is('public','investments','units','numeric(28,14)','fractional units are derived precisely');
 select col_type_is('public','investment_cycles','capacity_ugx','numeric(28,8)','cycle capacity is cash-authoritative');
 select col_type_is('public','investment_cycles','unit_price_ugx','numeric(28,8)','unit price uses the same decimal money type');
+select col_type_is('public','profiles','is_test','boolean','profiles explicitly distinguish test accounts');
+select col_type_is('public','investments','is_test','boolean','investments explicitly distinguish test money');
+select has_trigger('public','investments','investment_test_flag_guard','investment test status is derived from its owner');
 select is_empty($$
   select 1
   from pg_index i

@@ -25,11 +25,13 @@ export default async function AdminPage() {
       .from("investments")
       .select("id", { count: "exact", head: true })
       .eq("status", "reserved")
+      .eq("is_test", false)
       .lte("reservation_expires_at", expiryCutoff),
     admin
       .from("investments")
       .select("id", { count: "exact", head: true })
-      .eq("status", "active"),
+      .eq("status", "active")
+      .eq("is_test", false),
     admin
       .from("jobs")
       .select("id", { count: "exact", head: true })
@@ -46,6 +48,7 @@ export default async function AdminPage() {
     admin
       .from("investments")
       .select("cycle_id,units,principal_ugx")
+      .eq("is_test", false)
       .in("status", ["reserved", "active"]),
   ]);
   const openCycleInvestments = cycle

@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
 import { getPublicEnv } from "@/lib/env";
-import { sanitizeNextPath } from "@/lib/redirect";
+import { resolveNextPath, sanitizeNextPath } from "@/lib/redirect";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { emailSchema, type ActionState } from "@/lib/validation";
 
@@ -51,6 +52,41 @@ export async function requestMagicLink(
     message:
       "If your approved account exists, a secure sign-in link is on its way.",
   };
+}
+
+export async function signInTestAccount(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const email = emailSchema.safeParse(formData.get("email"));
+  const password = String(formData.get("password") ?? "");
+  if (!email.success || password.length < 12 || password.length > 128)
+    return { ok: false, message: "Email or password is incorrect." };
+
+  // Password login is deliberately restricted to explicitly marked test
+  // profiles. Real partners continue to use email magic links.
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id,access_status,is_test")
+    .eq("email", email.data)
+    .eq("role", "investor")
+    .maybeSingle();
+  if (!profile?.is_test || profile.access_status !== "active")
+    return { ok: false, message: "Email or password is incorrect." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.data,
+    password,
+  });
+  if (error || data.user?.id !== profile.id) {
+    if (data.session) await supabase.auth.signOut({ scope: "local" });
+    return { ok: false, message: "Email or password is incorrect." };
+  }
+
+  const rawNext = formData.get("next");
+  redirect(resolveNextPath(rawNext, "investor"));
 }
 
 export async function signOut() {

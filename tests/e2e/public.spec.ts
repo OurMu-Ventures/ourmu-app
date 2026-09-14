@@ -11,7 +11,10 @@ test("public landing is responsive and discloses the model", async ({
 test("login does not offer unrestricted sign-up", async ({ page }) => {
   await page.goto("/login");
   await expect(
-    page.getByRole("heading", { name: /without a password/i }),
+    page.getByRole("heading", { name: /sign in to your portal/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /sign in to test account/i }),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: /sign up|register|create account/i }),
