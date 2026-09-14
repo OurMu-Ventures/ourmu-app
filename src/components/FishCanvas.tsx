@@ -384,9 +384,10 @@ const FEED_RADIUS = 280; // fish notice pellets within this range
 const FRENZY_RADIUS = 300; // a feeding schoolmate attracts mates within this
 const STARTLE_RADIUS = 160; // timid fish this close to a feed click dart first
 const SCHOOL_RADIUS = 90; // tilapia align/cohere with schoolmates within this
-const DEPTH_PULL_STRENGTH = 0.00015; // stronger pull toward preferred depth zone
+const DEPTH_PULL_STRENGTH = 0.00012; // proportional pull toward preferred depth zone (dt-scaled)
+const MAX_DEPTH_PULL_ANGLE = 0.05; // max radians per frame (~2.9 deg) - prevents oscillation
 const STUCK_THRESHOLD = 2000; // ms at edge before considering stuck
-const STUCK_MARGIN = 50; // px from edge to consider stuck
+const STUCK_MARGIN = 30; // px from edge to consider stuck (<= EDGE*0.4 = 32px)
 
 function updateFish(
   fish: FishState,
@@ -639,29 +640,24 @@ function updateFish(
     fish.angle += angleDiff(fish.angle, toCenter) * 0.012;
   }
 
-  // ── Edge avoidance ──
-  if (head.x < EDGE) fish.angle += 0.06 * (1 - head.x / EDGE);
-  if (head.x > w - EDGE) fish.angle -= 0.06 * (1 - (w - head.x) / EDGE);
-  if (head.y < EDGE * 0.4) fish.angle += 0.08;
-  if (head.y > h - EDGE * 0.4) fish.angle -= 0.08;
+  // ── Edge avoidance (dt-scaled) ──
+  const edgePush = 0.08 * dt;
+  if (head.x < EDGE) fish.angle += edgePush * (1 - head.x / EDGE);
+  if (head.x > w - EDGE) fish.angle -= edgePush * (1 - (w - head.x) / EDGE);
+  if (head.y < EDGE * 0.4) fish.angle += edgePush;
+  if (head.y > h - EDGE * 0.4) fish.angle -= edgePush;
 
-  // Vertical wrap: fish that swim off top/bottom reappear on opposite side
-  // (with a small buffer so the wrap isn't visible)
-  const wrapBuffer = fish.size * 2;
-  if (head.y < -wrapBuffer) {
-    for (const s of fish.spine) s.y += h + wrapBuffer * 2;
-  }
-  if (head.y > h + wrapBuffer) {
-    for (const s of fish.spine) s.y -= h + wrapBuffer * 2;
-  }
-
-  // Depth preference pull (stronger, scaled by distance from preferred zone)
+  // Depth preference pull (proportional, clamped, dt-scaled — like schooling/frenzy)
   const prefYMin = h * profile.preferredDepth[0];
   const prefYMax = h * profile.preferredDepth[1];
   const prefYCenter = (prefYMin + prefYMax) * 0.5;
   const depthDist = head.y - prefYCenter;
-  const depthPull = depthDist * DEPTH_PULL_STRENGTH * dt;
-  fish.angle -= depthPull; // negative because positive angle = down
+  // Proportional pull toward preferred zone center, like schooling/frenzy steering
+  const targetDepthAngle = -Math.sign(depthDist) * Math.min(
+    MAX_DEPTH_PULL_ANGLE,
+    Math.abs(depthDist) * DEPTH_PULL_STRENGTH * dt
+  );
+  fish.angle += angleDiff(fish.angle, fish.angle + targetDepthAngle) * 0.6;
 
   // Horizontal wrap
   if (head.x < -fish.size * 2) {
@@ -1406,14 +1402,15 @@ export default function FishCanvas() {
     }
 
     // ── Stuck-fish recovery: respawn fish stuck at top/bottom edges ──
-    // A fish is "stuck" if its head has been within STUCK_MARGIN of top/bottom
-    // for more than STUCK_THRESHOLD ms. We respawn it at a random position
-    // within its preferred depth zone.
+    // A fish is "stuck" if its head has been within STUCK_MARGIN (<= EDGE*0.4)
+    // of top/bottom AND its speed is low for more than STUCK_THRESHOLD ms.
+    // We respawn it at a random position in its preferred depth zone.
     for (const fish of fishRef.current) {
       const head = fish.spine[0];
       const atTop = head.y < STUCK_MARGIN;
       const atBottom = head.y > h - STUCK_MARGIN;
-      if (atTop || atBottom) {
+      const movingSlow = fish.speed < fish.profile.baseSpeed * 0.2;
+      if ((atTop || atBottom) && movingSlow) {
         fish.stuckTimer = (fish.stuckTimer ?? 0) + dt;
         if (fish.stuckTimer > STUCK_THRESHOLD) {
           // Respawn at a random position in preferred depth zone
@@ -1431,8 +1428,11 @@ export default function FishCanvas() {
           fish.targetSpeed = profile.baseSpeed;
           fish.speed = profile.baseSpeed;
           fish.angle = angle;
-          fish.vx = Math.cos(angle) * profile.baseSpeed;
-          fish.vy = Math.sin(angle) * profile.baseSpeed;
+          // Match the physics scale: vx = cos * speed * 0.08 (matches updateFish physics)
+          fish.vx = Math.cos(angle) * profile.baseSpeed * 0.08;
+          fish.vy = Math.sin(angle) * profile.baseSpeed * 0.08;
+          fish.mouseAware = false;
+          fish.mouseReactionCooldown = 0;
           for (let i = 0; i < fish.spine.length; i++) {
             fish.spine[i].x = newX - Math.cos(angle) * i * (fish.size / fish.profile.segments);
             fish.spine[i].y = newY - Math.sin(angle) * i * (fish.size / fish.profile.segments);
