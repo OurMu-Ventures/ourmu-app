@@ -18,6 +18,7 @@ type CurrentProfile = Pick<
   | "district"
   | "country"
   | "kyc_status"
+  | "is_test"
   | "onboarding_completed_at"
 >;
 
@@ -30,7 +31,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id,role,access_status,legal_name,email,phone,date_of_birth,address,district,country,kyc_status,onboarding_completed_at",
+      "id,role,access_status,legal_name,email,phone,date_of_birth,address,district,country,kyc_status,is_test,onboarding_completed_at",
     )
     .eq("id", user.id)
     .maybeSingle();
