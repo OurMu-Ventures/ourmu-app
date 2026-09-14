@@ -19,11 +19,6 @@ export default function HomePage() {
           />
           <p className="eyebrow">Private partner access</p>
           <h1>Grow with Uganda&apos;s aquaculture future.</h1>
-          <p className="lead">
-            A focused portal for invited OURMU partners to apply, reserve units
-            in an open cycle, record agreement acceptance, and follow an
-            externally verified bank-transfer investment.
-          </p>
           <div className="hero-actions">
             <Button asChild>
               <Link href="/login">
