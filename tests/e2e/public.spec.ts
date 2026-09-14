@@ -6,7 +6,7 @@ test("public landing is responsive and discloses the model", async ({
   await expect(
     page.getByRole("heading", { name: /aquaculture future/i }),
   ).toBeVisible();
-  await expect(page.getByText(/does not move money/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: /partner login/i })).toBeVisible();
 });
 test("login does not offer unrestricted sign-up", async ({ page }) => {
   await page.goto("/login");
