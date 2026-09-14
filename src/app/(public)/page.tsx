@@ -14,7 +14,7 @@ export default function HomePage() {
             alt="OURMU logo"
             width={240}
             height={162}
-            priority
+            preload
             className="hero-logo"
           />
           <p className="eyebrow">Private partner access</p>
