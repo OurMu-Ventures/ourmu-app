@@ -641,7 +641,7 @@ function updateFish(
   }
 
   // ── Edge avoidance (dt-scaled) ──
-  const edgePush = 0.08 * dt;
+  const edgePush = 0.08 * (dt / (1000 / 60));
   if (head.x < EDGE) fish.angle += edgePush * (1 - head.x / EDGE);
   if (head.x > w - EDGE) fish.angle -= edgePush * (1 - (w - head.x) / EDGE);
   if (head.y < EDGE * 0.4) fish.angle += edgePush;
