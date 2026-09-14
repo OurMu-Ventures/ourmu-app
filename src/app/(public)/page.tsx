@@ -35,34 +35,6 @@ export default function HomePage() {
         </div>
         <FishExperience />
       </section>
-      <section className="container">
-        <div className="grid">
-          <article className="card">
-            <p className="eyebrow">01</p>
-            <h2>Invite only</h2>
-            <p className="muted">
-              Applications begin with a one-use, email-bound link issued by
-              OURMU staff.
-            </p>
-          </article>
-          <article className="card">
-            <p className="eyebrow">02</p>
-            <h2>Bank transfer</h2>
-            <p className="muted">
-              The portal does not move money. Staff activate only after an exact
-              bank transfer is verified offline.
-            </p>
-          </article>
-          <article className="card">
-            <p className="eyebrow">03</p>
-            <h2>Clear records</h2>
-            <p className="muted">
-              Terms are snapshotted, acceptance is recorded, and the final
-              agreement is stored privately.
-            </p>
-          </article>
-        </div>
-      </section>
     </main>
   );
 }
