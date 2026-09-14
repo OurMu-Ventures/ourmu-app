@@ -15,13 +15,26 @@ test("login does not offer unrestricted sign-up", async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /sign in to test account/i }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: /sign up|register|create account/i }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /sign up|register|create account/i }),
   ).toHaveCount(0);
+});
+test("test account login is isolated on an unlinked route", async ({ page }) => {
+  await page.goto("/test");
+  await expect(
+    page.getByRole("heading", { name: /open the test portal/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /sign in to test account/i }),
+  ).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    "content",
+    /noindex/,
+  );
 });
 test("versioned legal content and compliance gates are visible", async ({
   page,

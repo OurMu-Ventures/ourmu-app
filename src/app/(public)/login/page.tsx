@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { FishExperience } from "@/components/FishExperience";
-import { MagicLinkForm, TestAccountLoginForm } from "@/components/forms";
+import { MagicLinkForm } from "@/components/forms";
 import { LOGIN_ERROR_MESSAGES, parseLoginError } from "@/lib/redirect";
 
 export const metadata: Metadata = { title: "Partner login" };
@@ -33,10 +33,6 @@ export default async function LoginPage({
           )}
           <div className="card">
             <MagicLinkForm next={next} />
-          </div>
-          <div className="card" style={{ marginTop: "1rem" }}>
-            <p className="eyebrow">Test accounts only</p>
-            <TestAccountLoginForm next={next} />
           </div>
         </div>
         <FishExperience />
