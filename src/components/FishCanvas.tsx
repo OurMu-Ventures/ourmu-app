@@ -189,6 +189,8 @@ interface FishState {
   // Mouse reaction
   mouseAware: boolean;
   mouseReactionCooldown: number;
+  // Stuck detection
+  stuckTimer: number;
   // Sprite rendering (photo fish; falls back to the vector path if unloaded)
   facing: 1 | -1; // horizontal flip, with hysteresis to avoid flicker
   depthBucket: number; // index into the pre-tinted sprite copies
@@ -322,6 +324,7 @@ function createFish(w: number, h: number, idx: number): FishState {
     finPhase: Math.random() * Math.PI * 2,
     mouseAware: false,
     mouseReactionCooldown: 0,
+    stuckTimer: 0,
     facing: Math.cos(angle) >= 0 ? 1 : -1,
     depthBucket: Math.min(
       SPRITE_DEPTH_BUCKETS - 1,
@@ -381,6 +384,9 @@ const FEED_RADIUS = 280; // fish notice pellets within this range
 const FRENZY_RADIUS = 300; // a feeding schoolmate attracts mates within this
 const STARTLE_RADIUS = 160; // timid fish this close to a feed click dart first
 const SCHOOL_RADIUS = 90; // tilapia align/cohere with schoolmates within this
+const DEPTH_PULL_STRENGTH = 0.00015; // stronger pull toward preferred depth zone
+const STUCK_THRESHOLD = 2000; // ms at edge before considering stuck
+const STUCK_MARGIN = 50; // px from edge to consider stuck
 
 function updateFish(
   fish: FishState,
@@ -636,14 +642,28 @@ function updateFish(
   // ── Edge avoidance ──
   if (head.x < EDGE) fish.angle += 0.06 * (1 - head.x / EDGE);
   if (head.x > w - EDGE) fish.angle -= 0.06 * (1 - (w - head.x) / EDGE);
-  if (head.y < EDGE * 0.4) fish.angle += 0.04;
-  if (head.y > h - EDGE * 0.4) fish.angle -= 0.04;
-  // Depth preference pull
-  const prefY =
-    h * (profile.preferredDepth[0] + profile.preferredDepth[1]) * 0.5;
-  fish.angle += (prefY - head.y) * 0.00002 * dt;
+  if (head.y < EDGE * 0.4) fish.angle += 0.08;
+  if (head.y > h - EDGE * 0.4) fish.angle -= 0.08;
 
-  // Wrap horizontally
+  // Vertical wrap: fish that swim off top/bottom reappear on opposite side
+  // (with a small buffer so the wrap isn't visible)
+  const wrapBuffer = fish.size * 2;
+  if (head.y < -wrapBuffer) {
+    for (const s of fish.spine) s.y += h + wrapBuffer * 2;
+  }
+  if (head.y > h + wrapBuffer) {
+    for (const s of fish.spine) s.y -= h + wrapBuffer * 2;
+  }
+
+  // Depth preference pull (stronger, scaled by distance from preferred zone)
+  const prefYMin = h * profile.preferredDepth[0];
+  const prefYMax = h * profile.preferredDepth[1];
+  const prefYCenter = (prefYMin + prefYMax) * 0.5;
+  const depthDist = head.y - prefYCenter;
+  const depthPull = depthDist * DEPTH_PULL_STRENGTH * dt;
+  fish.angle -= depthPull; // negative because positive angle = down
+
+  // Horizontal wrap
   if (head.x < -fish.size * 2) {
     for (const s of fish.spine) s.x += w + fish.size * 4;
   }
@@ -1383,6 +1403,44 @@ export default function FishCanvas() {
         bubblesRef.current,
       );
       drawFishAuto(ctx, fish);
+    }
+
+    // ── Stuck-fish recovery: respawn fish stuck at top/bottom edges ──
+    // A fish is "stuck" if its head has been within STUCK_MARGIN of top/bottom
+    // for more than STUCK_THRESHOLD ms. We respawn it at a random position
+    // within its preferred depth zone.
+    for (const fish of fishRef.current) {
+      const head = fish.spine[0];
+      const atTop = head.y < STUCK_MARGIN;
+      const atBottom = head.y > h - STUCK_MARGIN;
+      if (atTop || atBottom) {
+        fish.stuckTimer = (fish.stuckTimer ?? 0) + dt;
+        if (fish.stuckTimer > STUCK_THRESHOLD) {
+          // Respawn at a random position in preferred depth zone
+          const profile = fish.profile;
+          const newDepth =
+            profile.preferredDepth[0] +
+            Math.random() * (profile.preferredDepth[1] - profile.preferredDepth[0]);
+          const newX = Math.random() * w;
+          const newY = h * newDepth;
+          const angle = Math.random() * Math.PI * 2;
+          fish.stuckTimer = 0;
+          fish.behavior = "cruise";
+          fish.behaviorTimer = 0;
+          fish.behaviorDuration = 200 + Math.random() * 400;
+          fish.targetSpeed = profile.baseSpeed;
+          fish.speed = profile.baseSpeed;
+          fish.angle = angle;
+          fish.vx = Math.cos(angle) * profile.baseSpeed;
+          fish.vy = Math.sin(angle) * profile.baseSpeed;
+          for (let i = 0; i < fish.spine.length; i++) {
+            fish.spine[i].x = newX - Math.cos(angle) * i * (fish.size / fish.profile.segments);
+            fish.spine[i].y = newY - Math.sin(angle) * i * (fish.size / fish.profile.segments);
+          }
+        }
+      } else {
+        fish.stuckTimer = 0;
+      }
     }
 
     // Bubbles drift up in front of the fish
