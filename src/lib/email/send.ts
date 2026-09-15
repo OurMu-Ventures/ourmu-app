@@ -35,11 +35,21 @@ export async function sendTransactionalEmail(input: {
     : "";
   const { error } = await resend.emails.send({
     from: env.RESEND_FROM_EMAIL,
+    replyTo: "community@ourmu.org",
     to: input.to,
     subject: subjects[input.template],
     html: `<div style="font-family:Arial,sans-serif;color:#102923;max-width:600px"><h1 style="font-size:24px">OURMU</h1><p>${escapeHtml(input.detail ?? subjects[input.template])}</p>${action}<p style="color:#5d6c67;font-size:13px">Never forward private application or sign-in links. OURMU will never ask for your NIN or bank details by email.</p></div>`,
   });
-  if (error) throw new Error("EMAIL_DELIVERY_FAILED");
+  if (error) {
+    // Do not log the recipient or provider message: either may contain
+    // personal data. The stable fields are enough to alert and correlate.
+    console.error("email.transactional.delivery_failed", {
+      template: input.template,
+      provider: "resend",
+      code: error.name ?? "unknown",
+    });
+    throw new Error("EMAIL_DELIVERY_FAILED");
+  }
 }
 
 function escapeHtml(value: string) {

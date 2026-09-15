@@ -25,7 +25,7 @@ export async function requestMagicLink(
     typeof rawNext === "string" ? rawNext : null,
   );
   const supabase = await createClient();
-  await supabase.auth.signInWithOtp({
+  const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data,
     options: {
       shouldCreateUser: false,
@@ -34,6 +34,13 @@ export async function requestMagicLink(
       }`,
     },
   });
+  if (error) {
+    // Keep the public response non-enumerating. Provider messages can include
+    // account data, so production logs receive only a stable operation code.
+    console.error("auth.magic_link.request_failed", {
+      code: error.code ?? "unknown",
+    });
+  }
   const cookieStore = await cookies();
   if (safeNext) {
     cookieStore.set("pending_next", safeNext, {

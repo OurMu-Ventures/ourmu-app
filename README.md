@@ -8,7 +8,7 @@ Invite-only partner administration for OURMU Ventures. This repository is a gree
 - Supabase Auth, PostgreSQL 17, RLS, and a private `agreements` Storage bucket.
 - Server Components for reads and authenticated Server Actions for UI mutations.
 - Service-role-only, `SECURITY INVOKER` PostgreSQL functions for reservation, cancellation, activation, and maintenance.
-- Supabase Auth email for administrator-only setup testing. Resend transactional mail and custom SMTP remain production launch gates.
+- Resend-backed Supabase Auth email and application transactional mail, using separate production credentials.
 - No application payment collection. Staff verify bank transfers outside the portal.
 
 See [architecture](docs/architecture.md), [security model](docs/security.md), and [production runbook](docs/production-runbook.md).
@@ -41,6 +41,6 @@ npm run test:e2e
 
 `npm run release:check` intentionally fails until all legal and operational launch-gate variables are supplied. This is not a defect: counsel-approved agreement/privacy/risk text and verified production services are required before promoting `our-mu.com`.
 
-Supabase's built-in email service is temporary: it is restricted to project-team recipients, rate-limited, and has no delivery SLA. A deliberately enabled manual-link mode may be used for one controlled external acceptance tester. It displays each application or first-login link once to an MFA-authenticated administrator; links must be shared privately and never logged. Disable this mode and configure Resend custom SMTP and transactional email before general partner onboarding.
+Production email must use Resend for both Supabase Auth SMTP and application transactional messages. Use separate sending-only keys, verify `auth.ourmu.org` before cutover, keep link tracking disabled for Auth mail, and leave manual-link mode disabled except during a controlled emergency rollback. See `docs/production-runbook.md` for verification and rotation procedures.
 
 Never commit `.env.local`, service-role keys, database URLs, age identities, invite tokens, magic links, bank references, or plaintext NIN values. Do not paste them into issues, logs, CI output, or chat.
