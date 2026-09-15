@@ -1,4 +1,5 @@
 import { retryJob } from "@/actions/admin";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { dateTime } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -44,7 +45,7 @@ export default async function JobsPage() {
                   {["failed", "dead"].includes(item.status) && (
                     <form action={retryJob}>
                       <input type="hidden" name="jobId" value={item.id} />
-                      <button type="submit">Retry</button>
+                      <SubmitButton pendingLabel="Retrying…">Retry</SubmitButton>
                     </form>
                   )}
                 </td>

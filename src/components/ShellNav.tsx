@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 
 import { LinkStatus } from "@/components/ui/link-status";
+import { SubmitButton } from "@/components/SubmitButton";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/actions/auth";
 
@@ -150,7 +151,13 @@ export function ShellNav({
               href={link.href}
               key={link.href}
               aria-current={active ? "page" : undefined}
-              onClick={() => setOpen(false)}
+              // Leave the drawer open during navigation so the LinkStatus
+              // spinner stays visible until the destination commits; the
+              // lastPath check above closes it on pathname change.
+              // Same-page taps navigate nowhere, so close those immediately.
+              onClick={() => {
+                if (link.href === pathname) setOpen(false);
+              }}
             >
               {Icon && <Icon className="nav-icon" aria-hidden="true" />}
               {link.label} <LinkStatus label={link.status} />
@@ -158,10 +165,10 @@ export function ShellNav({
           );
         })}
         <form action={signOut} className="nav-signout">
-          <button type="submit">
+          <SubmitButton pendingLabel="Signing out…">
             <LogOut className="nav-icon" aria-hidden="true" />
             Sign out
-          </button>
+          </SubmitButton>
         </form>
       </nav>
     </>

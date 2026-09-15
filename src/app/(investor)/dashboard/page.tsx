@@ -103,7 +103,7 @@ export default async function DashboardPage() {
           {cycle && eligible && (
             <Button asChild>
               <Link href="/investments/new">
-                Request investment{" "}
+                Make an Investment{" "}
                 <LinkStatus label="Opening investment form" />
               </Link>
             </Button>

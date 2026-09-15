@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/purity -- server page computes a request-time 24-hour cutoff */
 import { resolveClosure } from "@/actions/admin";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { ugx, units } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -127,9 +128,9 @@ export default async function AdminPage() {
                     <option value="declined">Decline and restore access</option>
                   </select>
                 </label>
-                <button className="button" type="submit">
+                <SubmitButton className="button" pendingLabel="Recording…">
                   Record outcome
-                </button>
+                </SubmitButton>
               </form>
             </div>
           );
