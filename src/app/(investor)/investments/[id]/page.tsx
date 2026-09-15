@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cancelInvestment } from "@/actions/investments";
+import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
 import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
@@ -24,6 +26,17 @@ export default async function InvestmentPage({
   const agreement = Array.isArray(data.investment_agreements)
     ? data.investment_agreements[0]
     : data.investment_agreements;
+  // Reservation window is time-sensitive; check at render and re-check server-side on submit.
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+  const isCancellable =
+    data.status === "reserved" &&
+    data.reservation_expires_at &&
+    new Date(data.reservation_expires_at).getTime() > now;
+  const isExpired =
+    data.status === "reserved" &&
+    data.reservation_expires_at &&
+    new Date(data.reservation_expires_at).getTime() <= now;
   return (
     <>
       <p className="eyebrow">Investment record</p>
@@ -81,6 +94,25 @@ export default async function InvestmentPage({
               Open agreement <LinkStatus label="Opening agreement" />
             </Link>
           </Button>
+        )}
+        {isCancellable && (
+          <div style={{ marginTop: "1rem" }}>
+            <p className="muted" style={{ marginBottom: "0.5rem" }}>
+              Reserved — transfer the exact amount before expiry or cancel
+              this reservation.
+            </p>
+            <CancelInvestmentButton
+              action={cancelInvestment}
+              investmentId={data.id}
+              variant="danger"
+            />
+          </div>
+        )}
+        {isExpired && (
+          <p className="muted" style={{ marginTop: "1rem" }}>
+            This reservation has expired. It will be marked expired on the
+            next maintenance run.
+          </p>
         )}
       </div>
     </>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cancelInvestment } from "@/actions/investments";
+import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
 import { InvestmentCard } from "@/components/InvestmentCard";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
@@ -33,6 +34,13 @@ export default async function InvestmentsPage() {
             item.payout_basis === "reported_paid"
               ? (item.reported_payout_ugx ?? item.projected_value_ugx)
               : item.projected_value_ugx;
+          // Reservation window is time-sensitive; check at render and re-check server-side on submit.
+          // eslint-disable-next-line react-hooks/purity
+          const now = Date.now();
+          const isCancellable =
+            item.status === "reserved" &&
+            item.reservation_expires_at &&
+            new Date(item.reservation_expires_at).getTime() > now;
           return (
             <InvestmentCard
               key={item.id}
@@ -53,15 +61,11 @@ export default async function InvestmentsPage() {
                 detailStatus: "Opening investment details",
               }}
               actions={
-                item.status === "reserved" ? (
-                  <form action={cancelInvestment}>
-                    <input
-                      type="hidden"
-                      name="investmentId"
-                      value={item.id}
-                    />
-                    <button type="submit">Cancel</button>
-                  </form>
+                isCancellable ? (
+                  <CancelInvestmentButton
+                    action={cancelInvestment}
+                    investmentId={item.id}
+                  />
                 ) : undefined
               }
             />

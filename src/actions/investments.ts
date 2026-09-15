@@ -55,7 +55,10 @@ export async function requestInvestment(
   };
 }
 
-export async function cancelInvestment(formData: FormData) {
+export async function cancelInvestment(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const profile = await requireInvestor();
   const investmentId = String(formData.get("investmentId") ?? "");
   const admin = createAdminClient();
@@ -64,9 +67,20 @@ export async function cancelInvestment(formData: FormData) {
     p_investment_id: investmentId,
     p_request_id: requestId(),
   });
-  if (error) throw new Error(publicError(error, "Cancellation failed."));
+  if (error) {
+    const message = publicError(error, "Cancellation failed.");
+    // Race after expiry: row still reads `reserved` until hourly maintenance flips it to `expired`.
+    if (message.toLowerCase().includes("cannot be cancelled"))
+      return {
+        ok: false,
+        message:
+          "This reservation has expired and can no longer be cancelled. Refresh to see its updated status.",
+      };
+    return { ok: false, message };
+  }
   revalidatePath("/dashboard");
   revalidatePath("/investments");
+  return { ok: true, message: "Reservation cancelled." };
 }
 
 export async function activateInvestment(
