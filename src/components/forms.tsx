@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 
 import {
   createAgreementVersion,
@@ -244,9 +245,11 @@ export function NextOfKinForm({
 
 export function InvestmentRequestForm({
   cycleId,
+  agreementId,
   agreementTitle,
 }: {
   cycleId: string;
+  agreementId: string;
   agreementTitle: string;
 }) {
   const [state, action] = useActionState(requestInvestment, initialActionState);
@@ -271,8 +274,15 @@ export function InvestmentRequestForm({
       <label className="checkbox">
         <input name="agreementAccepted" type="checkbox" value="yes" required />
         <span>
-          I have read and accept “{agreementTitle}”. This records a legally
-          significant acceptance receipt.
+          I have read and accept the{" "}
+          <Link
+            href={`/participation-agreements/${agreementId}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {agreementTitle}
+          </Link>
+          . This records a legally significant acceptance receipt.
         </span>
       </label>
       <ActionButton>Reserve investment for 48 hours</ActionButton>
