@@ -7,10 +7,8 @@ import {
   createCycle,
   acceptPartnerImport,
   claimLegacyPartner,
-  revealNin,
   saveBankInstructions,
   updateCycle,
-  type RevealState,
 } from "@/actions/admin";
 import {
   approveApplication,
@@ -610,29 +608,6 @@ export function BankInstructionsForm() {
       </label>
       <ActionButton>Activate these instructions</ActionButton>
       <StateMessage state={state} />
-    </form>
-  );
-}
-
-export function NinReveal({ userId }: { userId: string }) {
-  const [state, action] = useActionState(revealNin, {
-    ok: false,
-    message: "",
-  } satisfies RevealState);
-  return (
-    <form action={action}>
-      <input type="hidden" name="userId" value={userId} />
-      <ActionButton>Reveal NIN once</ActionButton>
-      {state.message && (
-        <p className={state.ok ? "notice" : "error"} role="status">
-          {state.message}
-        </p>
-      )}
-      {state.value && (
-        <output className="card" aria-live="polite">
-          <strong>{state.value}</strong>
-        </output>
-      )}
     </form>
   );
 }

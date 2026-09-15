@@ -4,9 +4,8 @@ import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { requireAdmin, requireInvestor } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { audit, requestId } from "@/lib/db";
-import { decryptNin } from "@/lib/security/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { emailSchema, type ActionState } from "@/lib/validation";
@@ -337,62 +336,6 @@ export async function resolveClosure(formData: FormData) {
     requestId: requestId(),
   });
   revalidatePath("/admin");
-}
-
-export type RevealState = { ok: boolean; value?: string; message: string };
-export async function revealNin(
-  _: RevealState,
-  formData: FormData,
-): Promise<RevealState> {
-  const profile = await requireInvestor();
-  const targetUserId = z.uuid().parse(formData.get("userId"));
-  const supabase = await createClient();
-  const { data: claimData } = await supabase.auth.getClaims();
-  const claims = claimData?.claims;
-  if (!claims) return { ok: false, message: "Reauthentication required." };
-  if (profile.role === "admin") {
-    await requireAdmin();
-  } else {
-    if (targetUserId !== profile.id)
-      return { ok: false, message: "Not authorized." };
-    const issuedAt = Number(claims.iat ?? 0);
-    if (!issuedAt || Date.now() / 1000 - issuedAt > 600)
-      return {
-        ok: false,
-        message:
-          "Use a fresh emailed sign-in link, then try again within 10 minutes.",
-      };
-  }
-  const admin = createAdminClient();
-  const { data } = await admin
-    .schema("private")
-    .from("investor_identities")
-    .select("nin_ciphertext,nin_iv,nin_auth_tag,key_version")
-    .eq("user_id", targetUserId)
-    .is("erased_at", null)
-    .single();
-  if (!data?.nin_ciphertext || !data.nin_iv || !data.nin_auth_tag)
-    return { ok: false, message: "Identity record is unavailable." };
-  const decode = (value: string) =>
-    Buffer.from(value.startsWith("\\x") ? value.slice(2) : value, "hex");
-  const value = decryptNin({
-    ciphertext: decode(data.nin_ciphertext),
-    iv: decode(data.nin_iv),
-    authTag: decode(data.nin_auth_tag),
-    keyVersion: data.key_version,
-  });
-  await audit({
-    actorId: profile.id,
-    action: "identity.nin_revealed",
-    entityType: "profile",
-    entityId: targetUserId,
-    requestId: requestId(),
-  });
-  return {
-    ok: true,
-    value,
-    message: "Shown once. Do not copy it into notes or messages.",
-  };
 }
 
 export async function acceptPartnerImport(

@@ -1,7 +1,5 @@
-import { NextOfKinForm, NinReveal } from "@/components/forms";
+import { NextOfKinForm } from "@/components/forms";
 import { requireInvestor } from "@/lib/auth";
-import { maskNin } from "@/lib/security/crypto";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function ProfilePage() {
@@ -10,13 +8,6 @@ export default async function ProfilePage() {
   const { data: kin } = await supabase
     .from("next_of_kin")
     .select("*")
-    .eq("user_id", profile.id)
-    .maybeSingle();
-  const admin = createAdminClient();
-  const { data: identity } = await admin
-    .schema("private")
-    .from("investor_identities")
-    .select("nin_last_four")
     .eq("user_id", profile.id)
     .maybeSingle();
   return (
@@ -35,17 +26,6 @@ export default async function ProfilePage() {
             <br />
             {profile.address}, {profile.district}, {profile.country}
           </p>
-        </article>
-        <article className="card">
-          <h2>Identity</h2>
-          <p>
-            NIN: <strong>{maskNin(identity?.nin_last_four ?? null)}</strong>
-          </p>
-          <p className="muted">
-            Reveal requires a fresh emailed sign-in (partner) or AAL2
-            (administrator) and is audited.
-          </p>
-          <NinReveal userId={profile.id} />
         </article>
         <article className="card">
           <h2>KYC</h2>
