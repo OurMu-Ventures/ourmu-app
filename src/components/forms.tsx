@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -276,11 +277,14 @@ export function InvestmentRequestForm({
         <span>
           I have read and accept the{" "}
           <Link
+            aria-label={`${agreementTitle} (opens in a new tab)`}
+            className="agreement-acceptance-link"
             href={`/participation-agreements/${agreementId}`}
             target="_blank"
             rel="noreferrer"
           >
-            {agreementTitle}
+            <span>{agreementTitle}</span>
+            <ExternalLink aria-hidden="true" size={15} strokeWidth={2.5} />
           </Link>
           . This records a legally significant acceptance receipt.
         </span>

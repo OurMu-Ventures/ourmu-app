@@ -401,6 +401,31 @@ a:focus-visible {
   margin-top: 0.2rem;
   flex-shrink: 0;
 }
+.agreement-acceptance-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.08rem 0.25rem;
+  border-radius: 0.3rem;
+  background: rgba(215, 167, 71, 0.16);
+  color: var(--lake);
+  font-weight: 800;
+  text-decoration-color: var(--gold-dark);
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.agreement-acceptance-link:hover {
+  background: rgba(215, 167, 71, 0.3);
+  color: var(--ink);
+}
+.agreement-acceptance-link svg {
+  flex-shrink: 0;
+  transform: translateY(0.12em);
+}
 /* Mobile-first shell: nav is a sticky horizontal strip; sidebar on desktop. */
 .shell {
   display: grid;
