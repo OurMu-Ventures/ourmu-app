@@ -79,6 +79,7 @@ export default async function NewInvestmentPage() {
         </p>
         <InvestmentRequestForm
           cycleId={cycle.id}
+          agreementId={agreement.id}
           agreementTitle={agreement?.title ?? "Current agreement"}
         />
       </section>
