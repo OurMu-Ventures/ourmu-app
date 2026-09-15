@@ -24,7 +24,7 @@ export default async function InvestmentsPage() {
         </div>
         <Button asChild>
           <Link href="/investments/new">
-            Request investment <LinkStatus label="Opening investment form" />
+            Make an Investment <LinkStatus label="Opening investment form" />
           </Link>
         </Button>
       </div>

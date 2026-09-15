@@ -5,6 +5,7 @@ import {
   CycleForm,
   Tabs,
 } from "@/components/forms";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { dateTime, ugx, units } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -54,7 +55,7 @@ export default async function CyclesPage() {
                 <form action={setCycleStatus}>
                   <input type="hidden" name="cycleId" value={item.id} />
                   <input type="hidden" name="status" value={next[0]} />
-                  <button type="submit">{next[1]}</button>
+                  <SubmitButton pendingLabel="Working…">{next[1]}</SubmitButton>
                 </form>
               )}
             </div>

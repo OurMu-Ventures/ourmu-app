@@ -1,5 +1,6 @@
 import { reissueInvitation, revokeInvitation } from "@/actions/applications";
 import { InvitationForm } from "@/components/forms";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { dateTime } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -54,7 +55,7 @@ export default async function InvitationsPage() {
                             name="invitationId"
                             value={item.id}
                           />
-                          <button type="submit">Revoke</button>
+                          <SubmitButton pendingLabel="Revoking…">Revoke</SubmitButton>
                         </form>
                       )}
                       <form action={reissueInvitation}>
@@ -63,7 +64,7 @@ export default async function InvitationsPage() {
                           name="invitationId"
                           value={item.id}
                         />
-                        <button type="submit">Reissue</button>
+                        <SubmitButton pendingLabel="Reissuing…">Reissue</SubmitButton>
                       </form>
                     </div>
                   )}

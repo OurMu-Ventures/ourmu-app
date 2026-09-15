@@ -69,13 +69,24 @@ describe("ShellNav", () => {
     expect(document.body.style.overflow).toBe("");
   });
 
-  it("closes when a link is tapped", async () => {
+  it("keeps the drawer open during navigation so the loading indicator stays visible", async () => {
     const user = userEvent.setup();
     const { nav } = renderNav();
     await user.click(screen.getByRole("button", { name: "Open navigation" }));
     expect(nav.className).toMatch(/open/);
 
     await user.click(screen.getByRole("link", { name: "Overview" }));
+
+    expect(nav.className).toMatch(/open/);
+  });
+
+  it("closes when the current-page link is tapped", async () => {
+    const user = userEvent.setup();
+    const { nav } = renderNav();
+    await user.click(screen.getByRole("button", { name: "Open navigation" }));
+    expect(nav.className).toMatch(/open/);
+
+    await user.click(screen.getByRole("link", { name: "Investments" }));
 
     expect(nav.className).not.toMatch(/open/);
   });
