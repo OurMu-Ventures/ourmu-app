@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   decidePostLoginDestination,
+  getHomeDestination,
   parseLoginError,
   resolveNextPath,
   sanitizeNextPath,
@@ -150,5 +151,42 @@ describe("parseLoginError", () => {
     expect(parseLoginError("no_profile")).toBe("no_profile");
     expect(parseLoginError("<script>")).toBeNull();
     expect(parseLoginError(undefined)).toBeNull();
+  });
+});
+
+describe("getHomeDestination", () => {
+  const activeInvestor = { role: "investor" as const, access_status: "active" as const, is_test: false };
+  const activeTestAccount = { role: "investor" as const, access_status: "active" as const, is_test: true };
+  const activeAdmin = { role: "admin" as const, access_status: "active" as const, is_test: false };
+  const disabledInvestor = { role: "investor" as const, access_status: "disabled" as const, is_test: false };
+  const closedInvestor = { role: "investor" as const, access_status: "closed" as const, is_test: false };
+
+  it("returns null for null profile (signed out)", () => {
+    expect(getHomeDestination(null, false)).toBeNull();
+    expect(getHomeDestination(null, true)).toBeNull();
+  });
+
+  it("returns null for disabled or closed accounts", () => {
+    expect(getHomeDestination(disabledInvestor, false)).toBeNull();
+    expect(getHomeDestination(closedInvestor, true)).toBeNull();
+    expect(getHomeDestination({ ...activeAdmin, access_status: "disabled" }, true)).toBeNull();
+  });
+
+  it("sends active investors to dashboard", () => {
+    expect(getHomeDestination(activeInvestor, false)).toBe("/dashboard");
+    expect(getHomeDestination(activeInvestor, true)).toBe("/dashboard");
+  });
+
+  it("sends active test accounts to dashboard", () => {
+    expect(getHomeDestination(activeTestAccount, false)).toBe("/dashboard");
+    expect(getHomeDestination(activeTestAccount, true)).toBe("/dashboard");
+  });
+
+  it("sends AAL2 admins to admin", () => {
+    expect(getHomeDestination(activeAdmin, true)).toBe("/admin");
+  });
+
+  it("sends AAL1 admins to admin/mfa", () => {
+    expect(getHomeDestination(activeAdmin, false)).toBe("/admin/mfa");
   });
 });

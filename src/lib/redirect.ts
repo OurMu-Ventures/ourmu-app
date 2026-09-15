@@ -6,6 +6,8 @@
 // Roles come only from `profiles.role`. Investors can never be sent to
 // `/admin` destinations; administrators may use any safe path.
 
+import type { Tables } from "@/lib/database.types";
+
 export type AppRole = "admin" | "investor";
 
 export const LOGIN_ERROR_MESSAGES = {
@@ -71,6 +73,30 @@ export function resolveNextPath(raw: unknown, role: AppRole): string {
     return "/dashboard";
   }
   return path ?? "/admin";
+}
+
+export type HomeDestinationProfile = Pick<
+  Tables<"profiles">,
+  "role" | "access_status" | "is_test"
+>;
+
+// Determines the home destination for an authenticated user.
+// Returns null for signed-out, disabled, or incomplete accounts.
+// Test accounts with active status are treated as investors.
+export function getHomeDestination(
+  profile: HomeDestinationProfile | null,
+  aal2: boolean,
+): string | null {
+  if (!profile) return null;
+  if (profile.access_status !== "active") return null;
+
+  if (profile.role === "admin") {
+    if (!aal2) return "/admin/mfa";
+    return "/admin";
+  }
+
+  // investor or test account
+  return "/dashboard";
 }
 
 export type PostLoginDecision =

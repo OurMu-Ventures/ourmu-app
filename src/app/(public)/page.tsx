@@ -1,10 +1,35 @@
+import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { FishExperience } from "@/components/FishExperience";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
+import { createClient } from "@/lib/supabase/server";
+import { getHomeDestination } from "@/lib/redirect";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let destination: string | null = null;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role,access_status,is_test")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile) {
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      const aal2 = aal?.currentLevel === "aal2";
+      destination = getHomeDestination(profile, aal2);
+    }
+  }
+
+  if (destination) redirect(destination);
+
   return (
     <main id="main">
       <section className="container hero">
