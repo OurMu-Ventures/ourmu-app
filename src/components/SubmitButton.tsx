@@ -26,9 +26,6 @@ export function SubmitButton({
       aria-busy={pending}
     >
       {pending ? pendingLabel : children}
-      <span className="sr-only" aria-live="polite">
-        {pending ? pendingLabel : ""}
-      </span>
     </button>
   );
 }

@@ -33,5 +33,6 @@ describe("SubmitButton", () => {
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("aria-busy", "true");
     expect(button).toHaveTextContent("Working…");
+    expect(button).toHaveAccessibleName("Working…");
   });
 });
