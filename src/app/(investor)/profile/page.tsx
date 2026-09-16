@@ -1,4 +1,4 @@
-import { NextOfKinForm } from "@/components/forms";
+import { AccountEmailsPanel, NextOfKinForm } from "@/components/forms";
 import { requireInvestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -10,6 +10,12 @@ export default async function ProfilePage() {
     .select("*")
     .eq("user_id", profile.id)
     .maybeSingle();
+  const { data: accountEmails } = await supabase
+    .from("account_emails")
+    .select("id,email,is_primary,verified_at")
+    .eq("user_id", profile.id)
+    .order("is_primary", { ascending: false })
+    .order("created_at");
   return (
     <>
       <p className="eyebrow">Profile and contract contact</p>
@@ -35,6 +41,11 @@ export default async function ProfilePage() {
           <p className="muted">Verification is performed offline.</p>
         </article>
       </div>
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Email contacts</h2>
+        <p className="muted">Verified contacts receive account notifications and can request a secure sign-in link. Your primary email remains unchanged.</p>
+        <div className="card"><AccountEmailsPanel emails={accountEmails ?? []} /></div>
+      </section>
       <section style={{ marginTop: "2rem" }}>
         <h2>Beneficiary and estate contact</h2>
         <p className="muted">

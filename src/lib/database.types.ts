@@ -9,6 +9,27 @@ export type Json =
 export type Database = {
   private: {
     Tables: {
+      alias_login_attempts: {
+        Row: {
+          id: number
+          ip_fingerprint: string
+          requested_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: never
+          ip_fingerprint: string
+          requested_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: never
+          ip_fingerprint?: string
+          requested_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       investor_identities: {
         Row: {
           application_id: string | null
@@ -115,6 +136,53 @@ export type Database = {
           },
           {
             foreignKeyName: "account_closure_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      account_emails: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_primary: boolean
+          updated_at: string
+          user_id: string
+          verification_expires_at: string | null
+          verification_sent_at: string | null
+          verification_token_hash: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_primary?: boolean
+          updated_at?: string
+          user_id: string
+          verification_expires_at?: string | null
+          verification_sent_at?: string | null
+          verification_token_hash?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_primary?: boolean
+          updated_at?: string
+          user_id?: string
+          verification_expires_at?: string | null
+          verification_sent_at?: string | null
+          verification_token_hash?: string | null
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_emails_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -793,6 +861,7 @@ export type Database = {
           available_at: string
           completed_at: string | null
           created_at: string
+          email_dedupe_key: string | null
           entity_id: string
           entity_type: string
           id: string
@@ -809,6 +878,7 @@ export type Database = {
           available_at?: string
           completed_at?: string | null
           created_at?: string
+          email_dedupe_key?: string | null
           entity_id: string
           entity_type: string
           id?: string
@@ -825,6 +895,7 @@ export type Database = {
           available_at?: string
           completed_at?: string | null
           created_at?: string
+          email_dedupe_key?: string | null
           entity_id?: string
           entity_type?: string
           id?: string

@@ -5,18 +5,20 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export default async function PartnersPage() {
   await requireAdmin();
   const admin = createAdminClient();
-  const [{ data: profiles }, { data: unclaimed }] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("*")
-      .eq("role", "investor")
-      .order("created_at", { ascending: false }),
-    admin
-      .from("legacy_partner_identities")
-      .select("id,canonical_name,normalized_phone")
-      .is("profile_id", null)
-      .order("canonical_name"),
-  ]);
+  const [{ data: profiles }, { data: unclaimed }, { data: accountEmails }] =
+    await Promise.all([
+      admin
+        .from("profiles")
+        .select("*")
+        .eq("role", "investor")
+        .order("created_at", { ascending: false }),
+      admin
+        .from("legacy_partner_identities")
+        .select("id,canonical_name,normalized_phone")
+        .is("profile_id", null)
+        .order("canonical_name"),
+      admin.from("account_emails").select("user_id,email,is_primary,verified_at").eq("is_primary", false).order("created_at"),
+    ]);
   return (
     <>
       <p className="eyebrow">Partner records</p>
@@ -35,7 +37,14 @@ export default async function PartnersPage() {
             {(profiles ?? []).map((item) => (
               <tr key={item.id}>
                 <td>{item.legal_name}</td>
-                <td>{item.email}</td>
+                <td>
+                  {item.email}
+                  {(accountEmails ?? []).filter((email) => email.user_id === item.id).map((email) => (
+                    <small className="muted" style={{ display: "block" }} key={email.email}>
+                      {email.email} ({email.verified_at ? "verified" : "pending"})
+                    </small>
+                  ))}
+                </td>
                 <td>{item.access_status}</td>
                 <td>{item.kyc_status}</td>
               </tr>

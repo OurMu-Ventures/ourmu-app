@@ -20,7 +20,13 @@ import {
 } from "@/actions/applications";
 import { requestMagicLink, signInTestAccount } from "@/actions/auth";
 import { activateInvestment, requestInvestment } from "@/actions/investments";
-import { requestAccountClosure, saveNextOfKin } from "@/actions/profile";
+import {
+  addAccountEmail,
+  removeAccountEmail,
+  requestAccountClosure,
+  resendAccountEmailVerification,
+  saveNextOfKin,
+} from "@/actions/profile";
 import { ActionButton } from "@/components/ActionButton";
 import { StateMessage } from "@/components/StateMessage";
 import { Button } from "@/components/ui/button";
@@ -241,6 +247,68 @@ export function NextOfKinForm({
       <ActionButton>Save beneficiary contact</ActionButton>
       <StateMessage state={state} />
     </form>
+  );
+}
+
+type AccountEmail = {
+  id: string;
+  email: string;
+  is_primary: boolean;
+  verified_at: string | null;
+};
+
+export function AccountEmailsPanel({ emails }: { emails: AccountEmail[] }) {
+  const [addState, addAction] = useActionState(addAccountEmail, initialActionState);
+  const [resendState, resendAction] = useActionState(resendAccountEmailVerification, initialActionState);
+  const [removeState, removeAction] = useActionState(removeAccountEmail, initialActionState);
+  const aliasCount = emails.filter((item) => !item.is_primary).length;
+  return (
+    <div>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            {emails.map((item) => (
+              <tr key={item.id}>
+                <td>{item.email}</td>
+                <td>{item.is_primary ? "Primary" : item.verified_at ? "Verified" : "Pending"}</td>
+                <td>
+                  {!item.is_primary && (
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      {!item.verified_at && (
+                        <form action={resendAction}>
+                          <input type="hidden" name="emailId" value={item.id} />
+                          <ActionButton>Resend verification</ActionButton>
+                          <small className="muted" style={{ display: "block" }}>
+                            Sends a new link valid for one hour.
+                          </small>
+                        </form>
+                      )}
+                      <form action={removeAction}>
+                        <input type="hidden" name="emailId" value={item.id} />
+                        <ActionButton danger>Remove</ActionButton>
+                      </form>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <StateMessage state={resendState.message ? resendState : removeState} />
+      {aliasCount < 2 && (
+        <form className="form" action={addAction} style={{ marginTop: "1rem" }}>
+          <label>
+            Additional email
+            <input name="email" type="email" autoComplete="email" required />
+          </label>
+          <ActionButton>Add and verify email</ActionButton>
+          <StateMessage state={addState} />
+        </form>
+      )}
+      <p className="muted">For security, changes require a sign-in issued within the last 10 minutes. You may add up to two additional emails.</p>
+    </div>
   );
 }
 

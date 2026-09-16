@@ -20,7 +20,7 @@ export default function PrivacyPage() {
       <h2>Information we collect</h2>
       <p>
         We collect identification and contact information, including legal name,
-        email, phone, date of birth, address, district, country, and National
+        primary and additional verified emails, phone, date of birth, address, district, country, and National
         Identification Number; application and offline KYC results; beneficiary
         and estate-contact details; investment requests and agreements;
         bank-transfer verification records; closure requests; communications;
@@ -56,7 +56,9 @@ export default function PrivacyPage() {
         screens show only a mask. Protected reveals require recent
         reauthentication and create an audit event. Additional controls include
         administrator MFA, private document storage, row-level database policies,
-        restricted administrative access, and append-only audit records.
+        restricted administrative access, single-use email verification links,
+        login throttling, and append-only audit records. Routine account notices
+        are delivered to the primary address and all verified additional emails.
       </p>
       <h2>Retention</h2>
       <p>

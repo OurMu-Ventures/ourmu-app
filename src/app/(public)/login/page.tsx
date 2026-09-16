@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Partner login" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ disabled?: string; error?: string; next?: string }>;
+  searchParams: Promise<{ disabled?: string; error?: string; next?: string; contact?: string }>;
 }) {
   const params = await searchParams;
   const errorCode = parseLoginError(params.error);
@@ -30,6 +30,12 @@ export default async function LoginPage({
                 ? LOGIN_ERROR_MESSAGES[errorCode]
                 : "This account does not currently have portal access."}
             </p>
+          )}
+          {params.contact === "verified" && (
+            <p className="success" role="status">Your additional email is verified. You can now sign in with it.</p>
+          )}
+          {params.contact === "invalid" && (
+            <p className="error" role="alert">That email verification link is invalid or has expired.</p>
           )}
           <div className="card">
             <MagicLinkForm next={next} />

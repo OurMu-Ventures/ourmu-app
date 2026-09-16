@@ -27,5 +27,18 @@ describe("identity cryptography", () => {
     expect(fingerprintRequestValue("ip", "same")).not.toEqual(
       fingerprintRequestValue("invite", "same"),
     );
+    expect(fingerprintRequestValue("account-email", "same")).not.toEqual(
+      fingerprintRequestValue("alias-login-ip", "same"),
+    );
+  });
+  it("creates opaque account email tokens with stable hashes", async () => {
+    const { newAccountEmailToken, fingerprintRequestValue } = await import(
+      "@/lib/security/crypto"
+    );
+    const value = newAccountEmailToken();
+    expect(value.token).toHaveLength(43);
+    expect(value.hash).toEqual(
+      fingerprintRequestValue("account-email", value.token),
+    );
   });
 });

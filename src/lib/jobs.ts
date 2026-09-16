@@ -31,12 +31,14 @@ export async function processDueJobs(limit = 10) {
         await generateAgreement(job.entity_id);
       else if (job.kind === "send_email")
         await deliverJobEmail(
+          job.id,
           job.entity_type,
           job.entity_id,
           job.payload as {
             template?: EmailTemplate;
             to?: string;
             actionUrl?: string;
+            accountEmailId?: string;
           },
         );
       await admin
@@ -144,26 +146,32 @@ async function generateAgreement(investmentId: string) {
 }
 
 async function deliverJobEmail(
+  jobId: string,
   entityType: string,
   entityId: string,
-  payload: { template?: EmailTemplate; to?: string; actionUrl?: string },
+  payload: {
+    template?: EmailTemplate;
+    to?: string;
+    actionUrl?: string;
+    accountEmailId?: string;
+  },
 ) {
   const admin = createAdminClient();
-  let to = payload.to;
+  const to = payload.to;
+  if (to && payload.accountEmailId) {
+    const { data: activeRecipient } = await admin
+      .from("account_emails")
+      .select("id")
+      .eq("id", payload.accountEmailId)
+      .eq("email", to)
+      .not("verified_at", "is", null)
+      .maybeSingle();
+    // Removing an alias immediately suppresses any queued delivery to it.
+    if (!activeRecipient) return;
+  }
   if (!to && entityType === "investment") {
-    const { data: investment } = await admin
-      .from("investments")
-      .select("investor_id")
-      .eq("id", entityId)
-      .single();
-    const { data: profile } = investment?.investor_id
-      ? await admin
-          .from("profiles")
-          .select("email")
-          .eq("id", investment.investor_id)
-          .single()
-      : { data: null };
-    to = profile?.email;
+    await fanOutInvestmentEmails(jobId, entityId, payload.template);
+    return;
   }
   if (!to || !payload.template) throw new Error("EMAIL_JOB_INVALID");
   await sendTransactionalEmail({
@@ -171,4 +179,41 @@ async function deliverJobEmail(
     template: payload.template,
     actionUrl: payload.actionUrl,
   });
+}
+
+async function fanOutInvestmentEmails(
+  parentJobId: string,
+  investmentId: string,
+  template?: EmailTemplate,
+) {
+  if (!template) throw new Error("EMAIL_JOB_INVALID");
+  const admin = createAdminClient();
+  const { data: investment } = await admin
+    .from("investments")
+    .select("investor_id")
+    .eq("id", investmentId)
+    .single();
+  const { data: recipients } = investment?.investor_id
+    ? await admin
+        .from("account_emails")
+        .select("id,email")
+        .eq("user_id", investment.investor_id)
+        .not("verified_at", "is", null)
+    : { data: null };
+  if (!recipients?.length) throw new Error("EMAIL_JOB_INVALID");
+  const { error } = await admin.from("jobs").upsert(
+    recipients.map((recipient) => ({
+      kind: "send_email" as const,
+      entity_type: "investment",
+      entity_id: investmentId,
+      payload: {
+        template,
+        to: recipient.email,
+        accountEmailId: recipient.id,
+      },
+      email_dedupe_key: `${parentJobId}:${recipient.id}`,
+    })),
+    { onConflict: "email_dedupe_key", ignoreDuplicates: true },
+  );
+  if (error) throw new Error("EMAIL_FANOUT_FAILED");
 }

@@ -83,7 +83,7 @@ export function decryptNin(envelope: {
 }
 
 export function fingerprintRequestValue(
-  context: "ip" | "invite",
+  context: "ip" | "invite" | "account-email" | "alias-login-ip",
   value: string,
 ) {
   return createHmac("sha256", derive(`${context}-fingerprint`))
@@ -94,6 +94,11 @@ export function fingerprintRequestValue(
 export function newInviteToken() {
   const token = randomBytes(32).toString("base64url");
   return { token, hash: fingerprintRequestValue("invite", token) };
+}
+
+export function newAccountEmailToken() {
+  const token = randomBytes(32).toString("base64url");
+  return { token, hash: fingerprintRequestValue("account-email", token) };
 }
 
 export function safeSecretEqual(left: string, right: string) {

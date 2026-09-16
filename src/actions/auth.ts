@@ -2,8 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { headers } from "next/headers";
 
 import { getPublicEnv } from "@/lib/env";
+import { sendTransactionalEmail } from "@/lib/email/send";
+import { fingerprintRequestValue } from "@/lib/security/crypto";
+import { toBytea } from "@/lib/db";
 import { resolveNextPath, sanitizeNextPath } from "@/lib/redirect";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -25,15 +29,46 @@ export async function requestMagicLink(
     typeof rawNext === "string" ? rawNext : null,
   );
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithOtp({
-    email: parsed.data,
-    options: {
-      shouldCreateUser: false,
-      emailRedirectTo: `${getPublicEnv().NEXT_PUBLIC_APP_URL}/auth/confirm${
-        safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""
-      }`,
-    },
-  });
+  const redirectTo = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/auth/confirm${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}`;
+  const admin = createAdminClient();
+  // Primary addresses remain native Supabase identities and use signInWithOtp
+  // below. Only verified, non-primary contacts need the alias bridge.
+  const { data: alias } = await admin.from("account_emails").select("user_id").eq("email", parsed.data).eq("is_primary", false).not("verified_at", "is", null).maybeSingle();
+  let error: { code?: string } | null = null;
+  if (alias) {
+    const { data: profile } = await admin.from("profiles").select("email,access_status,is_test").eq("id", alias.user_id).maybeSingle();
+    if (profile?.access_status === "active" && !profile.is_test) {
+      const headerStore = await headers();
+      const forwarded = headerStore.get("x-forwarded-for")?.split(",")[0]?.trim();
+      const ip = forwarded || headerStore.get("x-real-ip") || "unknown";
+      const ipHash = toBytea(fingerprintRequestValue("alias-login-ip", ip));
+      const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const [{ count: accountCount }, { count: ipCount }] = await Promise.all([
+        admin.schema("private").from("alias_login_attempts").select("id", { count: "exact", head: true }).eq("user_id", alias.user_id).gte("requested_at", since),
+        admin.schema("private").from("alias_login_attempts").select("id", { count: "exact", head: true }).eq("ip_fingerprint", ipHash).gte("requested_at", since),
+      ]);
+      // Match the configured Supabase email allowance (2/hour per account)
+      // while also bounding distributed requests from one source IP.
+      if ((accountCount ?? 0) < 2 && (ipCount ?? 0) < 10) {
+        await admin.schema("private").from("alias_login_attempts").insert({ user_id: alias.user_id, ip_fingerprint: ipHash });
+        const generated = await admin.auth.admin.generateLink({ type: "magiclink", email: profile.email, options: { redirectTo } });
+        if (generated.error || !generated.data.properties?.action_link) error = generated.error ?? { code: "link_generation_failed" };
+        else {
+          try {
+            await sendTransactionalEmail({ to: parsed.data, template: "alias_magic_link", actionUrl: generated.data.properties.action_link });
+          } catch {
+            error = { code: "delivery_failed" };
+          }
+        }
+      }
+    }
+  } else {
+    const result = await supabase.auth.signInWithOtp({
+      email: parsed.data,
+      options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
+    });
+    error = result.error;
+  }
   if (error) {
     // Keep the public response non-enumerating. Provider messages can include
     // account data, so production logs receive only a stable operation code.
