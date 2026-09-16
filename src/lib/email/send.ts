@@ -12,7 +12,7 @@ export type EmailTemplate =
   | "investment_activated"
   | "agreement_ready"
   | "account_email_verification"
-  | "alias_magic_link";
+  | "magic_link";
 
 const subjects: Record<EmailTemplate, string> = {
   application_invitation: "Your private OURMU application link",
@@ -22,7 +22,7 @@ const subjects: Record<EmailTemplate, string> = {
   investment_activated: "Your OURMU investment is active",
   agreement_ready: "Your OURMU agreement is ready",
   account_email_verification: "Verify your additional OURMU email",
-  alias_magic_link: "Your secure OURMU sign-in link",
+  magic_link: "Your secure OURMU sign-in link",
 };
 
 export async function sendTransactionalEmail(input: {

@@ -3,9 +3,6 @@ import { NextResponse } from "next/server";
 import { decidePostLoginDestination } from "@/lib/redirect";
 import { createClient } from "@/lib/supabase/server";
 
-// Fallback carrier for the requested destination, set by the login action
-// in case the email provider strips query parameters from the callback URL.
-// Always re-validated before use; cleared on every callback outcome.
 const PENDING_NEXT_COOKIE = "pending_next";
 
 function readPendingNext(request: Request): string | null {
@@ -38,10 +35,19 @@ export async function GET(request: Request) {
   };
 
   const code = url.searchParams.get("code");
-  if (!code) return fail("invalid_link");
+  const tokenHash = url.searchParams.get("token_hash");
   const supabase = await createClient();
-  const { error: exchangeError } =
-    await supabase.auth.exchangeCodeForSession(code);
+
+  let exchangeError: Error | null = null;
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    exchangeError = error;
+  } else if (tokenHash) {
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });
+    exchangeError = error;
+  } else {
+    return fail("invalid_link");
+  }
   if (exchangeError) return fail("invalid_link");
 
   const {
@@ -60,7 +66,6 @@ export async function GET(request: Request) {
     const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     aal2 = data?.currentLevel === "aal2";
   }
-  // Transient lookup failures must not read as missing profiles.
   const decision = decidePostLoginDestination({
     profile: profileError ? null : profile,
     aal2,
