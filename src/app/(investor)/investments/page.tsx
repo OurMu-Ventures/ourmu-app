@@ -52,6 +52,8 @@ export default async function InvestmentsPage() {
                 statusLabel: item.status,
                 principalUgx: item.principal_ugx,
                 unitsValue: item.units ?? 0,
+                unitPriceUgx: item.unit_price_ugx,
+                isPaid: item.payout_basis === "reported_paid",
                 profitUgx: Number(payout ?? 0) - Number(item.principal_ugx),
                 payoutUgx: payout ?? 0,
                 maturityDate: item.maturity_date,

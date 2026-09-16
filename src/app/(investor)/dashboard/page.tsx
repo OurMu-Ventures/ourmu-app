@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { requireInvestor } from "@/lib/auth";
 import { InvestmentCard } from "@/components/InvestmentCard";
+import {
+  CurrentOpportunityRate,
+  PortfolioSummary,
+} from "@/components/PortfolioOverview";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
-import { date, dateTime, ugx, units } from "@/lib/format";
+import { date, dateTime, ugx } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -68,32 +72,13 @@ export default async function DashboardPage() {
           </Link>
         </div>
       )}
-      <div className="portfolio-summary">
-        <article className="card portfolio-hero-card">
-          <p className="muted">Active portfolio value at maturity</p>
-          <p className="stat">{ugx(projected)}</p>
-          <div className="portfolio-hero-breakdown">
-            <p>
-              <span>Principal</span>
-              <strong>{ugx(principal)}</strong>
-            </p>
-            <p>
-              <span>Projected return</span>
-              <strong>{ugx(projected - principal)}</strong>
-            </p>
-          </div>
-        </article>
-        <article className="card">
-          <p className="muted">Active placements</p>
-          <p className="stat">{activeInvestments.length}</p>
-          <p className="muted">{units(totalUnits)} units</p>
-        </article>
-        <article className="card">
-          <p className="muted">Past placements</p>
-          <p className="stat">{maturedInvestments.length}</p>
-          <p className="muted">Reported paid records</p>
-        </article>
-      </div>
+      <PortfolioSummary
+        principal={principal}
+        projected={projected}
+        activeCount={activeInvestments.length}
+        totalUnits={totalUnits}
+        maturedCount={maturedInvestments.length}
+      />
       <section style={{ marginTop: "2rem" }}>
         <div className="page-head">
           <div>
@@ -113,8 +98,11 @@ export default async function DashboardPage() {
           <div className="card">
             <p>
               Unit price <strong>{ugx(cycle.unit_price_ugx)}</strong> ·
-              projected return <strong>30%</strong> · maturity{" "}
-              <strong>{date(cycle.maturity_date)}</strong>.
+              projected return{" "}
+              <CurrentOpportunityRate
+                projectedReturnBps={cycle.projected_return_bps}
+              />{" "}
+              · maturity <strong>{date(cycle.maturity_date)}</strong>.
             </p>
             <p className="muted">
               Cycle closes {dateTime(cycle.closes_at)}. Projection is not a
@@ -156,6 +144,8 @@ export default async function DashboardPage() {
                       : item.status,
                   principalUgx: item.principal_ugx,
                   unitsValue: item.units ?? 0,
+                  unitPriceUgx: item.unit_price_ugx,
+                  isPaid: paid,
                   profitUgx: Number(payout ?? 0) - Number(item.principal_ugx),
                   payoutUgx: payout ?? 0,
                   maturityDate: item.maturity_date,

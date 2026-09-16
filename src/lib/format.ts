@@ -21,3 +21,9 @@ export function dateTime(value: string) {
     timeStyle: "short",
   }).format(new Date(value));
 }
+
+// Basis points (e.g. 3000) to a plain percentage number (e.g. 30).
+// Stored cycle rates are authoritative; never hardcode the percentage.
+export function bpsToPercent(bps: number | string): number {
+  return Number(bps) / 100;
+}

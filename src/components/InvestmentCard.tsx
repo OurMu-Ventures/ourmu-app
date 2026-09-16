@@ -11,6 +11,8 @@ export type InvestmentCardData = {
   statusLabel: string;
   principalUgx: number | string;
   unitsValue: number | string;
+  unitPriceUgx?: number | string | null;
+  isPaid?: boolean;
   profitUgx: number | string;
   payoutUgx: number | string;
   maturityDate: string | null;
@@ -36,14 +38,27 @@ export function InvestmentCard({
     item.maturityDate,
     item.status,
   );
+  const isPaid = item.isPaid ?? false;
   return (
     <article className="card invest-card">
       <div className="invest-head">
         <div>
           <h3>{item.name}</h3>
           <p className="invest-amount">
-            {ugx(item.principalUgx)}{" "}
-            <span className="muted">· {units(item.unitsValue)} units</span>
+            <span>
+              {ugx(item.principalUgx)}{" "}
+              <InfoHint
+                label="How principal is calculated"
+                text="Amount you contributed to this placement."
+              />
+            </span>{" "}
+            <span className="muted">
+              · {units(item.unitsValue)} units{" "}
+              <InfoHint
+                label="How units are calculated"
+                text="Your principal divided by this placement's unit price."
+              />
+            </span>
           </p>
         </div>
         <span className="badge">{item.statusLabel}</span>
@@ -53,8 +68,12 @@ export function InvestmentCard({
           <span className="invest-stat-label">
             Profit
             <InfoHint
-              label="About profit"
-              text="Fixed return on your investment, paid at the end of the cycle."
+              label="How profit is calculated"
+              text={
+                isPaid
+                  ? "Total payout minus principal, using the recorded paid amount."
+                  : "Total payout minus principal, using this placement's projected rate. This is a projection, not a guarantee."
+              }
             />
           </span>
           <strong className="invest-profit">{ugx(item.profitUgx)}</strong>
@@ -63,8 +82,12 @@ export function InvestmentCard({
           <span className="invest-stat-label">
             Total at Maturity
             <InfoHint
-              label="About total at maturity"
-              text="Your investment plus profit, paid out on the maturity date."
+              label="How total at maturity is calculated"
+              text={
+                isPaid
+                  ? "The recorded payout for this paid placement."
+                  : "Principal plus projected profit. This is a projection, not a guarantee."
+              }
             />
           </span>
           <strong>{ugx(item.payoutUgx)}</strong>
@@ -78,7 +101,13 @@ export function InvestmentCard({
       </div>
       <div>
         <div className="invest-progress-row">
-          <span>Progress</span>
+          <span>
+            Progress{" "}
+            <InfoHint
+              label="How maturity progress is calculated"
+              text="Time elapsed between placement creation and maturity. Matured or past-due placements show 100%."
+            />
+          </span>
           <span>{progress}%</span>
         </div>
         <div
