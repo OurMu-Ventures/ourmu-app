@@ -7,11 +7,11 @@
 5. Use Resend for both Supabase Auth SMTP and application transactional mail. Verify the dedicated `auth.ourmu.org` domain in Resend before changing either production sender. Keep `ALLOW_MANUAL_TEST_LINKS=false` outside a controlled emergency rollback.
 6. Verify the migrated Storage bucket is private, then bootstrap the administrator.
 7. Create one Vercel project and set environment variables only through Vercel.
-8. Configure GitHub backup, cron, and release-gate values; complete acceptance before domain change.
+8. Configure backup, cron, and release-gate values in the private `OurMu-Ventures/ourmu-ops` repository; complete acceptance before domain change.
 
 Vercel needs `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `IDENTITY_MASTER_KEY_BASE64`, `CRON_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ALLOW_MANUAL_TEST_LINKS`, `LEGAL_PRIVACY_VERSION`, and `AGREEMENT_PLACEHOLDER_BLOCK`.
 
-GitHub needs secrets `PROD_DATABASE_URL`, `AGE_RESTORE_IDENTITY`, `CRON_SECRET`, `TEMP_DEPLOYMENT_URL`, `LEGAL_AGREEMENT_SHA256`; variable `AGE_RECIPIENT`; and the release variables named in the workflow.
+The private `OurMu-Ventures/ourmu-ops` repository needs secrets `PROD_DATABASE_URL`, `AGE_RESTORE_IDENTITY`, `CRON_SECRET`, `TEMP_DEPLOYMENT_URL`, and `LEGAL_AGREEMENT_SHA256`; variable `AGE_RECIPIENT`; and the release variables documented alongside its private workflows. Production workflows and their configuration do not belong in this public application repository.
 
 Operationally verify health, maintenance, dead jobs, daily encrypted artifacts, monthly restore, Supabase advisors, and critical dependency audit. Supabase Free is acceptable only for the controlled invite-only pilot with these compensating backups. Upgrade before open enrollment, payment/payout work, or when automatic backups/support become required.
 
@@ -32,7 +32,7 @@ values; the dedicated subdomain must have its own Resend-provided SPF, DKIM, MX,
 and return-path records. Proceed only after Resend reports SPF and DKIM verified.
 Keep link tracking disabled for authentication mail.
 
-Configure the production Supabase project (`prodprojectrefplaceholder`) Auth SMTP with
+Configure the production Supabase project (`<prod-project-ref>`) Auth SMTP with
 sender `OURMU`, sender
 address `no-reply@auth.ourmu.org`, host `smtp.resend.com`, port `465`, username
 `resend`, and the dedicated Auth key as password. Preserve the 60-second

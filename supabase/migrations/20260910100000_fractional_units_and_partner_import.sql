@@ -407,30 +407,37 @@ begin
   if not private.is_admin(p_admin_id) then
     raise exception using errcode = '42501', message = 'active administrator required';
   end if;
-  if p_manifest->>'source_sha256' <> '0000000000000000000000000000000000000000000000000000000000000000' then
-    raise exception using errcode = '22023', message = 'source workbook checksum is not approved';
+  if coalesce(p_manifest->>'source_sha256', '') !~ '^[a-f0-9]{64}$' then
+    raise exception using errcode = '22023', message = 'valid source workbook checksum is required';
   end if;
   select * into v_existing from public.import_batches where id = v_batch_id;
   if found then return v_existing.id; end if;
-  if jsonb_array_length(p_manifest->'profiles') <> 0
-    or jsonb_array_length(p_manifest->'partners') <> 0
-    or jsonb_array_length(p_manifest->'cycles') <> 0
-    or jsonb_array_length(p_manifest->'investments') <> 0
-    or jsonb_array_length(p_manifest->'monthly_summaries') <> 0 then
+  if jsonb_array_length(p_manifest->'profiles') <> (p_manifest->'summary'->>'profiles')::integer
+    or jsonb_array_length(p_manifest->'partners') <> (p_manifest->'summary'->>'partners')::integer
+    or jsonb_array_length(p_manifest->'cycles') <> (p_manifest->'summary'->>'cycles')::integer
+    or jsonb_array_length(p_manifest->'investments') <> (p_manifest->'summary'->>'investments')::integer
+    or jsonb_array_length(p_manifest->'monthly_summaries') <> (p_manifest->'summary'->>'summaries')::integer then
     raise exception using errcode = '22023', message = 'manifest record counts do not reconcile';
   end if;
   select id into v_agreement_id from public.agreement_versions
-  where version = '2026-09-09' and is_legally_approved and published_at is not null;
+  where version = p_manifest->>'agreement_version' and is_legally_approved and published_at is not null;
   if v_agreement_id is null then
-    raise exception using errcode = '23514', message = 'approved 2026-09-09 agreement is required';
+    raise exception using errcode = '23514', message = 'manifest approved agreement is required';
   end if;
 
   insert into public.import_batches (id, source_filename, source_sha256, status, partner_count,
     profile_count, unclaimed_count, cycle_count, investment_count, monthly_summary_count,
     principal_total_ugx, return_total_ugx, payout_total_ugx, staged_by)
   values (v_batch_id, p_manifest->>'source_filename', p_manifest->>'source_sha256', 'staged',
-    0, 0, 0, 0, 0, 0, 1000000.0000000, 300000.00000000,
-    1300000.0000000, p_admin_id);
+    (p_manifest->'summary'->>'partners')::integer,
+    (p_manifest->'summary'->>'profiles')::integer,
+    (p_manifest->'summary'->>'unclaimed')::integer,
+    (p_manifest->'summary'->>'cycles')::integer,
+    (p_manifest->'summary'->>'investments')::integer,
+    (p_manifest->'summary'->>'summaries')::integer,
+    (p_manifest->'summary'->>'principal')::numeric,
+    (p_manifest->'summary'->>'returns')::numeric,
+    (p_manifest->'summary'->>'payout')::numeric, p_admin_id);
 
   insert into public.profiles (id, role, access_status, legal_name, email, phone, country,
     kyc_status, import_batch_id)
@@ -484,18 +491,21 @@ begin
   select sum(principal_ugx), sum(projected_return_ugx), sum(projected_value_ugx)
   into v_principal, v_return, v_payout
   from public.investments where import_batch_id = v_batch_id;
-  if v_principal <> 1000000.0000000 or v_return <> 300000.00000000
-    or v_payout <> 1300000.0000000
-    or (select count(*) from public.investments where import_batch_id = v_batch_id and status = 'matured') <> 0
-    or (select count(*) from public.investments where import_batch_id = v_batch_id and status = 'active') <> 0
-    or (select count(*) from public.investments where import_batch_id = v_batch_id and projected_return_bps = 3500) <> 0
-    or (select count(*) from public.legacy_partner_identities where import_batch_id = v_batch_id and profile_id is null) <> 0 then
+  if v_principal <> (p_manifest->'summary'->>'principal')::numeric
+    or v_return <> (p_manifest->'summary'->>'returns')::numeric
+    or v_payout <> (p_manifest->'summary'->>'payout')::numeric
+    or (select count(*) from public.investments where import_batch_id = v_batch_id and status = 'matured') <> (p_manifest->'summary'->>'matured')::integer
+    or (select count(*) from public.investments where import_batch_id = v_batch_id and status = 'active') <> (p_manifest->'summary'->>'active')::integer
+    or (select count(*) from public.investments where import_batch_id = v_batch_id and projected_return_bps = 3500) <> (p_manifest->'summary'->>'rate35')::integer
+    or (select count(*) from public.legacy_partner_identities where import_batch_id = v_batch_id and profile_id is null) <> (p_manifest->'summary'->>'unclaimed')::integer then
     raise exception using errcode = '23514', message = 'staged import failed financial reconciliation';
   end if;
   insert into public.audit_events (actor_id, action, entity_type, entity_id, request_id, metadata)
   values (p_admin_id, 'partner_import.staged', 'import_batch', v_batch_id, p_request_id,
-    jsonb_build_object('source_sha256', p_manifest->>'source_sha256', 'partners', 0,
-      'profiles', 0, 'investments', 0));
+    jsonb_build_object('source_sha256', p_manifest->>'source_sha256',
+      'partners', (p_manifest->'summary'->>'partners')::integer,
+      'profiles', (p_manifest->'summary'->>'profiles')::integer,
+      'investments', (p_manifest->'summary'->>'investments')::integer));
   return v_batch_id;
 end;
 $$;
@@ -524,12 +534,12 @@ begin
   if v_batch.status = 'accepted' then
     return jsonb_build_object('batch_id', p_batch_id, 'already_accepted', true);
   end if;
-  if v_batch.status <> 'staged' or v_batch.source_sha256 <> '0000000000000000000000000000000000000000000000000000000000000000'
-    or (select count(*) from public.profiles where import_batch_id = p_batch_id) <> 0
-    or (select count(*) from public.legacy_partner_identities where import_batch_id = p_batch_id) <> 0
-    or (select count(*) from public.investment_cycles where import_batch_id = p_batch_id) <> 0
-    or (select count(*) from public.investments where import_batch_id = p_batch_id) <> 0
-    or (select count(*) from public.legacy_monthly_financial_summaries where import_batch_id = p_batch_id) <> 0 then
+  if v_batch.status <> 'staged'
+    or (select count(*) from public.profiles where import_batch_id = p_batch_id) <> v_batch.profile_count
+    or (select count(*) from public.legacy_partner_identities where import_batch_id = p_batch_id) <> v_batch.partner_count
+    or (select count(*) from public.investment_cycles where import_batch_id = p_batch_id) <> v_batch.cycle_count
+    or (select count(*) from public.investments where import_batch_id = p_batch_id) <> v_batch.investment_count
+    or (select count(*) from public.legacy_monthly_financial_summaries where import_batch_id = p_batch_id) <> v_batch.monthly_summary_count then
     raise exception using errcode = '23514', message = 'import batch cannot be accepted';
   end if;
   update public.profiles set access_status = 'active' where import_batch_id = p_batch_id;
@@ -542,9 +552,11 @@ begin
   where id = p_batch_id;
   insert into public.audit_events (actor_id, action, entity_type, entity_id, request_id, metadata)
   values (p_admin_id, 'partner_import.accepted', 'import_batch', p_batch_id, p_request_id,
-    jsonb_build_object('profiles_activated', 0, 'cycles_processed', v_opened, 'investments', 0));
-  return jsonb_build_object('batch_id', p_batch_id, 'profiles_activated', 0,
-    'cycles_processed', v_opened, 'investments', 0);
+    jsonb_build_object('profiles_activated', v_batch.profile_count,
+      'cycles_processed', v_opened, 'investments', v_batch.investment_count));
+  return jsonb_build_object('batch_id', p_batch_id,
+    'profiles_activated', v_batch.profile_count,
+    'cycles_processed', v_opened, 'investments', v_batch.investment_count);
 end;
 $$;
 

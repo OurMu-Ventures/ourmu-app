@@ -2,6 +2,7 @@
   "name": "ourmu-app",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "next dev",
@@ -18,8 +19,8 @@
     "db:test": "supabase test db",
     "db:types": "supabase gen types typescript --local --schema public,private > src/lib/database.types.ts",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
-    "release:check": "node scripts/release-check.mjs",
-    "import:partners": "node scripts/partner-import.mjs"
+    "public:scan": "node scripts/public-release-scan.mjs",
+    "release:check": "node scripts/release-check.mjs"
   },
   "engines": {
     "node": "24.x",
@@ -51,10 +52,8 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@vitest/coverage-v8": "5.0.0",
-    "decimal.js": "10.6.0",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.4",
-    "exceljs": "4.4.0",
     "jsdom": "30.0.1",
     "prettier": "3.9.6",
     "tailwindcss": "4.3.3",

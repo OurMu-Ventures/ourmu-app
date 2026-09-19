@@ -47,3 +47,29 @@ next-env.d.ts
 /supabase/.branches
 /supabase/.temp
 /artifacts
+
+# legacy/local services
+/backend
+
+# private imports, exports, database backups, and generated manifests
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.dump
+*.dump.*
+*.backup
+*.age
+*.manifest.json
+*.sql.gz
+
+# private keys and certificates
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.jks
+*.keystore
+age-identity.txt
