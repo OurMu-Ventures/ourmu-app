@@ -11,7 +11,7 @@ describe("transactional email rendering", () => {
 
     expect(email).toEqual({
       subject: "Your sign-in link",
-      html: '<h2>Your sign-in link</h2><p>Follow the link below to sign in. This link expires shortly and can only be used once.</p><p><a href="https://partners.ourmu.org/auth/confirm?token_hash=secret">Sign in</a></p>',
+      html: '<h2>Your sign-in link</h2><p>Follow the link below to sign in. This link expires one hour after it was requested and works once.</p><p><a href="https://partners.ourmu.org/auth/confirm?token_hash=secret">Sign in</a></p>',
     });
   });
 

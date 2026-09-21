@@ -38,7 +38,14 @@ export default async function LoginPage({
             <p className="error" role="alert">That email verification link is invalid or has expired.</p>
           )}
           <div className="card">
-            <MagicLinkForm next={next} />
+            <MagicLinkForm
+              next={next}
+              submitLabel={
+                errorCode === "invalid_link"
+                  ? "Email me a fresh link"
+                  : "Email me a secure link"
+              }
+            />
           </div>
         </div>
         <FishExperience />

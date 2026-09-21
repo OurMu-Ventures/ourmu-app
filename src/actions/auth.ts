@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { headers } from "next/headers";
 
 import { getPublicEnv } from "@/lib/env";
+import { buildAuthStartUrl } from "@/lib/auth-links";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { fingerprintRequestValue } from "@/lib/security/crypto";
 import { toBytea } from "@/lib/db";
@@ -74,6 +75,10 @@ export async function requestMagicLink(
           .insert({ user_id: alias.user_id, ip_fingerprint: ipHash });
 
         const generated = await admin.auth.admin.generateLink({
+          // Alias links are issued as `magiclink` and must be verified with
+          // the same (legacy) type. Native Supabase TokenHash emails use the
+          // documented `email` type instead; both are accepted by the confirm
+          // route, which forwards the validated type to `verifyOtp`.
           type: "magiclink",
           email: profile.email,
           options: { redirectTo },
@@ -83,7 +88,12 @@ export async function requestMagicLink(
           error = generated.error ?? { code: "link_generation_failed" };
         } else {
           const hashedToken = generated.data.properties.hashed_token;
-          const ourCallback = `${redirectTo}${redirectTo.includes("?") ? "&" : "?"}token_hash=${encodeURIComponent(hashedToken)}`;
+          const appOrigin = getPublicEnv().NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+          const directCallback = `${redirectTo}${redirectTo.includes("?") ? "&" : "?"}token_hash=${encodeURIComponent(hashedToken)}&type=magiclink`;
+          // Scanner-resistant: the email carries /auth/start with the token in
+          // the fragment (never sent to the server on page load). The start
+          // page POSTs it same-origin on deliberate continuation.
+          const ourCallback = buildAuthStartUrl(appOrigin, directCallback);
           try {
             await sendTransactionalEmail({
               to: parsed.data,

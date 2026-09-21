@@ -31,7 +31,7 @@ export function renderTransactionalEmail(input: {
     const actionUrl = escapeHtml(input.actionUrl ?? "");
     return {
       subject: subjects.magic_link,
-      html: `<h2>Your sign-in link</h2><p>Follow the link below to sign in. This link expires shortly and can only be used once.</p><p><a href="${actionUrl}">Sign in</a></p>`,
+      html: `<h2>Your sign-in link</h2><p>Follow the link below to sign in. This link expires one hour after it was requested and works once.</p><p><a href="${actionUrl}">Sign in</a></p>`,
     };
   }
 

@@ -37,7 +37,13 @@ import {
 } from "@/content/legal";
 import { initialActionState } from "@/lib/validation";
 
-export function MagicLinkForm({ next }: { next?: string }) {
+export function MagicLinkForm({
+  next,
+  submitLabel = "Email me a secure link",
+}: {
+  next?: string;
+  submitLabel?: string;
+}) {
   const [state, action] = useActionState(requestMagicLink, initialActionState);
   return (
     <form className="form" action={action}>
@@ -48,7 +54,7 @@ export function MagicLinkForm({ next }: { next?: string }) {
         Email address
         <input name="email" type="email" autoComplete="email" required />
       </label>
-      <ActionButton>Email me a secure link</ActionButton>
+      <ActionButton>{submitLabel}</ActionButton>
       <StateMessage state={state} />
     </form>
   );
