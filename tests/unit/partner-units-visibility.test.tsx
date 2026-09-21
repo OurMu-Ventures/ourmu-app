@@ -65,13 +65,16 @@ const placement = {
   units: 2.5,
   unit_price_ugx: 125000,
   maturity_date: "2026-07-15T12:00:00.000Z",
-  requested_at: "2026-01-15T12:00:00.000Z",
+  // Requested mid-cycle, after the term opened: the displayed duration must
+  // follow the cycle term start below, not this reservation timestamp.
+  requested_at: "2026-02-02T09:00:00.000Z",
   reservation_expires_at: null,
   record_origin: "portal",
   investment_cycles: {
     name: "Cycle One",
     status: "open",
     maturity_date: "2026-07-15T12:00:00.000Z",
+    opens_at: "2026-01-05T06:00:00.000Z",
   },
   investment_agreements: [],
 };

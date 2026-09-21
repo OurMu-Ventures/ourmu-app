@@ -64,4 +64,43 @@ describe("investmentPeriod", () => {
       investmentPeriod("not-a-date", "2026-12-15T12:00:00.000Z"),
     ).toBeNull();
   });
+
+  it("reads date-only first-of-month values without timezone shifts", () => {
+    // maturity_date is a PostgreSQL `date` returned as YYYY-MM-DD; it must
+    // read as that calendar month in any runtime timezone.
+    expect(investmentPeriod("2026-06-01", "2026-12-01")).toBe(
+      "June 2026 - December 2026",
+    );
+    expect(investmentPeriod("2026-01-01", "2026-01-31")).toBe("January 2026");
+  });
+
+  it("reads Kampala business time for month-boundary timestamps", () => {
+    // 2026-05-31T21:30Z is 00:30 on June 1st in Kampala: June, not May.
+    expect(
+      investmentPeriod("2026-05-31T21:30:00.000Z", "2026-12-15T12:00:00.000Z"),
+    ).toBe("June 2026 - December 2026");
+    // 2026-06-30T21:00Z is 00:00 on July 1st in Kampala: July, not June.
+    expect(
+      investmentPeriod("2026-01-15T12:00:00.000Z", "2026-06-30T21:00:00.000Z"),
+    ).toBe("January 2026 - July 2026");
+  });
+
+  it("rejects impossible calendar dates", () => {
+    expect(investmentPeriod("2026-13-01", "2026-12-01")).toBeNull();
+    expect(investmentPeriod("2026-02-30", "2026-12-01")).toBeNull();
+  });
+
+  it("holds month boundaries under a non-UTC runtime timezone", () => {
+    const previous = process.env.TZ;
+    process.env.TZ = "America/Los_Angeles";
+    try {
+      expect(investmentPeriod("2026-07-01", "2026-07-31")).toBe("July 2026");
+      expect(investmentPeriod("2026-01-01", "2026-12-01")).toBe(
+        "January 2026 - December 2026",
+      );
+    } finally {
+      if (previous === undefined) delete process.env.TZ;
+      else process.env.TZ = previous;
+    }
+  });
 });

@@ -20,14 +20,18 @@ export function maturityProgress(
 }
 
 // Human-readable placement duration, e.g. "June 2026 - December 2026".
-// A single month reads once ("June 2026"); a missing maturity reads as the
-// start month alone. Null when the start is missing or invalid so callers
-// can fall back to the stored cycle label.
+// The start is the cycle term start (investment_cycles.opens_at), never the
+// reservation timestamp: a request can land days or weeks after the cycle
+// opens, so request-month would misstate the contractual term. Reserved
+// placements show the cycle term they reserved for; the stored cycle label
+// remains the fallback when the term start is unknown. A single month reads
+// once ("June 2026"); a missing maturity reads as the start month alone.
+// Null when the start is missing or invalid so callers can fall back.
 export function investmentPeriod(
-  startIso: string | null | undefined,
+  termStart: string | null | undefined,
   maturityIso: string | null | undefined,
 ): string | null {
-  const start = monthYear(startIso);
+  const start = monthYear(termStart);
   if (!start) return null;
   const maturity = monthYear(maturityIso);
   if (!maturity || maturity === start) return start;
