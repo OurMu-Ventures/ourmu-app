@@ -9,6 +9,7 @@ import {
   parseAuthStartFragment,
   PRODUCTION_MAGIC_LINK_TEMPLATE_HREF,
   renderProductionMagicLinkHref,
+  resolveVerifyType,
 } from "@/lib/auth-links";
 import { LOGIN_ERROR_MESSAGES } from "@/lib/redirect";
 
@@ -217,7 +218,7 @@ describe("Supabase-origin fail-closed", () => {
 describe("production Supabase template (discrete fragment fields)", () => {
   it("documents the exact dashboard template representation", () => {
     expect(PRODUCTION_MAGIC_LINK_TEMPLATE_HREF).toBe(
-      "{{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}",
+      "{{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=email&redirect_to={{ .RedirectTo }}",
     );
   });
 
@@ -238,7 +239,7 @@ describe("production Supabase template (discrete fragment fields)", () => {
       payload: {
         kind: "token",
         token_hash: "pkce-token-hash-value",
-        type: "magiclink",
+        type: "email",
         next: "/dashboard",
       },
     });
@@ -264,6 +265,29 @@ describe("production Supabase template (discrete fragment fields)", () => {
       { appOrigin: APP, supabaseOrigin: SUPABASE },
     );
     expect(fixed.kind).toBe("supabase");
+  });
+
+  it("accepts the documented native type and the legacy alias type", () => {
+    for (const type of ["email", "magiclink"]) {
+      expect(
+        extractStartPayloadFromHash(`#token_hash=abc&type=${type}`, {
+          appOrigin: APP,
+          supabaseOrigin: SUPABASE,
+        }),
+      ).toEqual({
+        kind: "confirm",
+        payload: { kind: "token", token_hash: "abc", type, next: null },
+      });
+    }
+  });
+
+  it("resolves a missing type to the legacy alias default", () => {
+    expect(resolveVerifyType(null)).toBe("magiclink");
+    expect(resolveVerifyType("")).toBe("magiclink");
+    expect(resolveVerifyType("email")).toBe("email");
+    expect(resolveVerifyType("magiclink")).toBe("magiclink");
+    expect(resolveVerifyType("recovery")).toBeNull();
+    expect(resolveVerifyType("invite")).toBeNull();
   });
 
   it("parses discrete code/next fragments", () => {

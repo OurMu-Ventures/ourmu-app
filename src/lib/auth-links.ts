@@ -13,10 +13,25 @@ import { sanitizeNextPath } from "@/lib/redirect";
 export const AUTH_START_PATH = "/auth/start";
 export const AUTH_CONFIRM_PATH = "/auth/confirm";
 
-// Only magic-link verifications may be redeemed through this flow. Anything
-// else (recovery, invite, email-change, ...) is rejected to avoid repurposing
-// a token issued for a different purpose.
-const ALLOWED_VERIFY_TYPES = new Set(["magiclink"]);
+// Verification types redeemable through this flow. `email` is the documented
+// native Supabase token-hash type (`signup`/`magiclink` are deprecated upstream
+// and current docs specify `type=email` for TokenHash verification).
+// `magiclink` is retained only for alias links issued via
+// `admin.generateLink({ type: "magiclink" })`, whose hashes must be verified
+// with the same type. Anything else (recovery, invite, email-change, ...)
+// is rejected to avoid repurposing a token issued for a different purpose.
+export const NATIVE_VERIFY_TYPE = "email";
+export const ALIAS_VERIFY_TYPE = "magiclink";
+const ALLOWED_VERIFY_TYPES = new Set<string>([NATIVE_VERIFY_TYPE, ALIAS_VERIFY_TYPE]);
+
+export type VerifyOtpType = typeof NATIVE_VERIFY_TYPE | typeof ALIAS_VERIFY_TYPE;
+
+/** Resolve a raw `type` value: missing defaults to the legacy alias type. */
+export function resolveVerifyType(raw: string | null | undefined): VerifyOtpType | null {
+  if (raw == null || raw === "") return ALIAS_VERIFY_TYPE;
+  if (raw === NATIVE_VERIFY_TYPE || raw === ALIAS_VERIFY_TYPE) return raw;
+  return null;
+}
 
 // Supabase Auth verify endpoints. The email `ConfirmationURL` points here with
 // `?token=...&type=...&redirect_to=...`.
@@ -217,14 +232,15 @@ export function extractConfirmPayload(
 // fragment fields). The supported production representation therefore passes
 // the credential as discrete fragment fields:
 //
-//   {{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}
+//   {{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=email&redirect_to={{ .RedirectTo }}
 //
 // where `{{ .RedirectTo }}` is the `emailRedirectTo` passed to
 // `signInWithOtp` (our same-origin `/auth/confirm?next=...` URL, which itself
-// contains no raw `&`). The start page parses these fields without any
-// nested-URL decoding step, so nothing can be truncated.
+// contains no raw `&`). `email` is the documented native Supabase TokenHash
+// type; the start page parses these fields without any nested-URL decoding
+// step, so nothing can be truncated.
 export const PRODUCTION_MAGIC_LINK_TEMPLATE_HREF =
-  "{{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}";
+  "{{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=email&redirect_to={{ .RedirectTo }}";
 
 /**
  * Render the production template with literal values (used by tests and
@@ -236,7 +252,7 @@ export function renderProductionMagicLinkHref(input: {
   redirectTo: string;
 }): string {
   const site = input.siteUrl.replace(/\/$/, "");
-  return `${site}/auth/start#token_hash=${input.tokenHash}&type=magiclink&redirect_to=${input.redirectTo}`;
+  return `${site}/auth/start#token_hash=${input.tokenHash}&type=email&redirect_to=${input.redirectTo}`;
 }
 
 function parseFragmentParams(
@@ -292,9 +308,11 @@ export type StartFragmentDecision =
  * Parse an `/auth/start` location hash in either supported representation:
  * - Encoded nested URL: `#confirmation_url=<percent-encoded /auth/confirm or
  *   Supabase verify URL>` (alias/Resend path via buildAuthStartUrl()).
- * - Discrete fields: `#token_hash=...&type=magiclink[&next=...]` or
- *   `#token_hash=...&type=magiclink&redirect_to=<confirm URL>]`,
- *   `#code=...[&next=...]` (Supabase native template path).
+ * - Discrete fields: `#token_hash=...&type=email[&next=...]` or
+ *   `#token_hash=...&type=email&redirect_to=<confirm URL>]`,
+ *   `#code=...[&next=...]` (Supabase native template path; `type=magiclink`
+ *   is additionally accepted for alias links issued via
+ *   `admin.generateLink({ type: "magiclink" })`).
  */
 export function extractStartPayloadFromHash(
   hash: string | null | undefined,

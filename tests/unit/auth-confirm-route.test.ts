@@ -103,6 +103,39 @@ describe("GET /auth/confirm session-aware flow", () => {
     });
   });
 
+  it("native email-type links verify with the documented type", async () => {
+    investorProfile();
+    mocks.getUser
+      .mockResolvedValueOnce({ data: { user: null } })
+      .mockResolvedValueOnce({ data: { user: { id: "user-1" } } });
+    mocks.verifyOtp.mockResolvedValue({ error: null });
+
+    const response = await GET(
+      new Request(`${APP}/auth/confirm?token_hash=native&next=%2Fdashboard&type=email`),
+    );
+
+    expect(response.status).toBe(307);
+    expect(mocks.verifyOtp).toHaveBeenCalledWith({
+      token_hash: "native",
+      type: "email",
+    });
+  });
+
+  it("alias magiclink-type links keep verifying with the legacy type", async () => {
+    investorProfile();
+    mocks.getUser
+      .mockResolvedValueOnce({ data: { user: null } })
+      .mockResolvedValueOnce({ data: { user: { id: "user-1" } } });
+    mocks.verifyOtp.mockResolvedValue({ error: null });
+
+    await GET(new Request(`${APP}/auth/confirm?token_hash=alias&type=magiclink`));
+
+    expect(mocks.verifyOtp).toHaveBeenCalledWith({
+      token_hash: "alias",
+      type: "magiclink",
+    });
+  });
+
   it("consumed link in a clean browser shows recovery", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } });
     mocks.verifyOtp.mockResolvedValue({
@@ -143,6 +176,10 @@ describe("POST /auth/confirm redemption flow", () => {
       redirectTo: "/dashboard",
     });
     expect(mocks.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(mocks.verifyOtp).toHaveBeenCalledWith({
+      token_hash: "tok",
+      type: "magiclink",
+    });
   });
 
   it("repeat POST with a session short-circuits without redeeming", async () => {
@@ -185,6 +222,28 @@ describe("POST /auth/confirm redemption flow", () => {
       ok: false,
       code: "invalid_link",
       redirectTo: "/login?error=invalid_link",
+    });
+  });
+
+  it("native email-type POST payload verifies with the documented type", async () => {
+    investorProfile();
+    mocks.getUser
+      .mockResolvedValueOnce({ data: { user: null } })
+      .mockResolvedValueOnce({ data: { user: { id: "user-1" } } });
+    mocks.verifyOtp.mockResolvedValue({ error: null });
+
+    const response = await POST(
+      new Request(`${APP}/auth/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token_hash: "native", type: "email" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.verifyOtp).toHaveBeenCalledWith({
+      token_hash: "native",
+      type: "email",
     });
   });
 });

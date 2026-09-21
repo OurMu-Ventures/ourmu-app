@@ -75,6 +75,10 @@ export async function requestMagicLink(
           .insert({ user_id: alias.user_id, ip_fingerprint: ipHash });
 
         const generated = await admin.auth.admin.generateLink({
+          // Alias links are issued as `magiclink` and must be verified with
+          // the same (legacy) type. Native Supabase TokenHash emails use the
+          // documented `email` type instead; both are accepted by the confirm
+          // route, which forwards the validated type to `verifyOtp`.
           type: "magiclink",
           email: profile.email,
           options: { redirectTo },

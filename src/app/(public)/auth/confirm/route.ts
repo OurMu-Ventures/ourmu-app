@@ -4,6 +4,7 @@ import {
   extractConfirmPayload,
   isInvalidOrExpiredError,
   logAuthVerificationOutcome,
+  resolveVerifyType,
 } from "@/lib/auth-links";
 import { getPublicEnv } from "@/lib/env";
 import { decidePostLoginDestination } from "@/lib/redirect";
@@ -93,7 +94,12 @@ export async function GET(request: Request) {
     logAuthVerificationOutcome("invalid_or_expired");
     return fail("invalid_link");
   }
-  if (tokenHash && type && type !== "magiclink") {
+  // Native Supabase TokenHash links verify with the documented `email` type;
+  // alias links issued via `generateLink({ type: "magiclink" })` verify with
+  // `magiclink`. A missing type defaults to the legacy alias type so
+  // already-issued direct links keep working through the transition.
+  const verifyType = tokenHash ? resolveVerifyType(type) : null;
+  if (tokenHash && !verifyType) {
     logAuthVerificationOutcome("invalid_or_expired");
     return fail("invalid_link");
   }
@@ -102,10 +108,10 @@ export async function GET(request: Request) {
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     exchangeError = error;
-  } else if (tokenHash) {
+  } else if (tokenHash && verifyType) {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: "magiclink",
+      type: verifyType,
     });
     exchangeError = error;
   }
@@ -260,16 +266,17 @@ export async function POST(request: Request) {
 
   if (!code && !tokenHash) return invalid();
   if (code && tokenHash) return invalid();
-  if (tokenHash && verifyType && verifyType !== "magiclink") return invalid();
+  const resolvedType = tokenHash ? resolveVerifyType(verifyType) : null;
+  if (tokenHash && !resolvedType) return invalid();
 
   let exchangeError: unknown = null;
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     exchangeError = error;
-  } else if (tokenHash) {
+  } else if (tokenHash && resolvedType) {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: "magiclink",
+      type: resolvedType,
     });
     exchangeError = error;
   }
