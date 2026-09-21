@@ -7,7 +7,7 @@ import {
 } from "@/components/PortfolioOverview";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
-import { date, dateTime, ugx } from "@/lib/format";
+import { date, dateTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -45,10 +45,6 @@ export default async function DashboardPage() {
     (sum, item) => sum + Number(item.projected_value_ugx),
     0,
   );
-  const totalUnits = activeInvestments.reduce(
-    (sum, item) => sum + Number(item.units),
-    0,
-  );
   const eligible = profile.kyc_status === "verified" && Boolean(kin);
   return (
     <>
@@ -76,7 +72,6 @@ export default async function DashboardPage() {
         principal={principal}
         projected={projected}
         activeCount={activeInvestments.length}
-        totalUnits={totalUnits}
         maturedCount={maturedInvestments.length}
       />
       <section style={{ marginTop: "2rem" }}>
@@ -97,8 +92,7 @@ export default async function DashboardPage() {
         {cycle && (
           <div className="card">
             <p>
-              Unit price <strong>{ugx(cycle.unit_price_ugx)}</strong> ·
-              projected return{" "}
+              Projected return{" "}
               <CurrentOpportunityRate
                 projectedReturnBps={cycle.projected_return_bps}
               />{" "}
@@ -143,8 +137,6 @@ export default async function DashboardPage() {
                       ? "Active"
                       : item.status,
                   principalUgx: item.principal_ugx,
-                  unitsValue: item.units ?? 0,
-                  unitPriceUgx: item.unit_price_ugx,
                   isPaid: paid,
                   profitUgx: Number(payout ?? 0) - Number(item.principal_ugx),
                   payoutUgx: payout ?? 0,

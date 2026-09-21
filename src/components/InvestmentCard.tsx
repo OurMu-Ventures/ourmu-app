@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { InfoHint } from "@/components/InfoHint";
 import { LinkStatus } from "@/components/ui/link-status";
-import { date, ugx, units } from "@/lib/format";
+import { date, ugx } from "@/lib/format";
 import { maturityProgress } from "@/lib/investments";
 
 export type InvestmentCardData = {
@@ -10,8 +10,6 @@ export type InvestmentCardData = {
   status: string;
   statusLabel: string;
   principalUgx: number | string;
-  unitsValue: number | string;
-  unitPriceUgx?: number | string | null;
   isPaid?: boolean;
   profitUgx: number | string;
   payoutUgx: number | string;
@@ -50,13 +48,6 @@ export function InvestmentCard({
               <InfoHint
                 label="How principal is calculated"
                 text="Amount you contributed to this placement."
-              />
-            </span>{" "}
-            <span className="muted">
-              · {units(item.unitsValue)} units{" "}
-              <InfoHint
-                label="How units are calculated"
-                text="Your principal divided by this placement's unit price."
               />
             </span>
           </p>

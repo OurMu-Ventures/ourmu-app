@@ -1,17 +1,15 @@
 import { InfoHint } from "@/components/InfoHint";
-import { bpsToPercent, ugx, units } from "@/lib/format";
+import { bpsToPercent, ugx } from "@/lib/format";
 
 export function PortfolioSummary({
   principal,
   projected,
   activeCount,
-  totalUnits,
   maturedCount,
 }: {
   principal: number;
   projected: number;
   activeCount: number;
-  totalUnits: number;
   maturedCount: number;
 }) {
   return (
@@ -57,13 +55,6 @@ export function PortfolioSummary({
           />
         </p>
         <p className="stat">{activeCount}</p>
-        <p className="muted">
-          {units(totalUnits)} units{" "}
-          <InfoHint
-            label="How units are calculated"
-            text="Total units across reserved and active placements. Each placement's units equal its principal divided by its unit price."
-          />
-        </p>
       </article>
       <article className="card">
         <p className="muted">

@@ -34,13 +34,12 @@ describe("PortfolioSummary hints", () => {
         principal={500000}
         projected={650000}
         activeCount={2}
-        totalUnits={4}
         maturedCount={1}
       />,
     );
   }
 
-  it("explains all six overview computed metrics", async () => {
+  it("explains five overview computed metrics without units", async () => {
     renderSummary();
 
     const expectations: Array<[string, string]> = [
@@ -61,10 +60,6 @@ describe("PortfolioSummary hints", () => {
         "Number of placements currently reserved or active.",
       ],
       [
-        "How units are calculated",
-        "Total units across reserved and active placements. Each placement's units equal its principal divided by its unit price.",
-      ],
-      [
         "How past placements are counted",
         "Number of placements recorded as matured.",
       ],
@@ -75,6 +70,17 @@ describe("PortfolioSummary hints", () => {
       expect(screen.getByRole("tooltip")).toHaveTextContent(text);
       await user.keyboard("{Escape}");
     }
+  });
+
+  it("shows active placement counts without unit totals", () => {
+    renderSummary();
+
+    expect(screen.getByText("Active placements")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.queryByText(/units/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "How units are calculated" }),
+    ).not.toBeInTheDocument();
   });
 });
 
