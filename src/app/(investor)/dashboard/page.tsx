@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { date, dateTime } from "@/lib/format";
+import { investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -17,7 +18,7 @@ export default async function DashboardPage() {
     await Promise.all([
       supabase
         .from("investments")
-        .select("*,investment_cycles(name,status,maturity_date)")
+        .select("*,investment_cycles(name,status,maturity_date,opens_at)")
         .eq("investor_id", profile.id)
         .order("requested_at", { ascending: false }),
       supabase
@@ -129,7 +130,11 @@ export default async function DashboardPage() {
               <InvestmentCard
                 key={item.id}
                 item={{
-                  name: itemCycle?.name ?? "OURMU placement",
+                  name:
+                    investmentPeriod(
+                      itemCycle?.opens_at,
+                      item.maturity_date,
+                    ) ?? (itemCycle?.name ?? "OURMU placement"),
                   status: item.status,
                   statusLabel: paid
                     ? "Reported paid"
