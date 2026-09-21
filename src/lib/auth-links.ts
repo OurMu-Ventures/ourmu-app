@@ -42,6 +42,15 @@ export function buildAuthStartUrl(
 /**
  * Extract the `confirmation_url` value from a location hash. Accepts with or
  * without a leading `#`. Returns null when absent or empty.
+ *
+ * NOTE: this intentionally reads only the single `confirmation_url` field. A
+ * real Supabase `ConfirmationURL` contains its own `&type=...&redirect_to=...`,
+ * so embedding it unencoded (e.g.
+ * `#confirmation_url={{ .ConfirmationURL }}`) truncates at the first `&` and
+ * fails validation. The supported production template uses discrete fragment
+ * fields instead (see PRODUCTION_MAGIC_LINK_TEMPLATE_HREF); this helper is
+ * kept for the alias/Resend path where buildAuthStartUrl() percent-encodes
+ * the complete nested URL.
  */
 export function parseAuthStartFragment(hash: string | null | undefined): string | null {
   if (!hash) return null;
@@ -165,9 +174,13 @@ export function extractConfirmPayload(
   }
 
   // Supabase verify URL: validate and hand back for deliberate navigation.
+  // Fails closed: accepted only when a configured, valid Supabase origin
+  // exists and matches exactly. A missing or malformed configured origin
+  // must never accept an arbitrary HTTPS origin (open redirect otherwise).
   const supabaseOrigin = opts.supabaseOrigin ? getOrigin(opts.supabaseOrigin) : null;
   if (
-    (supabaseOrigin == null || url.origin === supabaseOrigin) &&
+    supabaseOrigin != null &&
+    url.origin === supabaseOrigin &&
     SUPABASE_VERIFY_PATHS.has(url.pathname)
   ) {
     const type = url.searchParams.get("type");
@@ -192,6 +205,141 @@ export function extractConfirmPayload(
 
   if (url.origin !== appOrigin) return { kind: "invalid", reason: "unexpected_host" };
   return { kind: "invalid", reason: "unexpected_path" };
+}
+
+// ---------------------------------------------------------------------------
+// Production Supabase email template (discrete fragment fields).
+//
+// Supabase Go templates render variables unencoded, so wrapping the whole
+// `{{ .ConfirmationURL }}` inside a fragment
+// (`#confirmation_url={{ .ConfirmationURL }}`) truncates at the first `&`
+// (`?token=abc` survives; `&type=` and `&redirect_to=` are parsed as sibling
+// fragment fields). The supported production representation therefore passes
+// the credential as discrete fragment fields:
+//
+//   {{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}
+//
+// where `{{ .RedirectTo }}` is the `emailRedirectTo` passed to
+// `signInWithOtp` (our same-origin `/auth/confirm?next=...` URL, which itself
+// contains no raw `&`). The start page parses these fields without any
+// nested-URL decoding step, so nothing can be truncated.
+export const PRODUCTION_MAGIC_LINK_TEMPLATE_HREF =
+  "{{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}";
+
+/**
+ * Render the production template with literal values (used by tests and
+ * rollout verification to prove the exact dashboard href parses correctly).
+ */
+export function renderProductionMagicLinkHref(input: {
+  siteUrl: string;
+  tokenHash: string;
+  redirectTo: string;
+}): string {
+  const site = input.siteUrl.replace(/\/$/, "");
+  return `${site}/auth/start#token_hash=${input.tokenHash}&type=magiclink&redirect_to=${input.redirectTo}`;
+}
+
+function parseFragmentParams(
+  hash: string | null | undefined,
+): URLSearchParams | null {
+  if (!hash) return null;
+  const trimmed = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!trimmed) return null;
+  try {
+    return new URLSearchParams(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function resolveNextFromRaw(
+  direct: string | null,
+  redirectTo: string | null,
+  appOrigin: string,
+): { next: string | null; invalid: boolean } {
+  if (direct != null && direct !== "") {
+    const safe = sanitizeNextPath(direct);
+    if (safe == null) return { next: null, invalid: true };
+    return { next: safe, invalid: false };
+  }
+  if (redirectTo != null && redirectTo !== "") {
+    // `redirect_to` is our same-origin `/auth/confirm?next=...` URL. Validate
+    // its origin/path before trusting the nested `next`.
+    let inner: URL;
+    try {
+      inner = new URL(redirectTo, appOrigin);
+    } catch {
+      return { next: null, invalid: true };
+    }
+    if (inner.origin !== appOrigin || inner.pathname !== AUTH_CONFIRM_PATH) {
+      return { next: null, invalid: true };
+    }
+    const nested = inner.searchParams.get("next");
+    if (nested == null || nested === "") return { next: null, invalid: false };
+    const safe = sanitizeNextPath(nested);
+    if (safe == null) return { next: null, invalid: true };
+    return { next: safe, invalid: false };
+  }
+  return { next: null, invalid: false };
+}
+
+export type StartFragmentDecision =
+  | { kind: "confirm"; payload: ConfirmPayload }
+  | { kind: "supabase"; supabaseUrl: string; next: string | null }
+  | { kind: "invalid"; reason: string };
+
+/**
+ * Parse an `/auth/start` location hash in either supported representation:
+ * - Encoded nested URL: `#confirmation_url=<percent-encoded /auth/confirm or
+ *   Supabase verify URL>` (alias/Resend path via buildAuthStartUrl()).
+ * - Discrete fields: `#token_hash=...&type=magiclink[&next=...]` or
+ *   `#token_hash=...&type=magiclink&redirect_to=<confirm URL>]`,
+ *   `#code=...[&next=...]` (Supabase native template path).
+ */
+export function extractStartPayloadFromHash(
+  hash: string | null | undefined,
+  opts: { appOrigin: string; supabaseOrigin?: string | null },
+): StartFragmentDecision {
+  const params = parseFragmentParams(hash);
+  if (!params) return { kind: "invalid", reason: "missing_fragment" };
+
+  const nested = params.get("confirmation_url");
+  if (nested && nested.trim()) {
+    const decision = extractConfirmPayload(nested.trim(), opts);
+    if (decision.kind === "confirm") return { kind: "confirm", payload: decision.payload };
+    if (decision.kind === "supabase")
+      return { kind: "supabase", supabaseUrl: decision.supabaseUrl, next: decision.next };
+    return { kind: "invalid", reason: decision.reason };
+  }
+
+  const appOrigin = getOrigin(opts.appOrigin);
+  if (!appOrigin) return { kind: "invalid", reason: "misconfigured_app_origin" };
+
+  const code = params.get("code");
+  const tokenHash = params.get("token_hash");
+  const type = params.get("type");
+  if ((code && tokenHash) || (!code && !tokenHash)) {
+    return { kind: "invalid", reason: code && tokenHash ? "conflicting_credential" : "missing_credential" };
+  }
+  const { next, invalid } = resolveNextFromRaw(
+    params.get("next"),
+    params.get("redirect_to"),
+    appOrigin,
+  );
+  if (invalid) return { kind: "invalid", reason: "unsafe_redirect_target" };
+
+  if (code) {
+    if (code.length > 2000) return { kind: "invalid", reason: "oversized_code" };
+    return { kind: "confirm", payload: { kind: "code", code, next } };
+  }
+  const token = (tokenHash ?? "").trim();
+  if (!token || token.length > 2000) {
+    return { kind: "invalid", reason: !token ? "missing_credential" : "oversized_token" };
+  }
+  if (!type || !ALLOWED_VERIFY_TYPES.has(type)) {
+    return { kind: "invalid", reason: "unexpected_verification_type" };
+  }
+  return { kind: "confirm", payload: { kind: "token", token_hash: token, type, next } };
 }
 
 const INVALID_OR_EXPIRED_PATTERNS = [

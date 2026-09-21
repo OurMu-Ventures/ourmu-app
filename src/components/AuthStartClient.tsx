@@ -5,8 +5,7 @@ import { useEffect, useState } from "react";
 import { MagicLinkForm } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import {
-  extractConfirmPayload,
-  parseAuthStartFragment,
+  extractStartPayloadFromHash,
   type ConfirmPayload,
 } from "@/lib/auth-links";
 
@@ -33,9 +32,7 @@ export function AuthStartClient() {
   // continuation. Scanners that fetch without executing JS cannot consume it.
   const [status, setStatus] = useState<Status>(() => {
     if (typeof window === "undefined") return { name: "loading" };
-    const confirmationUrl = parseAuthStartFragment(window.location.hash);
-    if (!confirmationUrl) return { name: "invalid" };
-    const decision = extractConfirmPayload(confirmationUrl, {
+    const decision = extractStartPayloadFromHash(window.location.hash, {
       appOrigin: window.location.origin,
       supabaseOrigin: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
     });

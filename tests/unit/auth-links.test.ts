@@ -3,9 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildAuthStartUrl,
   extractConfirmPayload,
+  extractStartPayloadFromHash,
   isInvalidOrExpiredError,
   logAuthVerificationOutcome,
   parseAuthStartFragment,
+  PRODUCTION_MAGIC_LINK_TEMPLATE_HREF,
+  renderProductionMagicLinkHref,
 } from "@/lib/auth-links";
 import { LOGIN_ERROR_MESSAGES } from "@/lib/redirect";
 
@@ -174,5 +177,125 @@ describe("safe logging", () => {
     } finally {
       info.mockRestore();
     }
+  });
+});
+
+describe("Supabase-origin fail-closed", () => {
+  const supabaseUrl = `${SUPABASE}/auth/v1/verify?token=raw&type=magiclink&redirect_to=${encodeURIComponent(`${APP}/auth/confirm?next=%2Fdashboard`)}`;
+
+  it("rejects Supabase verify URLs when no origin is configured", () => {
+    expect(
+      extractConfirmPayload(supabaseUrl, { appOrigin: APP, supabaseOrigin: null }),
+    ).toEqual({ kind: "invalid", reason: "unexpected_host" });
+    expect(
+      extractConfirmPayload(supabaseUrl, { appOrigin: APP, supabaseOrigin: undefined }),
+    ).toEqual({ kind: "invalid", reason: "unexpected_host" });
+  });
+
+  it("rejects Supabase verify URLs when the configured origin is malformed", () => {
+    expect(
+      extractConfirmPayload(supabaseUrl, { appOrigin: APP, supabaseOrigin: "not-a-url" }),
+    ).toEqual({ kind: "invalid", reason: "unexpected_host" });
+  });
+
+  it("rejects Supabase verify URLs from a non-matching origin", () => {
+    expect(
+      extractConfirmPayload(supabaseUrl, {
+        appOrigin: APP,
+        supabaseOrigin: "https://other.supabase.co",
+      }),
+    ).toEqual({ kind: "invalid", reason: "unexpected_host" });
+    expect(
+      extractConfirmPayload(
+        `https://evil.example/auth/v1/verify?token=raw&type=magiclink&redirect_to=${encodeURIComponent(`${APP}/auth/confirm`)}`,
+        { appOrigin: APP, supabaseOrigin: SUPABASE },
+      ),
+    ).toEqual({ kind: "invalid", reason: "unexpected_host" });
+  });
+});
+
+describe("production Supabase template (discrete fragment fields)", () => {
+  it("documents the exact dashboard template representation", () => {
+    expect(PRODUCTION_MAGIC_LINK_TEMPLATE_HREF).toBe(
+      "{{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}",
+    );
+  });
+
+  it("parses the literal rendered Supabase-shaped email href", () => {
+    // Literal rendering of the dashboard template for a signInWithOtp call
+    // whose emailRedirectTo is our same-origin confirm URL.
+    const href = renderProductionMagicLinkHref({
+      siteUrl: APP,
+      tokenHash: "pkce-token-hash-value",
+      redirectTo: `${APP}/auth/confirm?next=%2Fdashboard`,
+    });
+    const decision = extractStartPayloadFromHash(
+      href.slice(href.indexOf("#")),
+      { appOrigin: APP, supabaseOrigin: SUPABASE },
+    );
+    expect(decision).toEqual({
+      kind: "confirm",
+      payload: {
+        kind: "token",
+        token_hash: "pkce-token-hash-value",
+        type: "magiclink",
+        next: "/dashboard",
+      },
+    });
+  });
+
+  it("regresses the truncation bug: unencoded ConfirmationURL wrapping loses type/redirect_to", () => {
+    // What the old rollout doc suggested: raw ConfirmationURL in the fragment.
+    const rawConfirmation =
+      `${SUPABASE}/auth/v1/verify?token=abc&type=magiclink&redirect_to=${encodeURIComponent(`${APP}/auth/confirm?next=%2Fdashboard`)}`;
+    const buggyHref = `${APP}/auth/start#confirmation_url=${rawConfirmation}`;
+    const buggy = extractStartPayloadFromHash(buggyHref.slice(buggyHref.indexOf("#")), {
+      appOrigin: APP,
+      supabaseOrigin: SUPABASE,
+    });
+    // URLSearchParams truncates at the first inner `&`, so only `?token=abc`
+    // survives and validation must fail rather than redeem something partial.
+    expect(buggy.kind).toBe("invalid");
+
+    // The alias/Resend path percent-encodes the whole nested URL and works.
+    const encodedHref = buildAuthStartUrl(APP, rawConfirmation);
+    const fixed = extractStartPayloadFromHash(
+      encodedHref.slice(encodedHref.indexOf("#")),
+      { appOrigin: APP, supabaseOrigin: SUPABASE },
+    );
+    expect(fixed.kind).toBe("supabase");
+  });
+
+  it("parses discrete code/next fragments", () => {
+    expect(
+      extractStartPayloadFromHash("#code=pkce-code-123&next=%2Fprofile", {
+        appOrigin: APP,
+        supabaseOrigin: SUPABASE,
+      }),
+    ).toEqual({
+      kind: "confirm",
+      payload: { kind: "code", code: "pkce-code-123", next: "/profile" },
+    });
+  });
+
+  it("rejects discrete fragments with bad type or unsafe next", () => {
+    expect(
+      extractStartPayloadFromHash("#token_hash=abc&type=recovery", {
+        appOrigin: APP,
+        supabaseOrigin: SUPABASE,
+      }),
+    ).toEqual({ kind: "invalid", reason: "unexpected_verification_type" });
+    expect(
+      extractStartPayloadFromHash("#token_hash=abc&type=magiclink&next=%2F%2Fevil.example", {
+        appOrigin: APP,
+        supabaseOrigin: SUPABASE,
+      }),
+    ).toEqual({ kind: "invalid", reason: "unsafe_redirect_target" });
+    expect(
+      extractStartPayloadFromHash("#next=%2Fdashboard", {
+        appOrigin: APP,
+        supabaseOrigin: SUPABASE,
+      }),
+    ).toEqual({ kind: "invalid", reason: "missing_credential" });
   });
 });
