@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Open_Sans } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
 
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <span>© {new Date().getFullYear()} OURMU Ventures</span>
           <span>Private partner portal · Investments involve risk</span>
         </footer>
+        <Analytics />
       </body>
     </html>
   );
