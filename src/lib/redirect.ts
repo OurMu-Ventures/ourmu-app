@@ -11,7 +11,8 @@ import type { Tables } from "@/lib/database.types";
 export type AppRole = "admin" | "investor";
 
 export const LOGIN_ERROR_MESSAGES = {
-  invalid_link: "That sign-in link is invalid or expired. Request a new one.",
+  invalid_link:
+    "This link has already been used or has expired. For your security, each sign-in link works once.",
   disabled_access: "This account does not currently have portal access.",
   no_profile: "No portal profile was found for this sign-in.",
 } as const;
