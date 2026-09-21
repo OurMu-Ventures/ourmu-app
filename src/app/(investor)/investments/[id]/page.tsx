@@ -5,7 +5,7 @@ import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
 import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
-import { date, dateTime, ugx, units } from "@/lib/format";
+import { date, dateTime, ugx } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentPage({
@@ -41,8 +41,11 @@ export default async function InvestmentPage({
     <>
       <p className="eyebrow">Investment record</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
-        {units(data.units ?? 0)} units · {data.status}
+        Investment details
       </h1>
+      <p>
+        <span className="badge">{data.status}</span>
+      </p>
       <div className="grid">
         <article className="card">
           <p className="muted">Principal</p>

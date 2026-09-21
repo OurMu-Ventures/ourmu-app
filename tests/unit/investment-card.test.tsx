@@ -17,8 +17,6 @@ const baseItem: InvestmentCardData = {
   status: "active",
   statusLabel: "Active",
   principalUgx: 250000,
-  unitsValue: 2,
-  unitPriceUgx: 125000,
   profitUgx: 75000,
   payoutUgx: 325000,
   maturityDate: "2026-07-01T00:00:00.000Z",
@@ -35,19 +33,20 @@ async function reveal(label: string) {
 }
 
 describe("InvestmentCard computed-metric hints", () => {
-  it("explains principal and units in the header", async () => {
+  it("shows principal without a unit count", async () => {
     render(<InvestmentCard item={baseItem} />);
 
-    let user = await reveal("How principal is calculated");
+    expect(screen.getByText("Cycle One")).toBeInTheDocument();
+    expect(screen.queryByText(/units/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "How units are calculated" }),
+    ).not.toBeInTheDocument();
+
+    const user = await reveal("How principal is calculated");
     expect(screen.getByRole("tooltip")).toHaveTextContent(
       "Amount you contributed to this placement.",
     );
     await user.keyboard("{Escape}");
-
-    user = await reveal("How units are calculated");
-    expect(screen.getByRole("tooltip")).toHaveTextContent(
-      "Your principal divided by this placement's unit price.",
-    );
   });
 
   it("explains projected profit and total for non-paid placements", async () => {
@@ -89,10 +88,10 @@ describe("InvestmentCard computed-metric hints", () => {
     );
   });
 
-  it("exposes exactly five computed-metric hints and no hint on maturity date", async () => {
+  it("exposes exactly four computed-metric hints and no hint on maturity date", async () => {
     render(<InvestmentCard item={baseItem} />);
     const buttons = screen.getAllByRole("button", { name: /^How / });
-    expect(buttons).toHaveLength(5);
+    expect(buttons).toHaveLength(4);
     expect(
       screen.queryByRole("button", { name: /maturity date/i }),
     ).not.toBeInTheDocument();
