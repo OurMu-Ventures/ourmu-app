@@ -15,6 +15,17 @@ export function date(value: string) {
     new Date(value),
   );
 }
+// Month and year of a timestamp, e.g. "June 2026". Null for missing or
+// invalid input so callers can fall back to a stored label.
+export function monthYear(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return null;
+  return new Intl.DateTimeFormat("en-UG", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(time));
+}
 export function dateTime(value: string) {
   return new Intl.DateTimeFormat("en-UG", {
     dateStyle: "medium",

@@ -5,6 +5,7 @@ import { InvestmentCard } from "@/components/InvestmentCard";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { requireInvestor } from "@/lib/auth";
+import { investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentsPage() {
@@ -41,13 +42,16 @@ export default async function InvestmentsPage() {
             item.status === "reserved" &&
             item.reservation_expires_at &&
             new Date(item.reservation_expires_at).getTime() > now;
+          const cycleName = Array.isArray(item.investment_cycles)
+            ? (item.investment_cycles[0]?.name ?? "OURMU placement")
+            : (item.investment_cycles?.name ?? "OURMU placement");
           return (
             <InvestmentCard
               key={item.id}
               item={{
-                name: Array.isArray(item.investment_cycles)
-                  ? (item.investment_cycles[0]?.name ?? "OURMU placement")
-                  : (item.investment_cycles?.name ?? "OURMU placement"),
+                name:
+                  investmentPeriod(item.requested_at, item.maturity_date) ??
+                  cycleName,
                 status: item.status,
                 statusLabel: item.status,
                 principalUgx: item.principal_ugx,
