@@ -52,6 +52,8 @@ jobs:
           SUPABASE_INTERNAL_IMAGE_REGISTRY: docker.io
       - run: supabase db reset
       - run: supabase test db
+        env:
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: docker.io
       - run: supabase db lint --level error
   browser:
     name: browser
