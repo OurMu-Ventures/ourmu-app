@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: supabase/setup-cli@v3
         with: { version: 2.113.0 }
-      - run: supabase start
+      - run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - run: supabase db reset
       - run: supabase test db
       - run: supabase db lint --level error
