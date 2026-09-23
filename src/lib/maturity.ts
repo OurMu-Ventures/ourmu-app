@@ -1,7 +1,14 @@
 export type MaturityChoice =
-  | "withdraw_all"
-  | "withdraw_roi_reinvest_principal"
-  | "reinvest_all";
+  "withdraw_all" | "withdraw_roi_reinvest_principal" | "reinvest_all";
+
+export type MaturityNoticeInput = {
+  principalUgx: number;
+  projectedReturnUgx: number;
+  projectedValueUgx: number;
+  projectedPercent: number;
+  maturityDate: string;
+  payoutDate: string;
+};
 
 export const MATURITY_CHOICES: {
   value: MaturityChoice;
@@ -16,7 +23,8 @@ export const MATURITY_CHOICES: {
   {
     value: "withdraw_roi_reinvest_principal",
     label: "B. Paka Paka payout",
-    description: "Here, you withdraw only your ROI and Re-invest the principal.",
+    description:
+      "Here, you withdraw only your ROI and Re-invest the principal.",
   },
   {
     value: "reinvest_all",
@@ -26,7 +34,9 @@ export const MATURITY_CHOICES: {
 ];
 
 export function maturityChoiceLabel(choice: string): string {
-  return MATURITY_CHOICES.find((option) => option.value === choice)?.label ?? choice;
+  return (
+    MATURITY_CHOICES.find((option) => option.value === choice)?.label ?? choice
+  );
 }
 
 // Scheduled payout day: the 15th of the maturity month (ISO date string).
@@ -66,14 +76,7 @@ export function fulfilledSplits(
 
 // Pure composer for the maturity notice email body. Kept here (instead of
 // the job runner) so the figures it quotes are unit-tested.
-export function maturityNoticeDetail(input: {
-  principalUgx: number;
-  projectedReturnUgx: number;
-  projectedValueUgx: number;
-  projectedPercent: number;
-  maturityDate: string;
-  payoutDate: string;
-}): string {
+export function maturityNoticeDetail(input: MaturityNoticeInput): string {
   const withdrawAll = maturitySplits(
     input.principalUgx,
     input.projectedReturnUgx,
