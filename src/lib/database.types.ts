@@ -1218,6 +1218,11 @@ export type Database = {
       }
       maturity_reinvest_authorizations: {
         Row: {
+          acceptance_request_id: string
+          accepted_content_hash: string
+          accepted_ip_fingerprint: string
+          accepted_user_agent: string
+          agreement_version_id: string
           authorized_at: string
           authorized_by: string | null
           created_at: string
@@ -1227,6 +1232,11 @@ export type Database = {
           scope: string
         }
         Insert: {
+          acceptance_request_id: string
+          accepted_content_hash: string
+          accepted_ip_fingerprint: string
+          accepted_user_agent: string
+          agreement_version_id: string
           authorized_at?: string
           authorized_by?: string | null
           created_at?: string
@@ -1236,6 +1246,11 @@ export type Database = {
           scope?: string
         }
         Update: {
+          acceptance_request_id?: string
+          accepted_content_hash?: string
+          accepted_ip_fingerprint?: string
+          accepted_user_agent?: string
+          agreement_version_id?: string
           authorized_at?: string
           authorized_by?: string | null
           created_at?: string
@@ -1245,6 +1260,13 @@ export type Database = {
           scope?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "maturity_reinvest_authorizations_agreement_version_id_fkey"
+            columns: ["agreement_version_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_versions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "maturity_reinvest_authorizations_authorized_by_fkey"
             columns: ["authorized_by"]
@@ -1447,6 +1469,16 @@ export type Database = {
         }
         Returns: Json
       }
+      accept_standing_reinvest_terms: {
+        Args: {
+          p_agreement_version_id: string
+          p_investor_id: string
+          p_ip_fingerprint: string
+          p_request_id: string
+          p_user_agent: string
+        }
+        Returns: string
+      }
       activate_investment: {
         Args: {
           p_admin_aal2: boolean
@@ -1456,6 +1488,15 @@ export type Database = {
           p_investment_id: string
           p_received_amount_ugx: number
           p_received_date: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
+      admin_revoke_standing_reinvest_authorization: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_investor_id: string
           p_request_id: string
         }
         Returns: undefined
@@ -1535,6 +1576,10 @@ export type Database = {
           p_user_agent: string
         }
         Returns: string
+      }
+      revoke_standing_reinvest_authorization: {
+        Args: { p_investor_id: string; p_request_id: string }
+        Returns: undefined
       }
       run_maintenance: { Args: { p_request_id: string }; Returns: Json }
       stage_partner_import: {

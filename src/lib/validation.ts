@@ -98,6 +98,10 @@ export const maturityReopenSchema = z.object({
   notes: z.string().trim().min(10).max(1000),
 });
 
+export const standingTermsSchema = z.object({
+  agreementVersionId: z.uuid(),
+});
+
 export type ActionState = {
   ok: boolean;
   message: string;

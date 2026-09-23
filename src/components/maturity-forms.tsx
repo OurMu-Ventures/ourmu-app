@@ -4,9 +4,11 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 
 import {
+  acceptStandingTerms,
   confirmMaturityAmounts,
   fulfillMaturityInstruction,
   reopenMaturityInstruction,
+  revokeStandingTerms,
   submitMaturityInstruction,
 } from "@/actions/maturity";
 import { ActionButton } from "@/components/ActionButton";
@@ -316,7 +318,11 @@ export function MaturityConfirmAmountsForm({
   );
 }
 
-export function MaturityReopenForm({ instructionId }: { instructionId: string }) {
+export function MaturityReopenForm({
+  instructionId,
+}: {
+  instructionId: string;
+}) {
   const [state, action] = useActionState(
     reopenMaturityInstruction,
     initialActionState,
@@ -334,6 +340,54 @@ export function MaturityReopenForm({ instructionId }: { instructionId: string })
       </label>
       <ActionButton>Reopen for partner revision</ActionButton>
       <StateMessage state={state} />
+    </form>
+  );
+}
+
+export type StandingTermsOption = {
+  id: string;
+  version: string;
+  title: string;
+};
+
+export function StandingTermsAcceptForm({
+  agreements,
+}: {
+  agreements: StandingTermsOption[];
+}) {
+  const [state, action] = useActionState(
+    acceptStandingTerms,
+    initialActionState,
+  );
+  return (
+    <form className="form" action={action}>
+      <label>
+        Approved standing terms
+        <select name="agreementVersionId" required>
+          <option value="">Select…</option>
+          {agreements.map((agreement) => (
+            <option key={agreement.id} value={agreement.id}>
+              {agreement.version} · {agreement.title}
+            </option>
+          ))}
+        </select>
+        <small className="muted">
+          Authorizes automatic full reinvestment of unanswered maturities
+          only under these exact terms. Your acceptance (version, content
+          hash, timestamp, and session evidence) is recorded immutably, and
+          any rollover links back to it.
+        </small>
+      </label>
+      <ActionButton>Accept standing reinvest terms</ActionButton>
+      <StateMessage state={state} />
+    </form>
+  );
+}
+
+export function StandingTermsRevokeForm() {
+  return (
+    <form action={revokeStandingTerms}>
+      <ActionButton danger>Revoke standing authorization</ActionButton>
     </form>
   );
 }

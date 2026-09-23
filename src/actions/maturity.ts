@@ -16,6 +16,7 @@ import {
   maturityFulfillmentSchema,
   maturityInstructionSchema,
   maturityReopenSchema,
+  standingTermsSchema,
   type ActionState,
 } from "@/lib/validation";
 
@@ -328,3 +329,47 @@ export async function reopenMaturityInstruction(
   };
 }
 
+
+export async function acceptStandingTerms(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireInvestor();
+  const parsed = standingTermsSchema.safeParse({
+    agreementVersionId: formData.get("agreementVersionId"),
+  });
+  if (!parsed.success)
+    return { ok: false, message: "Select the standing terms to accept." };
+  const requestHeaders = await headers();
+  const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("accept_standing_reinvest_terms", {
+    p_investor_id: profile.id,
+    p_agreement_version_id: parsed.data.agreementVersionId,
+    p_user_agent: requestHeaders.get("user-agent") ?? "unknown",
+    p_ip_fingerprint: toBytea(fingerprintRequestValue("ip", ip)),
+    p_request_id: requestId(),
+  });
+  if (error)
+    return {
+      ok: false,
+      message: publicError(error, "The standing terms could not be accepted."),
+    };
+  revalidatePath("/profile");
+  return {
+    ok: true,
+    message:
+      "Standing reinvest terms accepted. Unanswered maturities covered by these exact terms may be reinvested automatically.",
+  };
+}
+
+export async function revokeStandingTerms() {
+  const profile = await requireInvestor();
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("revoke_standing_reinvest_authorization", {
+    p_investor_id: profile.id,
+    p_request_id: requestId(),
+  });
+  if (error) throw new Error(publicError(error, "Revocation failed."));
+  revalidatePath("/profile");
+}
