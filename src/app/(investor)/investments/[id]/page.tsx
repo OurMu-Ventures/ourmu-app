@@ -12,7 +12,7 @@ import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
-import { fulfilledSplits, maturityPayoutDateIso } from "@/lib/maturity";
+import { fulfilledSplits, maturityChoiceLabel, maturityPayoutDateIso } from "@/lib/maturity";
 import { investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
@@ -202,7 +202,7 @@ export default async function InvestmentPage({
           {instruction?.status === "requested" && (
             <>
               <p className="notice">
-                Choice recorded: <strong>{instruction.choice}</strong>{" "}
+                Choice recorded: <strong>{maturityChoiceLabel(instruction.choice)}</strong>{" "}
                 (projected payout {ugx(instruction.projected_payout_ugx)} ·
                 projected reinvestment {ugx(instruction.projected_reinvest_ugx)}
                 ). You can revise it until an admin begins processing.
@@ -227,7 +227,7 @@ export default async function InvestmentPage({
           {instruction?.status === "processing" && (
             <>
               <p className="notice">
-                Your choice (<strong>{instruction.choice}</strong>) is being
+                Your choice (<strong>{maturityChoiceLabel(instruction.choice)}</strong>) is being
                 processed by our team and can no longer be revised.
               </p>
               {instruction.proposed_actual_roi_ugx != null &&

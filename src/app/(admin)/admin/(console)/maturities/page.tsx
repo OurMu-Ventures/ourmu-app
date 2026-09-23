@@ -6,6 +6,7 @@ import {
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { dateTime, ugx } from "@/lib/format";
+import { maturityChoiceLabel } from "@/lib/maturity";
 import { decryptPayoutReference } from "@/lib/security/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -135,7 +136,7 @@ export default async function AdminMaturitiesPage() {
               <div className="page-head">
                 <div>
                   <h2>
-                    {partner?.legal_name ?? "Partner"} · {item.choice}
+                    {partner?.legal_name ?? "Partner"} · {maturityChoiceLabel(item.choice)}
                   </h2>
                   <p>
                     Principal {ugx(source?.principal_ugx ?? 0)} · projected

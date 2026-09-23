@@ -4,6 +4,7 @@ import {
   fulfilledSplits,
   impliedProjectedRoi,
   isMaturityDayAllowed,
+  maturityChoiceLabel,
   maturityNoticeDetail,
   maturityPayoutDateIso,
   maturitySplits,
@@ -97,18 +98,28 @@ describe("maturityNoticeDetail", () => {
 
   it("quotes the full-reinvestment amount for option three", () => {
     expect(detail).toContain(
-      "3) Reinvest principal and ROI (UGX 1,300,000.00 reinvested)",
+      "C. Dobolo Payout (UGX 1,300,000.00 reinvested)",
     );
     expect(detail).not.toContain("UGX 0.00 reinvested");
   });
 
   it("covers the other choices, dates, and the projection caveat", () => {
+    expect(detail).toContain("A. Bijjodolo payout");
+    expect(detail).toContain("B. Paka Paka payout");
     expect(detail).toContain("UGX 1,300,000.00 payout");
     expect(detail).toContain(
       "UGX 300,000.00 payout, UGX 1,000,000.00 reinvested",
     );
     expect(detail).toContain("15 Aug 2026");
     expect(detail).toContain("may differ from this projection");
+  });
+});
+
+describe("maturityChoiceLabel", () => {
+  it("uses the three payout-plan names from the partner notice", () => {
+    expect(maturityChoiceLabel("withdraw_all")).toBe("A. Bijjodolo payout");
+    expect(maturityChoiceLabel("withdraw_roi_reinvest_principal")).toBe("B. Paka Paka payout");
+    expect(maturityChoiceLabel("reinvest_all")).toBe("C. Dobolo Payout");
   });
 });
 

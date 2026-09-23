@@ -6,7 +6,7 @@ import { getPublicEnv } from "@/lib/env";
 import { bpsToPercent, date, ugx } from "@/lib/format";
 import {
   fulfilledSplits,
-  MATURITY_CHOICES,
+  maturityChoiceLabel,
   maturityNoticeDetail,
   maturityPayoutDateIso,
   type MaturityChoice,
@@ -205,12 +205,6 @@ async function deliverJobEmail(
   });
 }
 
-function choiceLabel(choice: string) {
-  return (
-    MATURITY_CHOICES.find((option) => option.value === choice)?.label ?? choice
-  );
-}
-
 // Maturity emails carry the figures that prompt the partner's decision:
 // principal, projected ROI, payout date, the three choices with their
 // splits, and a link to the investment — never just the subject line.
@@ -260,7 +254,7 @@ async function maturityEmailContent(
     return {
       actionUrl,
       detail:
-        `Your maturity choice (${choiceLabel(instruction.choice)}) is recorded: projected payout ` +
+        `Your maturity choice (${maturityChoiceLabel(instruction.choice)}) is recorded: projected payout ` +
         `${ugx(instruction.projected_payout_ugx)}, projected reinvestment ` +
         `${ugx(instruction.projected_reinvest_ugx)}. You can revise it until our team begins ` +
         `processing. Scheduled payout date: ${payoutDate}.`,
@@ -290,7 +284,7 @@ async function maturityEmailContent(
       detail:
         `The fund recorded an actual return of ${ugx(instruction.proposed_actual_roi_ugx)} ` +
         `instead of the projected ${ugx(projectedReturn)}. Your updated amounts for ` +
-        `(${choiceLabel(instruction.choice)}): payout ${ugx(proposed.payoutUgx)}, reinvestment ` +
+        `(${maturityChoiceLabel(instruction.choice)}): payout ${ugx(proposed.payoutUgx)}, reinvestment ` +
         `${ugx(proposed.reinvestUgx)}. Open your investment to confirm before anything is paid or reinvested.`,
     };
   }

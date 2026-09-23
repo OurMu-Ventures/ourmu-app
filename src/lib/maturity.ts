@@ -10,20 +10,24 @@ export const MATURITY_CHOICES: {
 }[] = [
   {
     value: "withdraw_all",
-    label: "Withdraw principal and ROI",
-    description: "Receive the full principal plus the return as a payout.",
+    label: "A. Bijjodolo payout",
+    description: "You withdraw both your Principal and ROI.",
   },
   {
     value: "withdraw_roi_reinvest_principal",
-    label: "Withdraw ROI, reinvest principal",
-    description: "Receive the return as a payout and reinvest the principal.",
+    label: "B. Paka Paka payout",
+    description: "Here, you withdraw only your ROI and Re-invest the principal.",
   },
   {
     value: "reinvest_all",
-    label: "Reinvest principal and ROI",
-    description: "Reinvest the full maturity value into a new cycle.",
+    label: "C. Dobolo Payout",
+    description: "Re-Invest your ROI and Principal.",
   },
 ];
+
+export function maturityChoiceLabel(choice: string): string {
+  return MATURITY_CHOICES.find((option) => option.value === choice)?.label ?? choice;
+}
 
 // Scheduled payout day: the 15th of the maturity month (ISO date string).
 export function maturityPayoutDateIso(maturityDateIso: string): string {
@@ -91,10 +95,10 @@ export function maturityNoticeDetail(input: {
     `Your OURMU investment of ${money(input.principalUgx)} matured on ${input.maturityDate} ` +
     `with a projected ${input.projectedPercent}% return of ${money(input.projectedReturnUgx)} ` +
     `(projected value ${money(input.projectedValueUgx)}). Payouts are scheduled for ${input.payoutDate}. ` +
-    `Record your choice on the investment page: 1) Withdraw principal and ROI ` +
-    `(${money(withdrawAll.payoutUgx)} payout). 2) Withdraw ROI and reinvest principal ` +
+    `Record your choice on the investment page: ${maturityChoiceLabel("withdraw_all")} ` +
+    `(${money(withdrawAll.payoutUgx)} payout). ${maturityChoiceLabel("withdraw_roi_reinvest_principal")} ` +
     `(${money(middle.payoutUgx)} payout, ${money(middle.reinvestUgx)} reinvested). ` +
-    `3) Reinvest principal and ROI (${money(reinvestAll.reinvestUgx)} reinvested). ` +
+    `${maturityChoiceLabel("reinvest_all")} (${money(reinvestAll.reinvestUgx)} reinvested). ` +
     `The amount actually paid follows the return recorded by the fund, which may differ from this projection.`
   );
 }
