@@ -4,6 +4,7 @@ import {
   fulfilledSplits,
   impliedProjectedRoi,
   isMaturityDayAllowed,
+  maturityNoticeDetail,
   maturityPayoutDateIso,
   maturitySplits,
 } from "@/lib/maturity";
@@ -81,6 +82,33 @@ describe("impliedProjectedRoi", () => {
     const basis = impliedProjectedRoi(PRINCIPAL, 0, 1_300_000);
     expect(250_000 === basis).toBe(false);
     expect(300_000 === basis).toBe(true);
+  });
+});
+
+describe("maturityNoticeDetail", () => {
+  const detail = maturityNoticeDetail({
+    principalUgx: PRINCIPAL,
+    projectedReturnUgx: PROJECTED_RETURN,
+    projectedValueUgx: 1_300_000,
+    projectedPercent: 30,
+    maturityDate: "10 Aug 2026",
+    payoutDate: "15 Aug 2026",
+  });
+
+  it("quotes the full-reinvestment amount for option three", () => {
+    expect(detail).toContain(
+      "3) Reinvest principal and ROI (UGX 1,300,000.00 reinvested)",
+    );
+    expect(detail).not.toContain("UGX 0.00 reinvested");
+  });
+
+  it("covers the other choices, dates, and the projection caveat", () => {
+    expect(detail).toContain("UGX 1,300,000.00 payout");
+    expect(detail).toContain(
+      "UGX 300,000.00 payout, UGX 1,000,000.00 reinvested",
+    );
+    expect(detail).toContain("15 Aug 2026");
+    expect(detail).toContain("may differ from this projection");
   });
 });
 

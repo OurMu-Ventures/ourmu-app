@@ -1043,6 +1043,7 @@ export type Database = {
           request_id: string
           resolution_notes: string | null
           revision_count: number
+          standing_authorization_id: string | null
           status: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id: string | null
           target_cycle_id: string | null
@@ -1080,6 +1081,7 @@ export type Database = {
           request_id: string
           resolution_notes?: string | null
           revision_count?: number
+          standing_authorization_id?: string | null
           status?: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id?: string | null
           target_cycle_id?: string | null
@@ -1117,6 +1119,7 @@ export type Database = {
           request_id?: string
           resolution_notes?: string | null
           revision_count?: number
+          standing_authorization_id?: string | null
           status?: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id?: string | null
           target_cycle_id?: string | null
@@ -1156,6 +1159,13 @@ export type Database = {
             columns: ["processed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_instructions_standing_authorization_id_fkey"
+            columns: ["standing_authorization_id"]
+            isOneToOne: false
+            referencedRelation: "maturity_reinvest_authorizations"
             referencedColumns: ["id"]
           },
           {

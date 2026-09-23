@@ -7,8 +7,8 @@ import { bpsToPercent, date, ugx } from "@/lib/format";
 import {
   fulfilledSplits,
   MATURITY_CHOICES,
+  maturityNoticeDetail,
   maturityPayoutDateIso,
-  maturitySplits,
   type MaturityChoice,
 } from "@/lib/maturity";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -238,24 +238,22 @@ async function maturityEmailContent(
     )
     .eq("investment_id", investmentId)
     .maybeSingle();
-  const splits = (choice: MaturityChoice) =>
-    maturitySplits(principal, projectedReturn, choice);
   const basis =
     `Your OURMU investment of ${ugx(principal)} matured on ${date(investment.maturity_date)} ` +
     `with a projected ${bpsToPercent(investment.projected_return_bps)}% return of ` +
     `${ugx(projectedReturn)} (projected value ${ugx(investment.projected_value_ugx)}). ` +
     `Payouts are scheduled for ${payoutDate}.`;
   if (template === "maturity_notice") {
-    const all = splits("withdraw_all");
-    const middle = splits("withdraw_roi_reinvest_principal");
     return {
       actionUrl,
-      detail:
-        `${basis} Record your choice on the investment page: 1) Withdraw principal and ROI ` +
-        `(${ugx(all.payoutUgx)} payout). 2) Withdraw ROI and reinvest principal ` +
-        `(${ugx(middle.payoutUgx)} payout, ${ugx(middle.reinvestUgx)} reinvested). ` +
-        `3) Reinvest principal and ROI (${ugx(all.reinvestUgx)} reinvested). ` +
-        `The amount actually paid follows the return recorded by the fund, which may differ from this projection.`,
+      detail: maturityNoticeDetail({
+        principalUgx: principal,
+        projectedReturnUgx: projectedReturn,
+        projectedValueUgx: Number(investment.projected_value_ugx),
+        projectedPercent: bpsToPercent(investment.projected_return_bps),
+        maturityDate: date(investment.maturity_date),
+        payoutDate,
+      }),
     };
   }
   if (template === "maturity_choice_confirmed" && instruction) {

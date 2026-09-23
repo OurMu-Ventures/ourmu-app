@@ -1,5 +1,5 @@
 begin;
-select plan(66);
+select plan(68);
 select has_schema('private','private identity schema exists');
 select has_table('public','profiles','profiles exists');
 select has_table('private','investor_identities','identities are isolated');
@@ -74,6 +74,8 @@ select function_privs_are('public','fulfill_maturity_instruction',array['uuid','
 select function_privs_are('public','confirm_maturity_amounts',array['uuid','uuid','uuid'],'service_role',array['EXECUTE'],'service role alone confirms maturity amounts');
 select function_privs_are('public','reopen_maturity_instruction',array['uuid','uuid','text','boolean','uuid'],'service_role',array['EXECUTE'],'service role alone reopens held instructions');
 select has_trigger('public','payout_destinations','payout_destinations_immutable_guard','payout destinations are immutable once saved');
+select has_column('public','maturity_instructions','standing_authorization_id','auto instructions link their standing authorization');
+select has_column('public','maturity_instructions','acceptance_captured_at','partner acceptance evidence is stored on the instruction');
 select is_empty($$select 1 from information_schema.role_routine_grants where routine_schema='public' and routine_name in ('submit_maturity_instruction','begin_maturity_instruction_processing','fulfill_maturity_instruction','confirm_maturity_amounts','reopen_maturity_instruction') and grantee in ('PUBLIC','anon','authenticated')$$,'browser roles cannot execute maturity operations');
 select is_empty($$select 1 from information_schema.role_table_grants where table_schema='public' and table_name in ('payout_destinations','maturity_instructions') and grantee in ('PUBLIC','anon','authenticated') and privilege_type <> 'SELECT'$$,'browser roles cannot write payout or instruction records');
 select ok((select not enabled from public.maturity_policy_gates where name = 'current_agreement_auto_reinvest'),'automatic reinvestment launch gate ships disabled');

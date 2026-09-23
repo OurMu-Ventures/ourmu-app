@@ -100,11 +100,24 @@ export async function submitMaturityInstruction(
       // a locked instruction points at.
       const { data: existing } = await admin
         .from("payout_destinations")
-        .select("id,provider_label,account_name")
+        .select("id,channel,provider_label,account_name")
         .eq("investor_id", profile.id)
         .eq("account_ref_fingerprint", toBytea(envelope.fingerprint))
         .maybeSingle();
       if (existing) {
+        // The account number matches a saved destination, but the bank,
+        // network, or account name must also match: the row is immutable,
+        // so mismatched details are rejected rather than silently swapped.
+        if (
+          existing.channel !== input.channel ||
+          existing.provider_label !== input.providerLabel ||
+          existing.account_name !== input.accountName
+        )
+          return {
+            ok: false,
+            message:
+              "That account number is saved with different bank or account details. Select the saved destination or correct the details.",
+          };
         payoutDestinationId = existing.id;
       } else {
         const { data: destination, error: destinationError } = await admin

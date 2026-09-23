@@ -172,8 +172,11 @@ export default async function AdminMaturitiesPage() {
                   {item.agreement_accepted ? "accepted" : "not accepted"}
                   {item.acceptance_captured_at
                     ? ` by the partner at ${dateTime(item.acceptance_captured_at)}`
-                    : " (no partner acceptance captured)"}
-                  {item.acceptance_user_agent
+                    : item.standing_authorization_id
+                      ? " via the partner's standing reinvest authorization (re-verified at fulfillment)"
+                      : " (no partner acceptance captured)"}
+                  {item.acceptance_user_agent &&
+                  item.acceptance_user_agent !== "standing-authorization"
                     ? ` · ${item.acceptance_user_agent}`
                     : ""}
                 </p>

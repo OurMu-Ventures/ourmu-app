@@ -60,6 +60,44 @@ export function fulfilledSplits(
   return { payoutUgx: 0, reinvestUgx: principalUgx + actualRoiUgx };
 }
 
+// Pure composer for the maturity notice email body. Kept here (instead of
+// the job runner) so the figures it quotes are unit-tested.
+export function maturityNoticeDetail(input: {
+  principalUgx: number;
+  projectedReturnUgx: number;
+  projectedValueUgx: number;
+  projectedPercent: number;
+  maturityDate: string;
+  payoutDate: string;
+}): string {
+  const withdrawAll = maturitySplits(
+    input.principalUgx,
+    input.projectedReturnUgx,
+    "withdraw_all",
+  );
+  const middle = maturitySplits(
+    input.principalUgx,
+    input.projectedReturnUgx,
+    "withdraw_roi_reinvest_principal",
+  );
+  const reinvestAll = maturitySplits(
+    input.principalUgx,
+    input.projectedReturnUgx,
+    "reinvest_all",
+  );
+  const money = (value: number) =>
+    `UGX ${value.toLocaleString("en-UG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return (
+    `Your OURMU investment of ${money(input.principalUgx)} matured on ${input.maturityDate} ` +
+    `with a projected ${input.projectedPercent}% return of ${money(input.projectedReturnUgx)} ` +
+    `(projected value ${money(input.projectedValueUgx)}). Payouts are scheduled for ${input.payoutDate}. ` +
+    `Record your choice on the investment page: 1) Withdraw principal and ROI ` +
+    `(${money(withdrawAll.payoutUgx)} payout). 2) Withdraw ROI and reinvest principal ` +
+    `(${money(middle.payoutUgx)} payout, ${money(middle.reinvestUgx)} reinvested). ` +
+    `3) Reinvest principal and ROI (${money(reinvestAll.reinvestUgx)} reinvested). ` +
+    `The amount actually paid follows the return recorded by the fund, which may differ from this projection.`
+  );
+}
 // The ROI implied by an instruction's projected splits. Fulfillment uses
 // the admin-recorded actual ROI; when it differs from this basis the
 // partner must confirm the recalculated amounts before execution.
