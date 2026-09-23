@@ -38,8 +38,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-    env:
-      SUPABASE_INTERNAL_IMAGE_REGISTRY: docker.io
     steps:
       - uses: actions/checkout@v7
       - uses: docker/login-action@v3
@@ -50,6 +48,8 @@ jobs:
       - uses: supabase/setup-cli@v3
         with: { version: 2.113.0 }
       - run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+        env:
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: docker.io
       - run: supabase db reset
       - run: supabase test db
       - run: supabase db lint --level error
