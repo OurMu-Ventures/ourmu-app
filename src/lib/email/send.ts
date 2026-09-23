@@ -7,6 +7,7 @@ import {
   type EmailTemplate,
 } from "@/lib/email/template";
 import { getServerEnv } from "@/lib/env";
+import type { MaturityNoticeInput } from "@/lib/maturity";
 
 export type { EmailTemplate } from "@/lib/email/template";
 
@@ -15,6 +16,7 @@ export async function sendTransactionalEmail(input: {
   template: EmailTemplate;
   actionUrl?: string;
   detail?: string;
+  maturityNotice?: MaturityNoticeInput;
 }) {
   const env = getServerEnv();
   if (!env.RESEND_API_KEY) throw new Error("EMAIL_PROVIDER_NOT_CONFIGURED");
@@ -26,6 +28,7 @@ export async function sendTransactionalEmail(input: {
     to: input.to,
     subject: content.subject,
     html: content.html,
+    text: "text" in content ? content.text : undefined,
   });
   if (error) {
     // Do not log the recipient or provider message: either may contain

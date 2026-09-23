@@ -10,6 +10,7 @@ import {
   maturityNoticeDetail,
   maturityPayoutDateIso,
   type MaturityChoice,
+  type MaturityNoticeInput,
 } from "@/lib/maturity";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -192,16 +193,22 @@ async function deliverJobEmail(
   if (!to || !payload.template) throw new Error("EMAIL_JOB_INVALID");
   let actionUrl = payload.actionUrl;
   let detail: string | undefined;
-  if (entityType === "investment" && MATURITY_TEMPLATES.includes(payload.template)) {
+  let maturityNotice: MaturityNoticeInput | undefined;
+  if (
+    entityType === "investment" &&
+    MATURITY_TEMPLATES.includes(payload.template)
+  ) {
     const content = await maturityEmailContent(entityId, payload.template);
     actionUrl = payload.actionUrl ?? content.actionUrl;
     detail = content.detail;
+    maturityNotice = content.maturityNotice;
   }
   await sendTransactionalEmail({
     to,
     template: payload.template,
     actionUrl,
     detail,
+    maturityNotice,
   });
 }
 
@@ -211,7 +218,11 @@ async function deliverJobEmail(
 async function maturityEmailContent(
   investmentId: string,
   template: EmailTemplate,
-): Promise<{ detail: string; actionUrl: string }> {
+): Promise<{
+  detail: string;
+  actionUrl: string;
+  maturityNotice?: MaturityNoticeInput;
+}> {
   const admin = createAdminClient();
   const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
   const { data: investment } = await admin
@@ -238,16 +249,18 @@ async function maturityEmailContent(
     `${ugx(projectedReturn)} (projected value ${ugx(investment.projected_value_ugx)}). ` +
     `Payouts are scheduled for ${payoutDate}.`;
   if (template === "maturity_notice") {
+    const maturityNotice: MaturityNoticeInput = {
+      principalUgx: principal,
+      projectedReturnUgx: projectedReturn,
+      projectedValueUgx: Number(investment.projected_value_ugx),
+      projectedPercent: bpsToPercent(investment.projected_return_bps),
+      maturityDate: date(investment.maturity_date),
+      payoutDate,
+    };
     return {
       actionUrl,
-      detail: maturityNoticeDetail({
-        principalUgx: principal,
-        projectedReturnUgx: projectedReturn,
-        projectedValueUgx: Number(investment.projected_value_ugx),
-        projectedPercent: bpsToPercent(investment.projected_return_bps),
-        maturityDate: date(investment.maturity_date),
-        payoutDate,
-      }),
+      detail: maturityNoticeDetail(maturityNotice),
+      maturityNotice,
     };
   }
   if (template === "maturity_choice_confirmed" && instruction) {
