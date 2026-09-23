@@ -2,10 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cancelInvestment } from "@/actions/investments";
 import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
+import {
+  MaturityConfirmAmountsForm,
+  MaturityInstructionForm,
+  type OpenCycleOption,
+  type SavedDestination,
+} from "@/components/maturity-forms";
 import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
-import { date, dateTime, ugx } from "@/lib/format";
+import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
+import { fulfilledSplits, maturityChoiceLabel, maturityPayoutDateIso } from "@/lib/maturity";
 import { investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,7 +36,42 @@ export default async function InvestmentPage({
   const agreement = Array.isArray(data.investment_agreements)
     ? data.investment_agreements[0]
     : data.investment_agreements;
-  // Reservation window is time-sensitive; check at render and re-check server-side on submit.
+  const isPortalMatured =
+    data.status === "matured" && data.record_origin === "portal";
+  const [{ data: instruction }, { data: destinations }, { data: openCycles }] =
+    isPortalMatured
+      ? await Promise.all([
+          supabase
+            .from("maturity_instructions")
+            .select("*")
+            .eq("investment_id", id)
+            .maybeSingle(),
+          supabase
+            .from("payout_destinations")
+            .select(
+              "id,channel,provider_label,account_name,account_last_four",
+            )
+            .eq("investor_id", profile.id)
+            .eq("is_active", true)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("investment_cycles")
+            .select("id,name,agreement_version_id,agreement_versions(title)")
+            .eq("status", "open")
+            .eq("record_origin", "portal"),
+        ])
+      : [{ data: null }, { data: null }, { data: null }];
+  const cycleOptions: OpenCycleOption[] = (openCycles ?? []).map((cycle) => {
+    const version = Array.isArray(cycle.agreement_versions)
+      ? cycle.agreement_versions[0]
+      : cycle.agreement_versions;
+    return {
+      id: cycle.id,
+      name: cycle.name,
+      agreement_version_id: cycle.agreement_version_id ?? "",
+      agreement_title: version?.title ?? "Participation agreement",
+    };
+  });
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const isCancellable =
@@ -132,6 +174,101 @@ export default async function InvestmentPage({
           </p>
         )}
       </div>
+      {isPortalMatured && (
+        <div className="card" style={{ marginTop: "1rem" }}>
+          <p className="eyebrow">Matured investment choices</p>
+          <h2>What should happen to this placement?</h2>
+          <p>
+            Projected return{" "}
+            <strong>
+              {bpsToPercent(data.projected_return_bps ?? 3000)}%
+            </strong>{" "}
+            ({ugx(data.projected_return_ugx)}) on{" "}
+            {ugx(data.principal_ugx)} principal. Payouts are scheduled for{" "}
+            <strong>{date(maturityPayoutDateIso(data.maturity_date))}</strong>.
+            The amount actually paid follows the return recorded by the fund,
+            which may differ from this projection.
+          </p>
+          {!instruction && (
+            <MaturityInstructionForm
+              investmentId={data.id}
+              principalUgx={Number(data.principal_ugx)}
+              projectedReturnUgx={Number(data.projected_return_ugx)}
+              savedDestinations={(destinations ?? []) as SavedDestination[]}
+              openCycles={cycleOptions}
+              isRevision={false}
+            />
+          )}
+          {instruction?.status === "requested" && (
+            <>
+              <p className="notice">
+                Choice recorded: <strong>{maturityChoiceLabel(instruction.choice)}</strong>{" "}
+                (projected payout {ugx(instruction.projected_payout_ugx)} ·
+                projected reinvestment {ugx(instruction.projected_reinvest_ugx)}
+                ). You can revise it until an admin begins processing.
+              </p>
+              {instruction.resolution_notes && (
+                <p className="notice">
+                  Our team asked for a revision:{" "}
+                  <strong>{instruction.resolution_notes}</strong>
+                </p>
+              )}
+              <MaturityInstructionForm
+                investmentId={data.id}
+                principalUgx={Number(data.principal_ugx)}
+                projectedReturnUgx={Number(data.projected_return_ugx)}
+                savedDestinations={(destinations ?? []) as SavedDestination[]}
+                openCycles={cycleOptions}
+                existingChoice={instruction.choice}
+                isRevision
+              />
+            </>
+          )}
+          {instruction?.status === "processing" && (
+            <>
+              <p className="notice">
+                Your choice (<strong>{maturityChoiceLabel(instruction.choice)}</strong>) is being
+                processed by our team and can no longer be revised.
+              </p>
+              {instruction.proposed_actual_roi_ugx != null &&
+                instruction.confirmed_actual_roi_ugx !==
+                  instruction.proposed_actual_roi_ugx &&
+                (() => {
+                  const proposed = fulfilledSplits(
+                    Number(data.principal_ugx),
+                    Number(instruction.proposed_actual_roi_ugx),
+                    instruction.choice,
+                  );
+                  return (
+                    <MaturityConfirmAmountsForm
+                      instructionId={instruction.id}
+                      proposedRoiUgx={Number(
+                        instruction.proposed_actual_roi_ugx,
+                      )}
+                      proposedPayoutUgx={proposed.payoutUgx}
+                      proposedReinvestUgx={proposed.reinvestUgx}
+                    />
+                  );
+                })()}
+            </>
+          )}
+          {instruction?.status === "fulfilled" && (
+            <p className="notice">
+              Fulfilled: payout {ugx(instruction.actual_payout_ugx ?? 0)} ·
+              reinvestment {ugx(instruction.actual_reinvest_ugx ?? 0)} from an
+              actual return of {ugx(instruction.actual_roi_ugx ?? 0)}.
+            </p>
+          )}
+        </div>
+      )}
+      {data.status === "matured" && data.record_origin !== "portal" && (
+        <div className="card" style={{ marginTop: "1rem" }}>
+          <p className="muted">
+            Historical record. Maturity choices apply to newly matured portal
+            placements; this imported record is unchanged.
+          </p>
+        </div>
+      )}
     </>
   );
 }

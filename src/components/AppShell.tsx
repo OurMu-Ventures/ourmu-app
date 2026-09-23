@@ -34,6 +34,11 @@ const adminLinks: ShellLink[] = [
     label: "Activations",
     status: "Opening activations",
   },
+  {
+    href: "/admin/maturities",
+    label: "Maturities",
+    status: "Opening maturities",
+  },
   { href: "/admin/audit", label: "Audit", status: "Opening audit log" },
   { href: "/admin/jobs", label: "Jobs", status: "Opening jobs" },
   { href: "/admin/settings", label: "Settings", status: "Opening settings" },

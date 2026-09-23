@@ -41,4 +41,16 @@ describe("identity cryptography", () => {
       fingerprintRequestValue("account-email", value.token),
     );
   });
+  it("encrypts payout references with stable fingerprints only", async () => {
+    const { encryptPayoutReference, decryptPayoutReference } = await import(
+      "@/lib/security/crypto"
+    );
+    const a = encryptPayoutReference(" 0700 123 456 ");
+    const b = encryptPayoutReference("0700 123 456");
+    expect(a.ciphertext.toString("utf8")).not.toContain("0700");
+    expect(a.iv).not.toEqual(b.iv);
+    expect(a.fingerprint).toEqual(b.fingerprint);
+    expect(a.lastFour).toBe("3456");
+    expect(decryptPayoutReference(a)).toBe("0700 123 456");
+  });
 });

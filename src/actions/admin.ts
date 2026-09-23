@@ -36,6 +36,16 @@ const cycleSchema = z
       context.addIssue({ code: "custom", message: "Cycle dates are invalid" });
       return z.NEVER;
     }
+    // Payouts are scheduled on the 15th of the maturity month, so a portal
+    // cycle must mature on or before that day. Historical imports are
+    // excluded from this rule by the database trigger.
+    if (Number(cycle.maturityDate.split("-")[2]) > 15) {
+      context.addIssue({
+        code: "custom",
+        message: "Maturity must fall on or before the 15th payout day",
+      });
+      return z.NEVER;
+    }
     return {
       ...cycle,
       opensAt: opensAt.toISOString(),

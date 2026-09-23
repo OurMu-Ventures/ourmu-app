@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { InfoHint } from "@/components/InfoHint";
+import { buttonVariants } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { date, ugx } from "@/lib/format";
 import { maturityProgress } from "@/lib/investments";
@@ -18,12 +19,10 @@ export type InvestmentCardData = {
   detailHref: string;
   detailLabel: string;
   detailStatus: string;
+  detailAction?: boolean;
 };
 
-// Investor cycle card adopting the legacy portfolio layout: header with
-// status, three-stat grid with explainers, time progress toward maturity,
-// and a detail link. Matured-state Withdraw/Reinvest actions are
-// intentionally omitted until those flows exist.
+// Investor cycle card with status, three-stat grid, time progress, and detail link.
 export function InvestmentCard({
   item,
   actions,
@@ -116,7 +115,14 @@ export function InvestmentCard({
         </div>
       </div>
       <div className="invest-foot">
-        <Link href={item.detailHref}>
+        <Link
+          href={item.detailHref}
+          className={
+            item.detailAction
+              ? `${buttonVariants()} maturity-action`
+              : undefined
+          }
+        >
           {item.detailLabel} <LinkStatus label={item.detailStatus} />
         </Link>
         {actions}

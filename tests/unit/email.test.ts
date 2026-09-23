@@ -15,6 +15,28 @@ describe("transactional email rendering", () => {
     });
   });
 
+  it("renders maturity notices with actionable subjects", () => {
+    const notice = renderTransactionalEmail({
+      template: "maturity_notice",
+      actionUrl: "https://example.com/investments/123",
+    });
+    const fulfilled = renderTransactionalEmail({
+      template: "maturity_fulfilled",
+    });
+
+    expect(notice.subject).toContain("matured");
+    expect(notice.html).toContain("Continue securely");
+    expect(fulfilled.subject).toContain("fulfilled");
+  });
+
+  it("subjects the partner-action email as needing action", () => {
+    const action = renderTransactionalEmail({
+      template: "maturity_action_needed",
+    });
+
+    expect(action.subject).toContain("Action needed");
+  });
+
   it("escapes magic-link URLs without changing other templates", () => {
     const magicLink = renderTransactionalEmail({
       template: "magic_link",

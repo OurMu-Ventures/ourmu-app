@@ -1010,6 +1010,279 @@ export type Database = {
           },
         ]
       }
+      maturity_instructions: {
+        Row: {
+          acceptance_captured_at: string | null
+          acceptance_ip_fingerprint: string | null
+          acceptance_request_id: string | null
+          acceptance_user_agent: string | null
+          actual_payout_ugx: number | null
+          actual_reinvest_ugx: number | null
+          actual_roi_ugx: number | null
+          agreement_accepted: boolean
+          choice: Database["public"]["Enums"]["maturity_choice"]
+          confirmed_actual_roi_ugx: number | null
+          created_at: string
+          destination_confirmed: boolean
+          destination_verified: boolean
+          destination_verified_at: string | null
+          fulfilled_at: string | null
+          fulfilled_investment_id: string | null
+          id: string
+          investment_id: string
+          investor_id: string
+          needs_resolution: boolean
+          payout_destination_id: string | null
+          payout_reference: string | null
+          payout_verified_at: string | null
+          processed_at: string | null
+          processed_by: string | null
+          projected_payout_ugx: number
+          projected_reinvest_ugx: number
+          proposed_actual_roi_ugx: number | null
+          request_id: string
+          resolution_notes: string | null
+          revision_count: number
+          standing_authorization_id: string | null
+          status: Database["public"]["Enums"]["maturity_instruction_status"]
+          target_agreement_version_id: string | null
+          target_cycle_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          acceptance_captured_at?: string | null
+          acceptance_ip_fingerprint?: string | null
+          acceptance_request_id?: string | null
+          acceptance_user_agent?: string | null
+          actual_payout_ugx?: number | null
+          actual_reinvest_ugx?: number | null
+          actual_roi_ugx?: number | null
+          agreement_accepted?: boolean
+          choice: Database["public"]["Enums"]["maturity_choice"]
+          confirmed_actual_roi_ugx?: number | null
+          created_at?: string
+          destination_confirmed?: boolean
+          destination_verified?: boolean
+          destination_verified_at?: string | null
+          fulfilled_at?: string | null
+          fulfilled_investment_id?: string | null
+          id?: string
+          investment_id: string
+          investor_id: string
+          needs_resolution?: boolean
+          payout_destination_id?: string | null
+          payout_reference?: string | null
+          payout_verified_at?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          projected_payout_ugx: number
+          projected_reinvest_ugx: number
+          proposed_actual_roi_ugx?: number | null
+          request_id: string
+          resolution_notes?: string | null
+          revision_count?: number
+          standing_authorization_id?: string | null
+          status?: Database["public"]["Enums"]["maturity_instruction_status"]
+          target_agreement_version_id?: string | null
+          target_cycle_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          acceptance_captured_at?: string | null
+          acceptance_ip_fingerprint?: string | null
+          acceptance_request_id?: string | null
+          acceptance_user_agent?: string | null
+          actual_payout_ugx?: number | null
+          actual_reinvest_ugx?: number | null
+          actual_roi_ugx?: number | null
+          agreement_accepted?: boolean
+          choice?: Database["public"]["Enums"]["maturity_choice"]
+          confirmed_actual_roi_ugx?: number | null
+          created_at?: string
+          destination_confirmed?: boolean
+          destination_verified?: boolean
+          destination_verified_at?: string | null
+          fulfilled_at?: string | null
+          fulfilled_investment_id?: string | null
+          id?: string
+          investment_id?: string
+          investor_id?: string
+          needs_resolution?: boolean
+          payout_destination_id?: string | null
+          payout_reference?: string | null
+          payout_verified_at?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          projected_payout_ugx?: number
+          projected_reinvest_ugx?: number
+          proposed_actual_roi_ugx?: number | null
+          request_id?: string
+          resolution_notes?: string | null
+          revision_count?: number
+          standing_authorization_id?: string | null
+          status?: Database["public"]["Enums"]["maturity_instruction_status"]
+          target_agreement_version_id?: string | null
+          target_cycle_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maturity_instructions_fulfilled_investment_id_fkey"
+            columns: ["fulfilled_investment_id"]
+            isOneToOne: false
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_instructions_investment_id_fkey"
+            columns: ["investment_id"]
+            isOneToOne: true
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_instructions_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_instructions_payout_destination_id_fkey"
+            columns: ["payout_destination_id"]
+            isOneToOne: false
+            referencedRelation: "payout_destinations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_instructions_processed_by_fkey"
+            columns: ["processed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_instructions_standing_authorization_id_fkey"
+            columns: ["standing_authorization_id"]
+            isOneToOne: false
+            referencedRelation: "maturity_reinvest_authorizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_instructions_target_agreement_version_id_fkey"
+            columns: ["target_agreement_version_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_instructions_target_cycle_id_fkey"
+            columns: ["target_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "investment_cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maturity_policy_gates: {
+        Row: {
+          enabled: boolean
+          name: string
+          notes: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          enabled?: boolean
+          name: string
+          notes?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          enabled?: boolean
+          name?: string
+          notes?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maturity_policy_gates_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maturity_reinvest_authorizations: {
+        Row: {
+          acceptance_request_id: string
+          accepted_content_hash: string
+          accepted_ip_fingerprint: string
+          accepted_user_agent: string
+          agreement_version_id: string
+          authorized_at: string
+          authorized_by: string | null
+          created_at: string
+          id: string
+          investor_id: string
+          revoked_at: string | null
+          scope: string
+        }
+        Insert: {
+          acceptance_request_id: string
+          accepted_content_hash: string
+          accepted_ip_fingerprint: string
+          accepted_user_agent: string
+          agreement_version_id: string
+          authorized_at?: string
+          authorized_by?: string | null
+          created_at?: string
+          id?: string
+          investor_id: string
+          revoked_at?: string | null
+          scope?: string
+        }
+        Update: {
+          acceptance_request_id?: string
+          accepted_content_hash?: string
+          accepted_ip_fingerprint?: string
+          accepted_user_agent?: string
+          agreement_version_id?: string
+          authorized_at?: string
+          authorized_by?: string | null
+          created_at?: string
+          id?: string
+          investor_id?: string
+          revoked_at?: string | null
+          scope?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maturity_reinvest_authorizations_agreement_version_id_fkey"
+            columns: ["agreement_version_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_reinvest_authorizations_authorized_by_fkey"
+            columns: ["authorized_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maturity_reinvest_authorizations_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       next_of_kin: {
         Row: {
           address: string
@@ -1049,6 +1322,65 @@ export type Database = {
             foreignKeyName: "next_of_kin_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_destinations: {
+        Row: {
+          account_last_four: string
+          account_name: string
+          account_ref_auth_tag: string
+          account_ref_ciphertext: string
+          account_ref_fingerprint: string
+          account_ref_iv: string
+          channel: Database["public"]["Enums"]["payout_channel"]
+          created_at: string
+          id: string
+          investor_id: string
+          is_active: boolean
+          key_version: number
+          provider_label: string
+          updated_at: string
+        }
+        Insert: {
+          account_last_four: string
+          account_name: string
+          account_ref_auth_tag: string
+          account_ref_ciphertext: string
+          account_ref_fingerprint: string
+          account_ref_iv: string
+          channel: Database["public"]["Enums"]["payout_channel"]
+          created_at?: string
+          id?: string
+          investor_id: string
+          is_active?: boolean
+          key_version: number
+          provider_label: string
+          updated_at?: string
+        }
+        Update: {
+          account_last_four?: string
+          account_name?: string
+          account_ref_auth_tag?: string
+          account_ref_ciphertext?: string
+          account_ref_fingerprint?: string
+          account_ref_iv?: string
+          channel?: Database["public"]["Enums"]["payout_channel"]
+          created_at?: string
+          id?: string
+          investor_id?: string
+          is_active?: boolean
+          key_version?: number
+          provider_label?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_destinations_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1137,6 +1469,16 @@ export type Database = {
         }
         Returns: Json
       }
+      accept_standing_reinvest_terms: {
+        Args: {
+          p_agreement_version_id: string
+          p_investor_id: string
+          p_ip_fingerprint: string
+          p_request_id: string
+          p_user_agent: string
+        }
+        Returns: string
+      }
       activate_investment: {
         Args: {
           p_admin_aal2: boolean
@@ -1150,6 +1492,24 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_revoke_standing_reinvest_authorization: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_investor_id: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
+      begin_maturity_instruction_processing: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_instruction_id: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
       cancel_investment: {
         Args: {
           p_investment_id: string
@@ -1157,6 +1517,27 @@ export type Database = {
           p_request_id: string
         }
         Returns: undefined
+      }
+      confirm_maturity_amounts: {
+        Args: {
+          p_instruction_id: string
+          p_investor_id: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
+      fulfill_maturity_instruction: {
+        Args: {
+          p_actual_roi_ugx: number
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_confirmation: string
+          p_destination_verified: boolean
+          p_instruction_id: string
+          p_payout_reference: string
+          p_request_id: string
+        }
+        Returns: Json
       }
       link_legacy_partner: {
         Args: {
@@ -1167,6 +1548,20 @@ export type Database = {
           p_email: string
           p_legacy_partner_id: string
           p_phone: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
+      maturity_payout_date: {
+        Args: { p_maturity_date: string }
+        Returns: string
+      }
+      reopen_maturity_instruction: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_instruction_id: string
+          p_notes: string
           p_request_id: string
         }
         Returns: undefined
@@ -1182,9 +1577,28 @@ export type Database = {
         }
         Returns: string
       }
+      revoke_standing_reinvest_authorization: {
+        Args: { p_investor_id: string; p_request_id: string }
+        Returns: undefined
+      }
       run_maintenance: { Args: { p_request_id: string }; Returns: Json }
       stage_partner_import: {
         Args: { p_admin_id: string; p_manifest: Json; p_request_id: string }
+        Returns: string
+      }
+      submit_maturity_instruction: {
+        Args: {
+          p_agreement_accepted: boolean
+          p_choice: Database["public"]["Enums"]["maturity_choice"]
+          p_destination_confirmed: boolean
+          p_investment_id: string
+          p_investor_id: string
+          p_ip_fingerprint: string
+          p_payout_destination_id: string
+          p_request_id: string
+          p_target_cycle_id: string
+          p_user_agent: string
+        }
         Returns: string
       }
     }
@@ -1204,7 +1618,13 @@ export type Database = {
         | "matured"
       job_kind: "send_email" | "generate_agreement_pdf" | "revoke_sessions"
       job_status: "pending" | "running" | "succeeded" | "failed" | "dead"
+      maturity_choice:
+        | "withdraw_all"
+        | "withdraw_roi_reinvest_principal"
+        | "reinvest_all"
+      maturity_instruction_status: "requested" | "processing" | "fulfilled"
       payout_basis: "projected" | "reported_paid"
+      payout_channel: "bank" | "mobile_money"
       record_origin: "portal" | "legacy_import" | "hybrid"
       user_role: "investor" | "admin"
     }
@@ -1353,9 +1773,17 @@ export const Constants = {
       ],
       job_kind: ["send_email", "generate_agreement_pdf", "revoke_sessions"],
       job_status: ["pending", "running", "succeeded", "failed", "dead"],
+      maturity_choice: [
+        "withdraw_all",
+        "withdraw_roi_reinvest_principal",
+        "reinvest_all",
+      ],
+      maturity_instruction_status: ["requested", "processing", "fulfilled"],
       payout_basis: ["projected", "reported_paid"],
+      payout_channel: ["bank", "mobile_money"],
       record_origin: ["portal", "legacy_import", "hybrid"],
       user_role: ["investor", "admin"],
     },
   },
 } as const
+

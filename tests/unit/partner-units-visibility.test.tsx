@@ -28,6 +28,7 @@ vi.mock("@/actions/investments", () => ({
   requestInvestment: vi.fn(),
   activateInvestment: vi.fn(),
 }));
+vi.mock("@/actions/maturity", () => ({}));
 vi.mock("@/actions/admin", () => ({}));
 vi.mock("@/actions/applications", () => ({}));
 vi.mock("@/actions/auth", () => ({}));
