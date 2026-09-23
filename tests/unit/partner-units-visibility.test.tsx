@@ -28,6 +28,7 @@ vi.mock("@/actions/investments", () => ({
   requestInvestment: vi.fn(),
   activateInvestment: vi.fn(),
 }));
+vi.mock("@/actions/maturity", () => ({}));
 vi.mock("@/actions/admin", () => ({}));
 vi.mock("@/actions/applications", () => ({}));
 vi.mock("@/actions/auth", () => ({}));
@@ -64,17 +65,24 @@ const placement = {
   payout_basis: "projected",
   units: 2.5,
   unit_price_ugx: 125000,
-  maturity_date: "2026-07-01T00:00:00.000Z",
-  requested_at: "2026-01-01T00:00:00.000Z",
+  maturity_date: "2026-07-15T12:00:00.000Z",
+  // Requested mid-cycle, after the term opened: the displayed duration must
+  // follow the cycle term start below, not this reservation timestamp.
+  requested_at: "2026-02-02T09:00:00.000Z",
   reservation_expires_at: null,
   record_origin: "portal",
   investment_cycles: {
     name: "Cycle One",
     status: "open",
-    maturity_date: "2026-07-01T00:00:00.000Z",
+    maturity_date: "2026-07-15T12:00:00.000Z",
+    opens_at: "2026-01-05T06:00:00.000Z",
   },
   investment_agreements: [],
 };
+
+// Midday mid-month fixture timestamps keep the calendar month stable in every
+// timezone, unlike midnight boundary timestamps.
+const DURATION = "January 2026 - July 2026";
 
 const cycle = {
   id: "cycle-1",
@@ -82,7 +90,7 @@ const cycle = {
   status: "open",
   unit_price_ugx: 125000,
   projected_return_bps: 3000,
-  maturity_date: "2026-07-01T00:00:00.000Z",
+  maturity_date: "2026-07-15T12:00:00.000Z",
   closes_at: "2026-02-01T00:00:00.000Z",
   agreement_versions: [
     { id: "agr-1", title: "Current agreement", version: 1, content_hash: "abc" },
@@ -216,6 +224,7 @@ describe("partner units visibility across pages", () => {
       expect(item).not.toHaveProperty("unitsValue");
       expect(item).not.toHaveProperty("unitPriceUgx");
     }
+    expect(items[0]).toMatchObject({ name: DURATION });
   });
 
   it("investments list omits units from every card", async () => {
@@ -234,6 +243,7 @@ describe("partner units visibility across pages", () => {
       expect(item).not.toHaveProperty("unitsValue");
       expect(item).not.toHaveProperty("unitPriceUgx");
     }
+    expect(items[0]).toMatchObject({ name: DURATION });
   });
 
   it("investment detail uses an 'Investment details' heading with a status badge and no units", async () => {
@@ -259,6 +269,8 @@ describe("partner units visibility across pages", () => {
       .map((element) => collectText(element));
     expect(badges.join(" ")).toMatch(/active/i);
     expect(text).not.toMatch(/\bunits\b/i);
+    expect(text).toMatch(/duration/i);
+    expect(text).toMatch(/january 2026 - july 2026/i);
   });
 
   it("new-investment page keeps per-unit pricing in the creation flow", async () => {
@@ -273,6 +285,7 @@ describe("partner units visibility across pages", () => {
 
     expect(text).toMatch(/per unit/i);
     expect(text).toMatch(/125,000/);
+    expect(text).toMatch(/cycle one/i);
 
     const elements = walk(tree);
     const form = elements.find(

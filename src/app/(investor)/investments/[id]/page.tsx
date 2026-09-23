@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
 import { fulfilledSplits, maturityPayoutDateIso } from "@/lib/maturity";
+import { investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentPage({
@@ -25,7 +26,9 @@ export default async function InvestmentPage({
   const supabase = await createClient();
   const { data } = await supabase
     .from("investments")
-    .select("*,investment_agreements(id,pdf_status)")
+    .select(
+      "*,investment_agreements(id,pdf_status),investment_cycles(name,opens_at)",
+    )
     .eq("id", id)
     .eq("investor_id", profile.id)
     .maybeSingle();
@@ -79,6 +82,12 @@ export default async function InvestmentPage({
     data.status === "reserved" &&
     data.reservation_expires_at &&
     new Date(data.reservation_expires_at).getTime() <= now;
+  const period = investmentPeriod(
+    Array.isArray(data.investment_cycles)
+      ? data.investment_cycles[0]?.opens_at
+      : data.investment_cycles?.opens_at,
+    data.maturity_date,
+  );
   return (
     <>
       <p className="eyebrow">Investment record</p>
@@ -115,6 +124,11 @@ export default async function InvestmentPage({
         </article>
       </div>
       <div className="card" style={{ marginTop: "1rem" }}>
+        {period && (
+          <p>
+            Duration: <strong>{period}</strong>
+          </p>
+        )}
         <p>
           Maturity: <strong>{date(data.maturity_date)}</strong>
         </p>

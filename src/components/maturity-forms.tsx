@@ -361,24 +361,35 @@ export function StandingTermsAcceptForm({
   );
   return (
     <form className="form" action={action}>
-      <label>
-        Approved standing terms
-        <select name="agreementVersionId" required>
-          <option value="">Select…</option>
-          {agreements.map((agreement) => (
-            <option key={agreement.id} value={agreement.id}>
+      <fieldset>
+        <legend>Review and select approved standing terms</legend>
+        {agreements.map((agreement) => (
+          <div key={agreement.id}>
+            <label>
+              <input
+                type="radio"
+                name="agreementVersionId"
+                value={agreement.id}
+                required
+              />{" "}
               {agreement.version} · {agreement.title}
-            </option>
-          ))}
-        </select>
-        <small className="muted">
-          Authorizes automatic full reinvestment of unanswered maturities
-          only under these exact terms. Your acceptance (version, content
-          hash, timestamp, and session evidence) is recorded immutably, and
-          any rollover links back to it.
-        </small>
-      </label>
-      <ActionButton>Accept standing reinvest terms</ActionButton>
+            </label>{" "}
+            <Link href={`/participation-agreements/${agreement.id}`} target="_blank" rel="noopener noreferrer">
+              Read these terms (opens in a new tab)
+            </Link>
+          </div>
+        ))}
+      </fieldset>
+      <p className="muted">
+        By accepting, you authorize automatic full reinvestment of unanswered
+        maturities only when the destination cycle uses the terms you select.
+        Your acceptance evidence is recorded and linked to any covered rollover.
+      </p>
+      {agreements.length === 0 ? (
+        <p className="muted">No approved standing terms are available.</p>
+      ) : (
+        <ActionButton>Accept standing reinvest terms</ActionButton>
+      )}
       <StateMessage state={state} />
     </form>
   );

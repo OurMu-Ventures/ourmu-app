@@ -5,6 +5,7 @@ import { InvestmentCard } from "@/components/InvestmentCard";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { requireInvestor } from "@/lib/auth";
+import { investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentsPage() {
@@ -12,7 +13,7 @@ export default async function InvestmentsPage() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("investments")
-    .select("*,investment_cycles(name)")
+    .select("*,investment_cycles(name,opens_at)")
     .eq("investor_id", profile.id)
     .order("requested_at", { ascending: false });
   return (
@@ -41,13 +42,17 @@ export default async function InvestmentsPage() {
             item.status === "reserved" &&
             item.reservation_expires_at &&
             new Date(item.reservation_expires_at).getTime() > now;
+          const cycleName = Array.isArray(item.investment_cycles)
+            ? (item.investment_cycles[0]?.name ?? "OURMU placement")
+            : (item.investment_cycles?.name ?? "OURMU placement");
+          const termStart = Array.isArray(item.investment_cycles)
+            ? item.investment_cycles[0]?.opens_at
+            : item.investment_cycles?.opens_at;
           return (
             <InvestmentCard
               key={item.id}
               item={{
-                name: Array.isArray(item.investment_cycles)
-                  ? (item.investment_cycles[0]?.name ?? "OURMU placement")
-                  : (item.investment_cycles?.name ?? "OURMU placement"),
+                name: investmentPeriod(termStart, item.maturity_date) ?? cycleName,
                 status: item.status,
                 statusLabel: item.status,
                 principalUgx: item.principal_ugx,
