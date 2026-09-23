@@ -87,7 +87,15 @@ export const maturityFulfillmentSchema = z.object({
     .regex(/^\d+(?:\.\d{1,2})?$/)
     .refine((value) => Number(value) >= 0),
   payoutReference: z.string().trim().max(120).optional(),
+  destinationVerified: z.union([z.literal("yes"), z.literal("")]).optional(),
   confirmation: z.literal("FULFILL"),
+});
+
+export const maturityConfirmSchema = z.object({ instructionId: z.uuid() });
+
+export const maturityReopenSchema = z.object({
+  instructionId: z.uuid(),
+  notes: z.string().trim().min(10).max(1000),
 });
 
 export type ActionState = {

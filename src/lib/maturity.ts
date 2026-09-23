@@ -60,6 +60,17 @@ export function fulfilledSplits(
   return { payoutUgx: 0, reinvestUgx: principalUgx + actualRoiUgx };
 }
 
+// The ROI implied by an instruction's projected splits. Fulfillment uses
+// the admin-recorded actual ROI; when it differs from this basis the
+// partner must confirm the recalculated amounts before execution.
+export function impliedProjectedRoi(
+  principalUgx: number,
+  projectedPayoutUgx: number,
+  projectedReinvestUgx: number,
+): number {
+  return projectedPayoutUgx + projectedReinvestUgx - principalUgx;
+}
+
 // Portal cycles must mature on or before the 15th payout day so the payout
 // date (the 15th of the maturity month) never precedes maturity.
 export function isMaturityDayAllowed(maturityDateIso: string): boolean {

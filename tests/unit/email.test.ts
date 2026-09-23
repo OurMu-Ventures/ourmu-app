@@ -29,6 +29,14 @@ describe("transactional email rendering", () => {
     expect(fulfilled.subject).toContain("fulfilled");
   });
 
+  it("subjects the partner-action email as needing action", () => {
+    const action = renderTransactionalEmail({
+      template: "maturity_action_needed",
+    });
+
+    expect(action.subject).toContain("Action needed");
+  });
+
   it("escapes magic-link URLs without changing other templates", () => {
     const magicLink = renderTransactionalEmail({
       template: "magic_link",

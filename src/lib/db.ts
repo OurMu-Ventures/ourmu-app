@@ -59,6 +59,13 @@ export function publicError(
       "imported investments",
       "confirm the payout",
       "accept the destination",
+      "acceptance evidence",
+      "payouts are scheduled",
+      "has not been verified",
+      "partner confirmation",
+      "proposed amounts",
+      "held instruction",
+      "resolution notes",
     ].some((text) => error.message.includes(text))
   ) {
     return error.message;

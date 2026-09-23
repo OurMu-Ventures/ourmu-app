@@ -8,6 +8,7 @@ export type EmailTemplate =
   | "account_email_verification"
   | "maturity_notice"
   | "maturity_choice_confirmed"
+  | "maturity_action_needed"
   | "maturity_fulfilled"
   | "magic_link";
 
@@ -22,6 +23,7 @@ const subjects: Record<EmailTemplate, string> = {
   maturity_notice:
     "Your OURMU investment has matured — choose what happens next",
   maturity_choice_confirmed: "Your maturity choice has been recorded",
+  maturity_action_needed: "Action needed on your matured investment",
   maturity_fulfilled: "Your maturity instruction has been fulfilled",
   magic_link: "Your sign-in link",
 };

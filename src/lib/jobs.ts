@@ -2,7 +2,23 @@ import "server-only";
 
 import { buildAgreementPdf } from "@/lib/agreements/pdf";
 import { sendTransactionalEmail, type EmailTemplate } from "@/lib/email/send";
+import { getPublicEnv } from "@/lib/env";
+import { bpsToPercent, date, ugx } from "@/lib/format";
+import {
+  fulfilledSplits,
+  MATURITY_CHOICES,
+  maturityPayoutDateIso,
+  maturitySplits,
+  type MaturityChoice,
+} from "@/lib/maturity";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+const MATURITY_TEMPLATES: EmailTemplate[] = [
+  "maturity_notice",
+  "maturity_choice_confirmed",
+  "maturity_action_needed",
+  "maturity_fulfilled",
+];
 
 export async function processDueJobs(limit = 10) {
   const admin = createAdminClient();
@@ -174,11 +190,121 @@ async function deliverJobEmail(
     return;
   }
   if (!to || !payload.template) throw new Error("EMAIL_JOB_INVALID");
+  let actionUrl = payload.actionUrl;
+  let detail: string | undefined;
+  if (entityType === "investment" && MATURITY_TEMPLATES.includes(payload.template)) {
+    const content = await maturityEmailContent(entityId, payload.template);
+    actionUrl = payload.actionUrl ?? content.actionUrl;
+    detail = content.detail;
+  }
   await sendTransactionalEmail({
     to,
     template: payload.template,
-    actionUrl: payload.actionUrl,
+    actionUrl,
+    detail,
   });
+}
+
+function choiceLabel(choice: string) {
+  return (
+    MATURITY_CHOICES.find((option) => option.value === choice)?.label ?? choice
+  );
+}
+
+// Maturity emails carry the figures that prompt the partner's decision:
+// principal, projected ROI, payout date, the three choices with their
+// splits, and a link to the investment — never just the subject line.
+async function maturityEmailContent(
+  investmentId: string,
+  template: EmailTemplate,
+): Promise<{ detail: string; actionUrl: string }> {
+  const admin = createAdminClient();
+  const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
+  const { data: investment } = await admin
+    .from("investments")
+    .select(
+      "principal_ugx,projected_return_ugx,projected_return_bps,projected_value_ugx,maturity_date",
+    )
+    .eq("id", investmentId)
+    .single();
+  if (!investment) throw new Error("EMAIL_JOB_INVALID");
+  const principal = Number(investment.principal_ugx);
+  const projectedReturn = Number(investment.projected_return_ugx);
+  const payoutDate = date(maturityPayoutDateIso(investment.maturity_date));
+  const { data: instruction } = await admin
+    .from("maturity_instructions")
+    .select(
+      "choice,status,projected_payout_ugx,projected_reinvest_ugx,actual_payout_ugx,actual_reinvest_ugx,actual_roi_ugx,proposed_actual_roi_ugx,resolution_notes",
+    )
+    .eq("investment_id", investmentId)
+    .maybeSingle();
+  const splits = (choice: MaturityChoice) =>
+    maturitySplits(principal, projectedReturn, choice);
+  const basis =
+    `Your OURMU investment of ${ugx(principal)} matured on ${date(investment.maturity_date)} ` +
+    `with a projected ${bpsToPercent(investment.projected_return_bps)}% return of ` +
+    `${ugx(projectedReturn)} (projected value ${ugx(investment.projected_value_ugx)}). ` +
+    `Payouts are scheduled for ${payoutDate}.`;
+  if (template === "maturity_notice") {
+    const all = splits("withdraw_all");
+    const middle = splits("withdraw_roi_reinvest_principal");
+    return {
+      actionUrl,
+      detail:
+        `${basis} Record your choice on the investment page: 1) Withdraw principal and ROI ` +
+        `(${ugx(all.payoutUgx)} payout). 2) Withdraw ROI and reinvest principal ` +
+        `(${ugx(middle.payoutUgx)} payout, ${ugx(middle.reinvestUgx)} reinvested). ` +
+        `3) Reinvest principal and ROI (${ugx(all.reinvestUgx)} reinvested). ` +
+        `The amount actually paid follows the return recorded by the fund, which may differ from this projection.`,
+    };
+  }
+  if (template === "maturity_choice_confirmed" && instruction) {
+    return {
+      actionUrl,
+      detail:
+        `Your maturity choice (${choiceLabel(instruction.choice)}) is recorded: projected payout ` +
+        `${ugx(instruction.projected_payout_ugx)}, projected reinvestment ` +
+        `${ugx(instruction.projected_reinvest_ugx)}. You can revise it until our team begins ` +
+        `processing. Scheduled payout date: ${payoutDate}.`,
+    };
+  }
+  if (template === "maturity_fulfilled" && instruction) {
+    return {
+      actionUrl,
+      detail:
+        `Your maturity instruction is fulfilled from an actual return of ` +
+        `${ugx(instruction.actual_roi_ugx ?? projectedReturn)}: payout ` +
+        `${ugx(instruction.actual_payout_ugx ?? 0)}, reinvestment ` +
+        `${ugx(instruction.actual_reinvest_ugx ?? 0)}.`,
+    };
+  }
+  if (
+    template === "maturity_action_needed" &&
+    instruction?.proposed_actual_roi_ugx != null
+  ) {
+    const proposed = fulfilledSplits(
+      principal,
+      Number(instruction.proposed_actual_roi_ugx),
+      instruction.choice as MaturityChoice,
+    );
+    return {
+      actionUrl,
+      detail:
+        `The fund recorded an actual return of ${ugx(instruction.proposed_actual_roi_ugx)} ` +
+        `instead of the projected ${ugx(projectedReturn)}. Your updated amounts for ` +
+        `(${choiceLabel(instruction.choice)}): payout ${ugx(proposed.payoutUgx)}, reinvestment ` +
+        `${ugx(proposed.reinvestUgx)}. Open your investment to confirm before anything is paid or reinvested.`,
+    };
+  }
+  if (template === "maturity_action_needed" && instruction?.resolution_notes) {
+    return {
+      actionUrl,
+      detail:
+        `Our team needs your input before your maturity choice can proceed: ` +
+        `${instruction.resolution_notes} Open your investment to revise your choice.`,
+    };
+  }
+  return { actionUrl, detail: basis };
 }
 
 async function fanOutInvestmentEmails(
@@ -201,6 +327,7 @@ async function fanOutInvestmentEmails(
         .not("verified_at", "is", null)
     : { data: null };
   if (!recipients?.length) throw new Error("EMAIL_JOB_INVALID");
+  const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
   const { error } = await admin.from("jobs").upsert(
     recipients.map((recipient) => ({
       kind: "send_email" as const,
@@ -210,6 +337,7 @@ async function fanOutInvestmentEmails(
         template,
         to: recipient.email,
         accountEmailId: recipient.id,
+        actionUrl,
       },
       email_dedupe_key: `${parentJobId}:${recipient.id}`,
     })),

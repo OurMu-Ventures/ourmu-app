@@ -1,15 +1,21 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin, requireInvestor } from "@/lib/auth";
 import { publicError, requestId, toBytea } from "@/lib/db";
-import { encryptPayoutReference } from "@/lib/security/crypto";
+import {
+  encryptPayoutReference,
+  fingerprintRequestValue,
+} from "@/lib/security/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
+  maturityConfirmSchema,
   maturityFulfillmentSchema,
   maturityInstructionSchema,
+  maturityReopenSchema,
   type ActionState,
 } from "@/lib/validation";
 
@@ -47,6 +53,8 @@ export async function submitMaturityInstruction(
     return { ok: false, message: "Choose one of the three maturity options." };
   const input = parsed.data;
   const admin = createAdminClient();
+  const requestHeaders = await headers();
+  const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
 
   let payoutDestinationId: string | null = null;
   if (involvesPayout(input.choice)) {
@@ -87,10 +95,21 @@ export async function submitMaturityInstruction(
       } catch {
         return { ok: false, message: "The account reference is invalid." };
       }
-      const { data: destination, error: destinationError } = await admin
+      // Destinations are immutable once saved: a repeat submission of the
+      // same account reuses the existing row as-is and never rewrites what
+      // a locked instruction points at.
+      const { data: existing } = await admin
         .from("payout_destinations")
-        .upsert(
-          {
+        .select("id,provider_label,account_name")
+        .eq("investor_id", profile.id)
+        .eq("account_ref_fingerprint", toBytea(envelope.fingerprint))
+        .maybeSingle();
+      if (existing) {
+        payoutDestinationId = existing.id;
+      } else {
+        const { data: destination, error: destinationError } = await admin
+          .from("payout_destinations")
+          .insert({
             investor_id: profile.id,
             channel: input.channel,
             provider_label: input.providerLabel,
@@ -102,17 +121,16 @@ export async function submitMaturityInstruction(
             account_last_four: envelope.lastFour,
             key_version: envelope.keyVersion,
             is_active: true,
-          },
-          { onConflict: "investor_id,account_ref_fingerprint" },
-        )
-        .select("id")
-        .single();
-      if (destinationError || !destination)
-        return {
-          ok: false,
-          message: "The payout destination could not be saved.",
-        };
-      payoutDestinationId = destination.id;
+          })
+          .select("id")
+          .single();
+        if (destinationError || !destination)
+          return {
+            ok: false,
+            message: "The payout destination could not be saved.",
+          };
+        payoutDestinationId = destination.id;
+      }
     }
   }
 
@@ -138,6 +156,8 @@ export async function submitMaturityInstruction(
     p_agreement_accepted: input.agreementAccepted === "yes",
     p_destination_confirmed: input.destinationConfirmed === "yes",
     p_request_id: requestId(),
+    p_user_agent: requestHeaders.get("user-agent") ?? "unknown",
+    p_ip_fingerprint: toBytea(fingerprintRequestValue("ip", ip)),
   });
   if (error)
     return {
@@ -180,6 +200,7 @@ export async function fulfillMaturityInstruction(
     instructionId: formData.get("instructionId"),
     actualRoiUgx: formData.get("actualRoiUgx"),
     payoutReference: formData.get("payoutReference") ?? "",
+    destinationVerified: formData.get("destinationVerified") ?? "",
     confirmation: formData.get("confirmation"),
   });
   if (!parsed.success)
@@ -199,6 +220,7 @@ export async function fulfillMaturityInstruction(
     p_confirmation: parsed.data.confirmation,
     p_admin_aal2: aal?.currentLevel === "aal2",
     p_request_id: requestId(),
+    p_destination_verified: parsed.data.destinationVerified === "yes",
   });
   if (error)
     return {
@@ -207,12 +229,89 @@ export async function fulfillMaturityInstruction(
     };
   revalidatePath("/admin/maturities");
   revalidatePath("/admin/investments");
-  const outcome = data as { held?: boolean; reason?: string } | null;
+  const outcome = data as {
+    held?: boolean;
+    reason?: string;
+    pending_partner_confirmation?: boolean;
+  } | null;
   if (outcome?.held)
     return {
       ok: true,
-      message: `Held for admin resolution with partner confirmation: ${outcome.reason ?? "destination unavailable"}. No placement was created.`,
+      message: `Held for resolution: ${outcome.reason ?? "destination unavailable"}. Reopen it with notes so the partner can revise and re-confirm. No placement was created.`,
+    };
+  if (outcome?.pending_partner_confirmation)
+    return {
+      ok: true,
+      message:
+        "The actual return differs from the projection, so the new amounts are pending partner confirmation. Nothing was paid or reinvested yet.",
     };
   return { ok: true, message: "Maturity instruction fulfilled atomically." };
+}
+
+export async function confirmMaturityAmounts(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireInvestor();
+  const parsed = maturityConfirmSchema.safeParse({
+    instructionId: formData.get("instructionId"),
+  });
+  if (!parsed.success)
+    return { ok: false, message: "The confirmation could not be recorded." };
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("confirm_maturity_amounts", {
+    p_investor_id: profile.id,
+    p_instruction_id: parsed.data.instructionId,
+    p_request_id: requestId(),
+  });
+  if (error)
+    return {
+      ok: false,
+      message: publicError(error, "The confirmation could not be recorded."),
+    };
+  revalidatePath(`/investments`);
+  revalidatePath("/dashboard");
+  return {
+    ok: true,
+    message:
+      "Amounts confirmed. An admin will now complete the payout and reinvestment.",
+  };
+}
+
+export async function reopenMaturityInstruction(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireAdmin();
+  const parsed = maturityReopenSchema.safeParse({
+    instructionId: formData.get("instructionId"),
+    notes: formData.get("notes"),
+  });
+  if (!parsed.success)
+    return {
+      ok: false,
+      message: "Explain the resolution so the partner can revise.",
+    };
+  const supabase = await createClient();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("reopen_maturity_instruction", {
+    p_admin_id: profile.id,
+    p_instruction_id: parsed.data.instructionId,
+    p_notes: parsed.data.notes,
+    p_admin_aal2: aal?.currentLevel === "aal2",
+    p_request_id: requestId(),
+  });
+  if (error)
+    return {
+      ok: false,
+      message: publicError(error, "The instruction could not be reopened."),
+    };
+  revalidatePath("/admin/maturities");
+  return {
+    ok: true,
+    message: "Instruction reopened. The partner can now revise and re-confirm.",
+  };
 }
 

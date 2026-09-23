@@ -1012,13 +1012,20 @@ export type Database = {
       }
       maturity_instructions: {
         Row: {
+          acceptance_captured_at: string | null
+          acceptance_ip_fingerprint: string | null
+          acceptance_request_id: string | null
+          acceptance_user_agent: string | null
           actual_payout_ugx: number | null
           actual_reinvest_ugx: number | null
           actual_roi_ugx: number | null
           agreement_accepted: boolean
           choice: Database["public"]["Enums"]["maturity_choice"]
+          confirmed_actual_roi_ugx: number | null
           created_at: string
           destination_confirmed: boolean
+          destination_verified: boolean
+          destination_verified_at: string | null
           fulfilled_at: string | null
           fulfilled_investment_id: string | null
           id: string
@@ -1032,7 +1039,9 @@ export type Database = {
           processed_by: string | null
           projected_payout_ugx: number
           projected_reinvest_ugx: number
+          proposed_actual_roi_ugx: number | null
           request_id: string
+          resolution_notes: string | null
           revision_count: number
           status: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id: string | null
@@ -1040,13 +1049,20 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          acceptance_captured_at?: string | null
+          acceptance_ip_fingerprint?: string | null
+          acceptance_request_id?: string | null
+          acceptance_user_agent?: string | null
           actual_payout_ugx?: number | null
           actual_reinvest_ugx?: number | null
           actual_roi_ugx?: number | null
           agreement_accepted?: boolean
           choice: Database["public"]["Enums"]["maturity_choice"]
+          confirmed_actual_roi_ugx?: number | null
           created_at?: string
           destination_confirmed?: boolean
+          destination_verified?: boolean
+          destination_verified_at?: string | null
           fulfilled_at?: string | null
           fulfilled_investment_id?: string | null
           id?: string
@@ -1060,7 +1076,9 @@ export type Database = {
           processed_by?: string | null
           projected_payout_ugx: number
           projected_reinvest_ugx: number
+          proposed_actual_roi_ugx?: number | null
           request_id: string
+          resolution_notes?: string | null
           revision_count?: number
           status?: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id?: string | null
@@ -1068,13 +1086,20 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          acceptance_captured_at?: string | null
+          acceptance_ip_fingerprint?: string | null
+          acceptance_request_id?: string | null
+          acceptance_user_agent?: string | null
           actual_payout_ugx?: number | null
           actual_reinvest_ugx?: number | null
           actual_roi_ugx?: number | null
           agreement_accepted?: boolean
           choice?: Database["public"]["Enums"]["maturity_choice"]
+          confirmed_actual_roi_ugx?: number | null
           created_at?: string
           destination_confirmed?: boolean
+          destination_verified?: boolean
+          destination_verified_at?: string | null
           fulfilled_at?: string | null
           fulfilled_investment_id?: string | null
           id?: string
@@ -1088,7 +1113,9 @@ export type Database = {
           processed_by?: string | null
           projected_payout_ugx?: number
           projected_reinvest_ugx?: number
+          proposed_actual_roi_ugx?: number | null
           request_id?: string
+          resolution_notes?: string | null
           revision_count?: number
           status?: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id?: string | null
@@ -1440,12 +1467,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      confirm_maturity_amounts: {
+        Args: {
+          p_instruction_id: string
+          p_investor_id: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
       fulfill_maturity_instruction: {
         Args: {
           p_actual_roi_ugx: number
           p_admin_aal2: boolean
           p_admin_id: string
           p_confirmation: string
+          p_destination_verified: boolean
           p_instruction_id: string
           p_payout_reference: string
           p_request_id: string
@@ -1468,6 +1504,16 @@ export type Database = {
       maturity_payout_date: {
         Args: { p_maturity_date: string }
         Returns: string
+      }
+      reopen_maturity_instruction: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_instruction_id: string
+          p_notes: string
+          p_request_id: string
+        }
+        Returns: undefined
       }
       request_investment: {
         Args: {
@@ -1492,9 +1538,11 @@ export type Database = {
           p_destination_confirmed: boolean
           p_investment_id: string
           p_investor_id: string
+          p_ip_fingerprint: string
           p_payout_destination_id: string
           p_request_id: string
           p_target_cycle_id: string
+          p_user_agent: string
         }
         Returns: string
       }

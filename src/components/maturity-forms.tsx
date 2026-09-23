@@ -4,7 +4,9 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 
 import {
+  confirmMaturityAmounts,
   fulfillMaturityInstruction,
+  reopenMaturityInstruction,
   submitMaturityInstruction,
 } from "@/actions/maturity";
 import { ActionButton } from "@/components/ActionButton";
@@ -248,7 +250,8 @@ export function MaturityFulfillmentForm({
           />
           <small className="muted">
             Record the actual return from the fund. The projected figure is
-            never proof of cash.
+            never proof of cash. If it differs from the projection, the
+            partner must confirm the new amounts before anything moves.
           </small>
         </label>
         {needsPayout && (
@@ -258,11 +261,78 @@ export function MaturityFulfillmentForm({
           </label>
         )}
       </div>
+      {needsPayout && (
+        <label className="checkbox">
+          <input
+            name="destinationVerified"
+            type="checkbox"
+            value="yes"
+            required
+          />
+          <span>
+            I have opened the revealed payout destination below and verified
+            it matches the external transfer.
+          </span>
+        </label>
+      )}
       <label>
         Type FULFILL
         <input name="confirmation" autoComplete="off" required />
       </label>
       <ActionButton>Fulfill instruction</ActionButton>
+      <StateMessage state={state} />
+    </form>
+  );
+}
+
+export function MaturityConfirmAmountsForm({
+  instructionId,
+  proposedRoiUgx,
+  proposedPayoutUgx,
+  proposedReinvestUgx,
+}: {
+  instructionId: string;
+  proposedRoiUgx: number;
+  proposedPayoutUgx: number;
+  proposedReinvestUgx: number;
+}) {
+  const [state, action] = useActionState(
+    confirmMaturityAmounts,
+    initialActionState,
+  );
+  return (
+    <form className="form" action={action}>
+      <input type="hidden" name="instructionId" value={instructionId} />
+      <p className="notice">
+        The fund recorded an actual return of{" "}
+        <strong>{ugx(proposedRoiUgx)}</strong>: payout{" "}
+        <strong>{ugx(proposedPayoutUgx)}</strong> · reinvestment{" "}
+        <strong>{ugx(proposedReinvestUgx)}</strong>. Confirm these amounts to
+        let the admin complete your instruction.
+      </p>
+      <ActionButton>Confirm updated amounts</ActionButton>
+      <StateMessage state={state} />
+    </form>
+  );
+}
+
+export function MaturityReopenForm({ instructionId }: { instructionId: string }) {
+  const [state, action] = useActionState(
+    reopenMaturityInstruction,
+    initialActionState,
+  );
+  return (
+    <form className="form" action={action}>
+      <input type="hidden" name="instructionId" value={instructionId} />
+      <label>
+        Resolution notes for the partner
+        <textarea name="notes" minLength={10} maxLength={1000} required />
+        <small className="muted">
+          Reopening returns the instruction to requested so the partner can
+          revise the target cycle and re-accept its agreement.
+        </small>
+      </label>
+      <ActionButton>Reopen for partner revision</ActionButton>
       <StateMessage state={state} />
     </form>
   );

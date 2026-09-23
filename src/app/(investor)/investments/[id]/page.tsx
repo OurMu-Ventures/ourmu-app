@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { cancelInvestment } from "@/actions/investments";
 import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
 import {
+  MaturityConfirmAmountsForm,
   MaturityInstructionForm,
   type OpenCycleOption,
   type SavedDestination,
@@ -11,7 +12,7 @@ import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
-import { maturityPayoutDateIso } from "@/lib/maturity";
+import { fulfilledSplits, maturityPayoutDateIso } from "@/lib/maturity";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentPage({
@@ -192,6 +193,12 @@ export default async function InvestmentPage({
                 projected reinvestment {ugx(instruction.projected_reinvest_ugx)}
                 ). You can revise it until an admin begins processing.
               </p>
+              {instruction.resolution_notes && (
+                <p className="notice">
+                  Our team asked for a revision:{" "}
+                  <strong>{instruction.resolution_notes}</strong>
+                </p>
+              )}
               <MaturityInstructionForm
                 investmentId={data.id}
                 principalUgx={Number(data.principal_ugx)}
@@ -204,10 +211,32 @@ export default async function InvestmentPage({
             </>
           )}
           {instruction?.status === "processing" && (
-            <p className="notice">
-              Your choice (<strong>{instruction.choice}</strong>) is being
-              processed by our team and can no longer be revised.
-            </p>
+            <>
+              <p className="notice">
+                Your choice (<strong>{instruction.choice}</strong>) is being
+                processed by our team and can no longer be revised.
+              </p>
+              {instruction.proposed_actual_roi_ugx != null &&
+                instruction.confirmed_actual_roi_ugx !==
+                  instruction.proposed_actual_roi_ugx &&
+                (() => {
+                  const proposed = fulfilledSplits(
+                    Number(data.principal_ugx),
+                    Number(instruction.proposed_actual_roi_ugx),
+                    instruction.choice,
+                  );
+                  return (
+                    <MaturityConfirmAmountsForm
+                      instructionId={instruction.id}
+                      proposedRoiUgx={Number(
+                        instruction.proposed_actual_roi_ugx,
+                      )}
+                      proposedPayoutUgx={proposed.payoutUgx}
+                      proposedReinvestUgx={proposed.reinvestUgx}
+                    />
+                  );
+                })()}
+            </>
           )}
           {instruction?.status === "fulfilled" && (
             <p className="notice">

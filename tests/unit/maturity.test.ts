@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   fulfilledSplits,
+  impliedProjectedRoi,
   isMaturityDayAllowed,
   maturityPayoutDateIso,
   maturitySplits,
@@ -66,6 +67,20 @@ describe("fulfilledSplits", () => {
       payoutUgx: 0,
       reinvestUgx: 1_000_000,
     });
+  });
+});
+
+describe("impliedProjectedRoi", () => {
+  it("recovers the projected ROI from an instruction's splits", () => {
+    expect(impliedProjectedRoi(PRINCIPAL, 1_300_000, 0)).toBe(300_000);
+    expect(impliedProjectedRoi(PRINCIPAL, 300_000, 1_000_000)).toBe(300_000);
+    expect(impliedProjectedRoi(PRINCIPAL, 0, 1_300_000)).toBe(300_000);
+  });
+
+  it("detects when an admin-recorded ROI differs from the projection", () => {
+    const basis = impliedProjectedRoi(PRINCIPAL, 0, 1_300_000);
+    expect(250_000 === basis).toBe(false);
+    expect(300_000 === basis).toBe(true);
   });
 });
 
