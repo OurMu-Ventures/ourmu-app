@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -63,13 +64,10 @@ export function MaturityInstructionForm({
   const [useSaved, setUseSaved] = useState(savedDestinations.length > 0);
   const [targetCycleId, setTargetCycleId] = useState("");
   const needsPayout =
-    choice === "withdraw_all" ||
-    choice === "withdraw_roi_reinvest_principal";
+    choice === "withdraw_all" || choice === "withdraw_roi_reinvest_principal";
   const needsReinvest =
     choice === "withdraw_roi_reinvest_principal" || choice === "reinvest_all";
-  const selectedCycle = openCycles.find(
-    (cycle) => cycle.id === targetCycleId,
-  );
+  const selectedCycle = openCycles.find((cycle) => cycle.id === targetCycleId);
 
   return (
     <form className="form" action={action}>
@@ -157,8 +155,8 @@ export function MaturityInstructionForm({
           )}
           <p className="muted">
             <small>
-              Saved for future use. Only you and authorized admins can see
-              these details.
+              Saved for future use. Only you and authorized admins can see these
+              details.
             </small>
           </p>
           <label className="checkbox">
@@ -192,17 +190,6 @@ export function MaturityInstructionForm({
               ))}
             </select>
           </label>
-          {selectedCycle && (
-            <p className="muted">
-              <Link
-                href={`/participation-agreements/${selectedCycle.agreement_version_id}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Read {selectedCycle.agreement_title} (opens in a new tab)
-              </Link>
-            </p>
-          )}
           <label className="checkbox">
             <input
               name="agreementAccepted"
@@ -211,8 +198,26 @@ export function MaturityInstructionForm({
               required
             />
             <span>
-              I have read and accept the destination cycle&apos;s current
-              agreement. This records a legally significant acceptance.
+              I have read and accept the{" "}
+              {selectedCycle ? (
+                <Link
+                  aria-label={`${selectedCycle.agreement_title} (opens in a new tab)`}
+                  className="agreement-acceptance-link"
+                  href={`/participation-agreements/${selectedCycle.agreement_version_id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span>{selectedCycle.agreement_title}</span>
+                  <ExternalLink
+                    aria-hidden="true"
+                    size={15}
+                    strokeWidth={2.5}
+                  />
+                </Link>
+              ) : (
+                "destination cycle’s current agreement"
+              )}
+              . This records a legally significant acceptance receipt.
             </span>
           </label>
         </fieldset>
@@ -252,8 +257,8 @@ export function MaturityFulfillmentForm({
           />
           <small className="muted">
             Record the actual return from the fund. The projected figure is
-            never proof of cash. If it differs from the projection, the
-            partner must confirm the new amounts before anything moves.
+            never proof of cash. If it differs from the projection, the partner
+            must confirm the new amounts before anything moves.
           </small>
         </label>
         {needsPayout && (
@@ -272,8 +277,8 @@ export function MaturityFulfillmentForm({
             required
           />
           <span>
-            I have opened the revealed payout destination below and verified
-            it matches the external transfer.
+            I have opened the revealed payout destination below and verified it
+            matches the external transfer.
           </span>
         </label>
       )}
@@ -374,7 +379,11 @@ export function StandingTermsAcceptForm({
               />{" "}
               {agreement.version} · {agreement.title}
             </label>{" "}
-            <Link href={`/participation-agreements/${agreement.id}`} target="_blank" rel="noopener noreferrer">
+            <Link
+              href={`/participation-agreements/${agreement.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               Read these terms (opens in a new tab)
             </Link>
           </div>

@@ -33,6 +33,23 @@ async function reveal(label: string) {
 }
 
 describe("InvestmentCard computed-metric hints", () => {
+  it("shows the matured action as a button-styled link to investment details", () => {
+    render(
+      <InvestmentCard
+        item={{
+          ...baseItem,
+          status: "matured",
+          detailLabel: "Withdraw or Re-invest",
+          detailAction: true,
+        }}
+      />,
+    );
+
+    const action = screen.getByRole("link", { name: "Withdraw or Re-invest" });
+    expect(action).toHaveAttribute("href", "/investments/1");
+    expect(action).toHaveClass("maturity-action");
+  });
+
   it("shows principal without a unit count", async () => {
     render(<InvestmentCard item={baseItem} />);
 

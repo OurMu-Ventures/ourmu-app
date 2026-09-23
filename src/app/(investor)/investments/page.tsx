@@ -48,11 +48,14 @@ export default async function InvestmentsPage() {
           const termStart = Array.isArray(item.investment_cycles)
             ? item.investment_cycles[0]?.opens_at
             : item.investment_cycles?.opens_at;
+          const canChooseMaturity =
+            item.status === "matured" && item.record_origin === "portal";
           return (
             <InvestmentCard
               key={item.id}
               item={{
-                name: investmentPeriod(termStart, item.maturity_date) ?? cycleName,
+                name:
+                  investmentPeriod(termStart, item.maturity_date) ?? cycleName,
                 status: item.status,
                 statusLabel: item.status,
                 principalUgx: item.principal_ugx,
@@ -62,8 +65,13 @@ export default async function InvestmentsPage() {
                 maturityDate: item.maturity_date,
                 startIso: item.requested_at,
                 detailHref: `/investments/${item.id}`,
-                detailLabel: "View",
-                detailStatus: "Opening investment details",
+                detailLabel: canChooseMaturity
+                  ? "Withdraw or Re-invest"
+                  : "View",
+                detailStatus: canChooseMaturity
+                  ? "Opening maturity choices"
+                  : "Opening investment details",
+                detailAction: canChooseMaturity,
               }}
               actions={
                 isCancellable ? (
@@ -76,9 +84,7 @@ export default async function InvestmentsPage() {
             />
           );
         })}
-        {!data?.length && (
-          <p className="muted">No investment records yet.</p>
-        )}
+        {!data?.length && <p className="muted">No investment records yet.</p>}
       </div>
     </>
   );
