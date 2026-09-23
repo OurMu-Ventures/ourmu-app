@@ -47,6 +47,18 @@ export function publicError(
       "reservation cannot",
       "received amount",
       "typed confirmation",
+      "matured investment",
+      "payout destination",
+      "payout reference",
+      "destination cycle",
+      "destination agreement",
+      "destination capacity",
+      "being processed",
+      "begin processing",
+      "actual ROI",
+      "imported investments",
+      "confirm the payout",
+      "accept the destination",
     ].some((text) => error.message.includes(text))
   ) {
     return error.message;

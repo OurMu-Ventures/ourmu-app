@@ -48,6 +48,48 @@ export const activationSchema = z.object({
   confirmation: z.literal("ACTIVATE"),
 });
 
+export const maturityChoiceSchema = z.enum([
+  "withdraw_all",
+  "withdraw_roi_reinvest_principal",
+  "reinvest_all",
+]);
+
+export const payoutChannelSchema = z.enum(["bank", "mobile_money"]);
+
+// A payout destination is saved for future use. The account reference is
+// encrypted at the application layer; only the last four are displayable.
+export const payoutDestinationSchema = z.object({
+  channel: payoutChannelSchema,
+  providerLabel: z.string().trim().min(2).max(80),
+  accountName: z.string().trim().min(3).max(120),
+  accountReference: z.string().trim().min(3).max(64),
+});
+
+export const maturityInstructionSchema = z.object({
+  investmentId: z.uuid(),
+  choice: maturityChoiceSchema,
+  // Present when the choice involves a payout: either a saved destination
+  // or a new one plus an explicit confirmation on submission.
+  payoutDestinationId: z.union([z.uuid(), z.literal("")]).optional(),
+  ...payoutDestinationSchema.partial().shape,
+  destinationConfirmed: z.union([z.literal("yes"), z.literal("")]).optional(),
+  // Present when the choice involves reinvestment: the destination cycle
+  // plus acceptance of that cycle's current agreement.
+  targetCycleId: z.union([z.uuid(), z.literal("")]).optional(),
+  agreementAccepted: z.union([z.literal("yes"), z.literal("")]).optional(),
+});
+
+export const maturityFulfillmentSchema = z.object({
+  instructionId: z.uuid(),
+  actualRoiUgx: z
+    .string()
+    .trim()
+    .regex(/^\d+(?:\.\d{1,2})?$/)
+    .refine((value) => Number(value) >= 0),
+  payoutReference: z.string().trim().max(120).optional(),
+  confirmation: z.literal("FULFILL"),
+});
+
 export type ActionState = {
   ok: boolean;
   message: string;

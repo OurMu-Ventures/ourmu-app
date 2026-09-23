@@ -6,6 +6,9 @@ export type EmailTemplate =
   | "investment_activated"
   | "agreement_ready"
   | "account_email_verification"
+  | "maturity_notice"
+  | "maturity_choice_confirmed"
+  | "maturity_fulfilled"
   | "magic_link";
 
 const subjects: Record<EmailTemplate, string> = {
@@ -16,6 +19,10 @@ const subjects: Record<EmailTemplate, string> = {
   investment_activated: "Your OURMU investment is active",
   agreement_ready: "Your OURMU agreement is ready",
   account_email_verification: "Verify your additional OURMU email",
+  maturity_notice:
+    "Your OURMU investment has matured — choose what happens next",
+  maturity_choice_confirmed: "Your maturity choice has been recorded",
+  maturity_fulfilled: "Your maturity instruction has been fulfilled",
   magic_link: "Your sign-in link",
 };
 

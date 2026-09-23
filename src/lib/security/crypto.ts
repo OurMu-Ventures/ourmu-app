@@ -110,3 +110,61 @@ export function safeSecretEqual(left: string, right: string) {
 export function maskNin(lastFour: string | null) {
   return lastFour ? `********${lastFour}` : "Not available";
 }
+
+const PAYOUT_KEY_VERSION = 1;
+
+function derivePayout() {
+  return derive("payout-destination-encryption");
+}
+
+// Payout destinations are encrypted at the application layer before storage;
+// the database keeps only this envelope plus a lookup fingerprint.
+export function encryptPayoutReference(accountReference: string) {
+  const normalized = accountReference.trim();
+  if (normalized.length < 3 || normalized.length > 64)
+    throw new Error("Invalid payout account reference");
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", derivePayout(), iv);
+  cipher.setAAD(Buffer.from(`payout-destination:v${PAYOUT_KEY_VERSION}`));
+  const ciphertext = Buffer.concat([
+    cipher.update(normalized, "utf8"),
+    cipher.final(),
+  ]);
+  return {
+    ciphertext,
+    iv,
+    authTag: cipher.getAuthTag(),
+    fingerprint: createHmac("sha256", derive("payout-destination-fingerprint"))
+      .update(normalized)
+      .digest(),
+    lastFour: normalized.replace(/[^0-9A-Za-z]/g, "").slice(-4) || "****",
+    keyVersion: PAYOUT_KEY_VERSION,
+  };
+}
+
+export function decryptPayoutReference(envelope: {
+  ciphertext: Buffer;
+  iv: Buffer;
+  authTag: Buffer;
+  keyVersion: number;
+}) {
+  if (envelope.keyVersion !== PAYOUT_KEY_VERSION)
+    throw new Error("Unsupported payout key version");
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    derivePayout(),
+    envelope.iv,
+  );
+  decipher.setAAD(
+    Buffer.from(`payout-destination:v${envelope.keyVersion}`),
+  );
+  decipher.setAuthTag(envelope.authTag);
+  return Buffer.concat([
+    decipher.update(envelope.ciphertext),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+export function maskAccountReference(lastFour: string | null) {
+  return lastFour ? `•••• ${lastFour}` : "Not available";
+}
