@@ -28,7 +28,7 @@ const MATURITY_TEMPLATES: EmailTemplate[] = [
   "maturity_fulfilled",
 ];
 
-type JobRow = {
+export type JobRow = {
   id: string;
   kind: string;
   status: string;
@@ -43,7 +43,7 @@ type JobRow = {
   send_attempts?: number;
 };
 
-type SendEmailPayload = {
+export type SendEmailPayload = {
   template?: EmailTemplate;
   to?: string;
   actionUrl?: string;
@@ -401,7 +401,9 @@ async function receiptForInvestment(investmentId: string): Promise<ReceiptRow | 
   return data?.[0] ?? null;
 }
 
-async function deliverJobEmail(job: JobRow): Promise<string | null> {
+// Exported for worker-level regression tests (the production caller is
+// processDueJobs above).
+export async function deliverJobEmail(job: JobRow): Promise<string | null> {
   const admin = createAdminClient();
   const payload = job.payload as SendEmailPayload;
   const to = payload.to;
@@ -520,15 +522,18 @@ async function deliverJobEmail(job: JobRow): Promise<string | null> {
   }
   // Record the first actual provider send attempt (separate from worker
   // claim attempts) before calling the provider, so the idempotency guard
-  // and any later reconciliation key off real sends.
+  // and any later reconciliation key off real sends. This write must succeed
+  // first: if tracking is lost while Resend accepts the email, a retry past
+  // the 24h window could otherwise bypass reconciliation and double-send.
   const sendAttemptAt = new Date().toISOString();
-  await admin
+  const { error: trackingError } = await admin
     .from("jobs")
     .update({
       send_attempts: (job.send_attempts ?? 0) + 1,
       first_send_attempt_at: job.first_send_attempt_at ?? sendAttemptAt,
     })
     .eq("id", job.id);
+  if (trackingError) throw new Error("SEND_TRACKING_FAILED");
   const messageId = await sendTransactionalEmail({
     to,
     template: payload.template,
@@ -642,7 +647,9 @@ async function maturityEmailContent(
   return { actionUrl, detail: basis };
 }
 
-async function fanOutInvestmentEmails(job: JobRow) {
+// Exported for worker-level regression tests (the production caller is
+// deliverJobEmail above).
+export async function fanOutInvestmentEmails(job: JobRow) {
   const payload = job.payload as SendEmailPayload;
   const template = payload.template;
   if (!template) throw new Error("EMAIL_JOB_INVALID");
@@ -663,13 +670,18 @@ async function fanOutInvestmentEmails(job: JobRow) {
   const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${job.entity_id}`;
   // One delivery record per receipt and verified recipient: the dedupe key
   // is stable per (receipt, recipient) so retries never duplicate queued
-  // deliveries and reuse the same receipt number.
-  const receipt =
-    template === "investment_activated"
-      ? ((payload.receiptId
-          ? await fetchReceipt(payload.receiptId)
-          : await receiptForInvestment(job.entity_id)) ?? null)
-      : null;
+  // deliveries and reuse the same receipt number. A parent job that names a
+  // receipt must resolve it here — never fan out receipt-less children that
+  // would bypass the RECEIPT_NOT_FOUND guard and send legacy emails.
+  let receipt: ReceiptRow | null = null;
+  if (template === "investment_activated") {
+    if (payload.receiptId) {
+      receipt = await fetchReceipt(payload.receiptId);
+      if (!receipt) throw new Error("RECEIPT_NOT_FOUND");
+    } else {
+      receipt = await receiptForInvestment(job.entity_id);
+    }
+  }
   const rows = recipients.map((recipient) => ({
     kind: "send_email" as const,
     entity_type: "investment",
