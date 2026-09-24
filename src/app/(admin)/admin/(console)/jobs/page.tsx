@@ -1,4 +1,4 @@
-import { retryJob } from "@/actions/admin";
+import { reconcileJobDelivery, retryJob } from "@/actions/admin";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { dateTime } from "@/lib/format";
@@ -18,13 +18,14 @@ export default async function JobsPage() {
       <div className="table-wrap">
         <table>
           <thead>
-            <tr>
+              <tr>
               <th>Created</th>
               <th>Kind</th>
               <th>Entity</th>
               <th>Status</th>
               <th>Attempts</th>
               <th>Error code</th>
+              <th>Provider message</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -42,11 +43,41 @@ export default async function JobsPage() {
                 </td>
                 <td>{item.last_error_code ?? "—"}</td>
                 <td>
-                  {["failed", "dead"].includes(item.status) && (
-                    <form action={retryJob}>
-                      <input type="hidden" name="jobId" value={item.id} />
-                      <SubmitButton pendingLabel="Retrying…">Retry</SubmitButton>
-                    </form>
+                  {(item as { provider_message_id?: string | null }).provider_message_id ?? "—"}
+                </td>
+                <td>
+                  {item.last_error_code === "NEEDS_RECONCILIATION" ? (
+                    <>
+                      <form action={reconcileJobDelivery}>
+                        <input type="hidden" name="jobId" value={item.id} />
+                        <input
+                          type="hidden"
+                          name="outcome"
+                          value="confirmed_delivered"
+                        />
+                        <SubmitButton pendingLabel="Confirming…">
+                          Confirm delivered
+                        </SubmitButton>
+                      </form>
+                      <form action={reconcileJobDelivery}>
+                        <input type="hidden" name="jobId" value={item.id} />
+                        <input
+                          type="hidden"
+                          name="outcome"
+                          value="authorize_resend"
+                        />
+                        <SubmitButton pendingLabel="Authorizing…">
+                          Authorize resend
+                        </SubmitButton>
+                      </form>
+                    </>
+                  ) : (
+                    ["failed", "dead"].includes(item.status) && (
+                      <form action={retryJob}>
+                        <input type="hidden" name="jobId" value={item.id} />
+                        <SubmitButton pendingLabel="Retrying…">Retry</SubmitButton>
+                      </form>
+                    )
                   )}
                 </td>
               </tr>

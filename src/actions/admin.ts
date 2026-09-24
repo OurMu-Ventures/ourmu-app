@@ -289,6 +289,11 @@ export async function retryJob(formData: FormData) {
   const adminProfile = await requireAdmin();
   const jobId = z.uuid().parse(formData.get("jobId"));
   const admin = createAdminClient();
+  const { data: job } = await admin
+    .from("jobs")
+    .select("id,kind,entity_id,status")
+    .eq("id", jobId)
+    .maybeSingle();
   const { error } = await admin
     .from("jobs")
     .update({
@@ -300,12 +305,78 @@ export async function retryJob(formData: FormData) {
     .eq("id", jobId)
     .in("status", ["failed", "dead"]);
   if (error) throw new Error("Job retry failed");
+  // Retrying a receipt generation reuses the same receipt number: reset the
+  // row to generating so the worker rebuilds the same document.
+  if (job?.kind === "generate_receipt_pdf" && job.entity_id) {
+    await admin
+      .from("investment_receipts")
+      .update({ pdf_status: "generating", last_error_code: null })
+      .eq("id", job.entity_id)
+      .eq("pdf_status", "failed");
+  }
   await audit({
     actorId: adminProfile.id,
     action: "job.retried",
     entityType: "job",
     entityId: jobId,
     requestId: requestId(),
+  });
+  revalidatePath("/admin/jobs");
+}
+
+// Audited recovery for deliveries blocked by the 24h idempotency guard.
+// Either the provider send is confirmed (mark delivered) or a fresh send is
+// authorized (clears the first-send timestamp so the next attempt re-keys
+// the guard instead of bouncing straight back to dead).
+export async function reconcileJobDelivery(formData: FormData) {
+  const adminProfile = await requireAdmin();
+  const jobId = z.uuid().parse(formData.get("jobId"));
+  const outcome = z
+    .enum(["confirmed_delivered", "authorize_resend"])
+    .parse(formData.get("outcome"));
+  const notes = String(formData.get("notes") ?? "").trim().slice(0, 500);
+  const admin = createAdminClient();
+  const { data: job } = await admin
+    .from("jobs")
+    .select("id,status,last_error_code")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (
+    !job ||
+    !["failed", "dead"].includes(job.status) ||
+    job.last_error_code !== "NEEDS_RECONCILIATION"
+  )
+    throw new Error("Job is not awaiting reconciliation");
+  if (outcome === "confirmed_delivered") {
+    const { error } = await admin
+      .from("jobs")
+      .update({
+        status: "succeeded",
+        completed_at: new Date().toISOString(),
+        last_error_code: null,
+      })
+      .eq("id", jobId);
+    if (error) throw new Error("Reconciliation failed");
+  } else {
+    const { error } = await admin
+      .from("jobs")
+      .update({
+        status: "pending",
+        available_at: new Date().toISOString(),
+        locked_at: null,
+        last_error_code: null,
+        first_send_attempt_at: null,
+      })
+      .eq("id", jobId);
+    if (error) throw new Error("Reconciliation failed");
+  }
+  await audit({
+    actorId: adminProfile.id,
+    action: "job.delivery_reconciled",
+    entityType: "job",
+    entityId: jobId,
+    requestId: requestId(),
+    metadata: { outcome, notes: notes || null },
   });
   revalidatePath("/admin/jobs");
 }
