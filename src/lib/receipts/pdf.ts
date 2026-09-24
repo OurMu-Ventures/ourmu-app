@@ -9,8 +9,8 @@ import { PDFDocument, rgb } from "pdf-lib";
 import { formatUgxExact } from "@/lib/receipts/format";
 
 export const RECEIPT_TEMPLATE_VERSION = "receipt-v1";
-export const RECEIPT_COMPANY_NAME = "OURMU Ventures";
-export const RECEIPT_COMPANY_ADDRESS = "Kampala, Uganda";
+export const RECEIPT_COMPANY_NAME = "OurMu Ventures Limited";
+export const RECEIPT_COMPANY_ADDRESS = "Katabbi Town Council, Entebbe, Wakiso";
 
 const PAGE_W = 595;
 const PAGE_H = 842;

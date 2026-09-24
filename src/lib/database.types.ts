@@ -864,6 +864,7 @@ export type Database = {
           email_dedupe_key: string | null
           entity_id: string
           entity_type: string
+          first_send_attempt_at: string | null
           id: string
           kind: Database["public"]["Enums"]["job_kind"]
           last_error_code: string | null
@@ -871,6 +872,7 @@ export type Database = {
           max_attempts: number
           payload: Json
           provider_message_id: string | null
+          send_attempts: number
           status: Database["public"]["Enums"]["job_status"]
           updated_at: string
         }
@@ -882,6 +884,7 @@ export type Database = {
           email_dedupe_key?: string | null
           entity_id: string
           entity_type: string
+          first_send_attempt_at?: string | null
           id?: string
           kind: Database["public"]["Enums"]["job_kind"]
           last_error_code?: string | null
@@ -889,6 +892,7 @@ export type Database = {
           max_attempts?: number
           payload?: Json
           provider_message_id?: string | null
+          send_attempts?: number
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
         }
@@ -900,6 +904,7 @@ export type Database = {
           email_dedupe_key?: string | null
           entity_id?: string
           entity_type?: string
+          first_send_attempt_at?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["job_kind"]
           last_error_code?: string | null
@@ -907,6 +912,7 @@ export type Database = {
           max_attempts?: number
           payload?: Json
           provider_message_id?: string | null
+          send_attempts?: number
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
         }

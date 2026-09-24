@@ -1,5 +1,5 @@
 begin;
-select plan(80);
+select plan(84);
 select has_schema('private','private identity schema exists');
 select has_table('public','profiles','profiles exists');
 select has_table('private','investor_identities','identities are isolated');
@@ -92,5 +92,9 @@ select is_empty($$select 1 from information_schema.role_table_grants where table
 select function_privs_are('public','activate_investment',array['uuid','uuid','text','numeric','date','text','boolean','uuid'],'service_role',array['EXECUTE'],'service role alone executes activation function with receipts');
 select has_trigger('public','investment_receipts','investment_receipts_immutable_guard','issued receipt details are immutable');
 select ok((select not public from storage.buckets where id='receipts'),'receipt bucket is private');
+select function_privs_are('private','allocate_receipt_number',array['boolean'],'service_role',array['EXECUTE'],'service role alone allocates receipt numbers');
+select has_column('public','jobs','provider_message_id','delivery provider ids are recorded on jobs');
+select has_column('public','jobs','first_send_attempt_at','first provider sends are tracked separately');
+select has_column('public','jobs','send_attempts','provider send attempts are counted separately');
 select * from finish();
 rollback;

@@ -39,8 +39,8 @@ declare
   v_accept_ip bytea;
   v_receipt_id uuid;
   v_receipt_number text;
-  v_company_name text := 'OURMU Ventures';
-  v_company_address text := 'Kampala, Uganda';
+  v_company_name text := 'OurMu Ventures Limited';
+  v_company_address text := 'Katabbi Town Council, Entebbe, Wakiso';
 begin
   if not private.is_admin(p_admin_id) or not p_admin_aal2 then
     raise exception using errcode = '42501', message = 'active administrator AAL2 required';

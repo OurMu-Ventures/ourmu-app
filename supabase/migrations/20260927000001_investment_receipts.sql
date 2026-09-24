@@ -117,6 +117,7 @@ grant select on public.investment_receipts to authenticated;
 grant all on public.investment_receipts, public.receipt_counters to service_role;
 grant usage, select on all sequences in schema public to service_role;
 revoke all on function private.allocate_receipt_number(boolean) from public, anon, authenticated;
+grant execute on function private.allocate_receipt_number(boolean) to service_role;
 
 -- Provider message id for idempotent delivery correlation (Resend email id).
 alter table public.jobs add column if not exists provider_message_id text;
@@ -157,8 +158,8 @@ declare
   v_bank_receipt_id uuid;
   v_receipt_id uuid;
   v_receipt_number text;
-  v_company_name text := 'OURMU Ventures';
-  v_company_address text := 'Kampala, Uganda';
+  v_company_name text := 'OurMu Ventures Limited';
+  v_company_address text := 'Katabbi Town Council, Entebbe, Wakiso';
 begin
   if not private.is_admin(p_admin_id) or not p_admin_aal2 then
     raise exception using errcode = '42501', message = 'active administrator AAL2 required';
