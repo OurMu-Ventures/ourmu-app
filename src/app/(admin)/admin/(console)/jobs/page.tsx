@@ -18,13 +18,14 @@ export default async function JobsPage() {
       <div className="table-wrap">
         <table>
           <thead>
-            <tr>
+              <tr>
               <th>Created</th>
               <th>Kind</th>
               <th>Entity</th>
               <th>Status</th>
               <th>Attempts</th>
               <th>Error code</th>
+              <th>Provider message</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -41,6 +42,9 @@ export default async function JobsPage() {
                   {item.attempts}/{item.max_attempts}
                 </td>
                 <td>{item.last_error_code ?? "—"}</td>
+                <td>
+                  {(item as { provider_message_id?: string | null }).provider_message_id ?? "—"}
+                </td>
                 <td>
                   {["failed", "dead"].includes(item.status) && (
                     <form action={retryJob}>

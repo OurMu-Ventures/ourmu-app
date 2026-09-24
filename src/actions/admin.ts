@@ -289,6 +289,11 @@ export async function retryJob(formData: FormData) {
   const adminProfile = await requireAdmin();
   const jobId = z.uuid().parse(formData.get("jobId"));
   const admin = createAdminClient();
+  const { data: job } = await admin
+    .from("jobs")
+    .select("id,kind,entity_id,status")
+    .eq("id", jobId)
+    .maybeSingle();
   const { error } = await admin
     .from("jobs")
     .update({
@@ -300,6 +305,15 @@ export async function retryJob(formData: FormData) {
     .eq("id", jobId)
     .in("status", ["failed", "dead"]);
   if (error) throw new Error("Job retry failed");
+  // Retrying a receipt generation reuses the same receipt number: reset the
+  // row to generating so the worker rebuilds the same document.
+  if (job?.kind === "generate_receipt_pdf" && job.entity_id) {
+    await admin
+      .from("investment_receipts")
+      .update({ pdf_status: "generating", last_error_code: null })
+      .eq("id", job.entity_id)
+      .eq("pdf_status", "failed");
+  }
   await audit({
     actorId: adminProfile.id,
     action: "job.retried",

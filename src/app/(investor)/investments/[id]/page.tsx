@@ -27,7 +27,7 @@ export default async function InvestmentPage({
   const { data } = await supabase
     .from("investments")
     .select(
-      "*,investment_agreements(id,pdf_status),investment_cycles(name,opens_at)",
+      "*,investment_agreements(id,pdf_status),investment_receipts(id,receipt_number,pdf_status),investment_cycles(name,opens_at)",
     )
     .eq("id", id)
     .eq("investor_id", profile.id)
@@ -36,6 +36,12 @@ export default async function InvestmentPage({
   const agreement = Array.isArray(data.investment_agreements)
     ? data.investment_agreements[0]
     : data.investment_agreements;
+  const receiptRaw = (data as unknown as { investment_receipts?: unknown }).investment_receipts;
+  const receipt = (
+    Array.isArray(receiptRaw)
+      ? receiptRaw[0]
+      : receiptRaw
+  ) as { id: string; receipt_number: string; pdf_status: string } | undefined;
   const isPortalMatured =
     data.status === "matured" && data.record_origin === "portal";
   const [{ data: instruction }, { data: destinations }, { data: openCycles }] =
@@ -154,6 +160,25 @@ export default async function InvestmentPage({
             </Link>
           </Button>
         )}
+        {receipt ? (
+          receipt.pdf_status === "ready" ? (
+            <Button asChild variant="secondary">
+              <Link href={`/receipts/${receipt.id}`}>
+                Download receipt {receipt.receipt_number}{" "}
+                <LinkStatus label="Opening receipt" />
+              </Link>
+            </Button>
+          ) : receipt.pdf_status === "failed" ? (
+            <p className="notice">
+              Receipt {receipt.receipt_number} generation failed. OURMU staff
+              can retry it without reversing your investment.
+            </p>
+          ) : (
+            <p className="muted">Receipt {receipt.receipt_number} is generating…</p>
+          )
+        ) : data.status === "active" ? (
+          <p className="muted">Receipt generation pending…</p>
+        ) : null}
         {isCancellable && (
           <div style={{ marginTop: "1rem" }}>
             <p className="muted" style={{ marginBottom: "0.5rem" }}>

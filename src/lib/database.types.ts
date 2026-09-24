@@ -870,6 +870,7 @@ export type Database = {
           locked_at: string | null
           max_attempts: number
           payload: Json
+          provider_message_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           updated_at: string
         }
@@ -887,6 +888,7 @@ export type Database = {
           locked_at?: string | null
           max_attempts?: number
           payload?: Json
+          provider_message_id?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
         }
@@ -904,9 +906,112 @@ export type Database = {
           locked_at?: string | null
           max_attempts?: number
           payload?: Json
+          provider_message_id?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
         }
+        Relationships: []
+      }
+      investment_receipts: {
+        Row: {
+          account_description: string
+          amount_ugx: number
+          bank_receipt_id: string | null
+          company_address: string
+          company_name: string
+          created_at: string
+          generated_at: string | null
+          id: string
+          investment_id: string
+          investor_id: string
+          is_test: boolean
+          last_error_code: string | null
+          maturity_instruction_id: string | null
+          original_investment_id: string | null
+          partner_name: string
+          partner_phone: string | null
+          pdf_hash: string | null
+          pdf_path: string | null
+          pdf_status: Database["public"]["Enums"]["receipt_status"]
+          receipt_number: string
+          source: Database["public"]["Enums"]["receipt_source"]
+          template_version: string
+          transaction_date: string
+          updated_at: string
+        }
+        Insert: {
+          account_description: string
+          amount_ugx: number
+          bank_receipt_id?: string | null
+          company_address: string
+          company_name: string
+          created_at?: string
+          generated_at?: string | null
+          id?: string
+          investment_id: string
+          investor_id: string
+          is_test?: boolean
+          last_error_code?: string | null
+          maturity_instruction_id?: string | null
+          original_investment_id?: string | null
+          partner_name: string
+          partner_phone?: string | null
+          pdf_hash?: string | null
+          pdf_path?: string | null
+          pdf_status?: Database["public"]["Enums"]["receipt_status"]
+          receipt_number: string
+          source: Database["public"]["Enums"]["receipt_source"]
+          template_version?: string
+          transaction_date: string
+          updated_at?: string
+        }
+        Update: {
+          account_description?: string
+          amount_ugx?: number
+          bank_receipt_id?: string | null
+          company_address?: string
+          company_name?: string
+          created_at?: string
+          generated_at?: string | null
+          id?: string
+          investment_id?: string
+          investor_id?: string
+          is_test?: boolean
+          last_error_code?: string | null
+          maturity_instruction_id?: string | null
+          original_investment_id?: string | null
+          partner_name?: string
+          partner_phone?: string | null
+          pdf_hash?: string | null
+          pdf_path?: string | null
+          pdf_status?: Database["public"]["Enums"]["receipt_status"]
+          receipt_number?: string
+          source?: Database["public"]["Enums"]["receipt_source"]
+          template_version?: string
+          transaction_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_receipts_investment_id_fkey"
+            columns: ["investment_id"]
+            isOneToOne: true
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_receipts_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receipt_counters: {
+        Row: { year: number; last_seq: number }
+        Insert: { year: number; last_seq?: number }
+        Update: { year?: number; last_seq?: number }
         Relationships: []
       }
       legacy_monthly_financial_summaries: {
@@ -1616,7 +1721,11 @@ export type Database = {
         | "rejected"
         | "expired"
         | "matured"
-      job_kind: "send_email" | "generate_agreement_pdf" | "revoke_sessions"
+      job_kind:
+        | "send_email"
+        | "generate_agreement_pdf"
+        | "generate_receipt_pdf"
+        | "revoke_sessions"
       job_status: "pending" | "running" | "succeeded" | "failed" | "dead"
       maturity_choice:
         | "withdraw_all"
@@ -1625,6 +1734,8 @@ export type Database = {
       maturity_instruction_status: "requested" | "processing" | "fulfilled"
       payout_basis: "projected" | "reported_paid"
       payout_channel: "bank" | "mobile_money"
+      receipt_source: "bank_activation" | "reinvestment"
+      receipt_status: "generating" | "ready" | "failed"
       record_origin: "portal" | "legacy_import" | "hybrid"
       user_role: "investor" | "admin"
     }
@@ -1771,7 +1882,7 @@ export const Constants = {
         "expired",
         "matured",
       ],
-      job_kind: ["send_email", "generate_agreement_pdf", "revoke_sessions"],
+      job_kind: ["send_email", "generate_agreement_pdf", "generate_receipt_pdf", "revoke_sessions"],
       job_status: ["pending", "running", "succeeded", "failed", "dead"],
       maturity_choice: [
         "withdraw_all",
