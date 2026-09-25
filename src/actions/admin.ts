@@ -22,7 +22,6 @@ const cycleSchema = z
       .trim()
       .regex(/^\d+(?:\.\d{1,2})?$/)
       .refine((value) => Number(value) >= 125_000),
-    agreementVersionId: z.uuid(),
   })
   .transform((cycle, context) => {
     const bounds = cycleDayBounds(cycle.opensAt, cycle.closesAt);
@@ -47,6 +46,21 @@ const cycleSchema = z
     };
   });
 
+async function latestAgreementId(admin: ReturnType<typeof createAdminClient>) {
+  const { data, error } = await admin
+    .from("agreement_versions")
+    .select("id,template_markdown")
+    .eq("is_legally_approved", true)
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data || /PLACEHOLDER|TBD/i.test(data.template_markdown))
+    return null;
+  return data.id;
+}
+
 export async function createCycle(
   _: ActionState,
   formData: FormData,
@@ -58,14 +72,16 @@ export async function createCycle(
     closesAt: formData.get("closesAt"),
     maturityDate: formData.get("maturityDate"),
     capacityUgx: formData.get("capacityUgx"),
-    agreementVersionId: formData.get("agreementVersionId"),
   });
   if (!parsed.success)
     return {
       ok: false,
-      message: "Enter valid cycle dates, capacity, and agreement.",
+      message: "Enter valid cycle dates and capacity.",
     };
   const admin = createAdminClient();
+  const agreementVersionId = await latestAgreementId(admin);
+  if (!agreementVersionId)
+    return { ok: false, message: "Publish an approved agreement before creating a cycle." };
   const { data, error } = await admin
     .from("investment_cycles")
     .insert({
@@ -74,7 +90,7 @@ export async function createCycle(
       closes_at: parsed.data.closesAt,
       maturity_date: parsed.data.maturityDate,
       capacity_ugx: Number(parsed.data.capacityUgx),
-      agreement_version_id: parsed.data.agreementVersionId,
+      agreement_version_id: agreementVersionId,
       created_by: adminProfile.id,
     })
     .select("id")
@@ -103,14 +119,16 @@ export async function updateCycle(
     closesAt: formData.get("closesAt"),
     maturityDate: formData.get("maturityDate"),
     capacityUgx: formData.get("capacityUgx"),
-    agreementVersionId: formData.get("agreementVersionId"),
   });
   if (!cycleId.success || !parsed.success)
     return {
       ok: false,
-      message: "Enter valid cycle dates, capacity, and agreement.",
+      message: "Enter valid cycle dates and capacity.",
     };
   const admin = createAdminClient();
+  const agreementVersionId = await latestAgreementId(admin);
+  if (!agreementVersionId)
+    return { ok: false, message: "Publish an approved agreement before editing a cycle." };
   const { data, error } = await admin
     .from("investment_cycles")
     .update({
@@ -119,7 +137,7 @@ export async function updateCycle(
       closes_at: parsed.data.closesAt,
       maturity_date: parsed.data.maturityDate,
       capacity_ugx: Number(parsed.data.capacityUgx),
-      agreement_version_id: parsed.data.agreementVersionId,
+      agreement_version_id: agreementVersionId,
     })
     .eq("id", cycleId.data)
     .eq("status", "draft")

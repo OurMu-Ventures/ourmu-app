@@ -513,11 +513,7 @@ export function AgreementVersionForm() {
   );
 }
 
-export function CycleForm({
-  agreements,
-}: {
-  agreements: { id: string; title: string; version: string }[];
-}) {
+export function CycleForm() {
   const [state, action] = useActionState(createCycle, initialActionState);
   return (
     <form className="form" action={action}>
@@ -549,17 +545,6 @@ export function CycleForm({
           />
         </label>
       </div>
-      <label>
-        Agreement
-        <select name="agreementVersionId" required>
-          <option value="">Select…</option>
-          {agreements.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.version} · {a.title}
-            </option>
-          ))}
-        </select>
-      </label>
       <ActionButton>Create draft cycle</ActionButton>
       <StateMessage state={state} />
     </form>
@@ -568,7 +553,6 @@ export function CycleForm({
 
 export function CycleEditForm({
   cycle,
-  agreements,
 }: {
   cycle: {
     id: string;
@@ -577,9 +561,7 @@ export function CycleEditForm({
     closes_at: string;
     maturity_date: string;
     capacity_ugx: number | string | null;
-    agreement_version_id: string | null;
   };
-  agreements: { id: string; title: string; version: string }[];
 }) {
   const [state, action] = useActionState(updateCycle, initialActionState);
   const local = (value: string) =>
@@ -637,20 +619,6 @@ export function CycleEditForm({
           />
         </label>
       </div>
-      <label>
-        Agreement
-        <select
-          name="agreementVersionId"
-          defaultValue={cycle.agreement_version_id ?? ""}
-          required
-        >
-          {agreements.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.version} · {a.title}
-            </option>
-          ))}
-        </select>
-      </label>
       <ActionButton>Save draft</ActionButton>
       <StateMessage state={state} />
     </form>

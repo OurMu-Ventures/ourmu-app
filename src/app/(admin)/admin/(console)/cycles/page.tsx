@@ -12,17 +12,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export default async function CyclesPage() {
   await requireAdmin();
   const admin = createAdminClient();
-  const [{ data: agreements }, { data: cycles }] = await Promise.all([
-    admin
-      .from("agreement_versions")
-      .select("id,title,version")
-      .eq("is_legally_approved", true)
-      .order("created_at", { ascending: false }),
-    admin
-      .from("investment_cycles")
-      .select("*")
-      .order("created_at", { ascending: false }),
-  ]);
+  const { data: cycles } = await admin
+    .from("investment_cycles")
+    .select("*")
+    .order("created_at", { ascending: false });
   const nextStatus = {
     draft: ["open", "Open"],
     open: ["closed", "Close"],
@@ -33,7 +26,7 @@ export default async function CyclesPage() {
       <p className="eyebrow">Terms and capacity</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investment cycles</h1>
       <Tabs labels={["Create cycle", "Publish agreement"]}>
-        <CycleForm agreements={agreements ?? []} />
+        <CycleForm />
         <AgreementVersionForm />
       </Tabs>
       {(cycles ?? []).map((item) => {
@@ -62,7 +55,7 @@ export default async function CyclesPage() {
             {item.status === "draft" && item.record_origin === "portal" && (
               <details>
                 <summary>Edit draft</summary>
-                <CycleEditForm cycle={item} agreements={agreements ?? []} />
+                <CycleEditForm cycle={item} />
               </details>
             )}
           </article>
