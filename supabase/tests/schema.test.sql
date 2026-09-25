@@ -1,5 +1,5 @@
 begin;
-select plan(84);
+select plan(87);
 select has_schema('private','private identity schema exists');
 select has_table('public','profiles','profiles exists');
 select has_table('private','investor_identities','identities are isolated');
@@ -54,6 +54,7 @@ select is_empty($$
     and keys.column_names = array['cycle_id', 'investor_id']::name[]
 $$,'investors may hold multiple distinct placements in the same monthly cycle');
 select throws_ok($$insert into public.investment_cycles(name,opens_at,closes_at,maturity_date,capacity_ugx,unit_price_ugx,agreement_version_id,created_by) values('bad',now(),now()+interval '1 day',current_date+2,1250000,1,gen_random_uuid(),gen_random_uuid())$$,'23514',null,'unit price cannot drift');
+select throws_ok($$insert into public.investment_cycles(name,opens_at,closes_at,maturity_date,capacity_ugx,agreement_version_id,created_by) values('bad maturity','2026-09-01'::timestamptz,'2026-09-15'::timestamptz,'2027-03-15',1250000,gen_random_uuid(),gen_random_uuid())$$,'23514','portal cycle maturity must fall on the last day of the month','portal cycles must mature at month end');
 select throws_ok($$insert into public.investments(investor_id,cycle_id,unit_price_ugx,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,maturity_date,status,record_origin) values(gen_random_uuid(),gen_random_uuid(),125000,124999,3000,37499.7,162498.7,current_date,'reserved','portal')$$,'23514',null,'portal records cannot bypass the minimum principal and reservation constraints');
 insert into public.audit_events (action, entity_type, request_id) values ('test.created', 'test', gen_random_uuid());
 select throws_ok($$delete from public.audit_events where action = 'test.created'$$,'55000','audit_events records are immutable','audit history cannot be deleted');
@@ -84,7 +85,9 @@ select function_privs_are('public','revoke_standing_reinvest_authorization',arra
 select is_empty($$select 1 from information_schema.role_routine_grants where routine_schema='public' and routine_name in ('submit_maturity_instruction','begin_maturity_instruction_processing','fulfill_maturity_instruction','confirm_maturity_amounts','reopen_maturity_instruction') and grantee in ('PUBLIC','anon','authenticated')$$,'browser roles cannot execute maturity operations');
 select is_empty($$select 1 from information_schema.role_table_grants where table_schema='public' and table_name in ('payout_destinations','maturity_instructions') and grantee in ('PUBLIC','anon','authenticated') and privilege_type <> 'SELECT'$$,'browser roles cannot write payout or instruction records');
 select ok((select not enabled from public.maturity_policy_gates where name = 'current_agreement_auto_reinvest'),'automatic reinvestment launch gate ships disabled');
-select is(public.maturity_payout_date('2026-09-03'),'2026-09-15'::date,'payout day is the 15th of the maturity month');
+select is(public.maturity_payout_date('2026-09-30'),'2026-10-15'::date,'payout day is the 15th of the next month');
+select is(public.maturity_payout_date('2026-12-31'),'2027-01-15'::date,'payout crosses the year boundary');
+select is(public.maturity_payout_date('2028-02-29'),'2028-03-15'::date,'payout follows leap-year month end');
 select has_table('public','investment_receipts','investment receipts exist');
 select has_table('public','receipt_counters','receipt counters exist');
 select ok((select relrowsecurity from pg_class where oid = 'public.investment_receipts'::regclass),'receipts RLS enabled');
