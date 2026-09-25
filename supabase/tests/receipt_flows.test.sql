@@ -26,10 +26,10 @@ values
 insert into public.investment_cycles (id, name, opens_at, closes_at, maturity_date, capacity_ugx, unit_price_ugx, projected_return_bps, status, agreement_version_id, created_by)
 values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Receipt Old Cycle', now() - interval '400 days', now() - interval '300 days',
-    (date_trunc('month', now() - interval '7 months') + interval '14 days')::date, 100000000, 125000, 3000, 'closed',
+    (date_trunc('month', now() - interval '7 months') + interval '1 month - 1 day')::date, 100000000, 125000, 3000, 'closed',
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111'),
   ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'Receipt Open Cycle', now() - interval '1 day', now() + interval '30 days',
-    (date_trunc('month', now() + interval '6 months') + interval '14 days')::date, 100000000, 125000, 3000, 'open',
+    (date_trunc('month', now() + interval '6 months') + interval '1 month - 1 day')::date, 100000000, 125000, 3000, 'open',
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111');
 
 insert into public.investments (id, investor_id, cycle_id, unit_price_ugx, principal_ugx, projected_return_bps, projected_return_ugx, projected_value_ugx, maturity_date, reservation_expires_at, status, record_origin)

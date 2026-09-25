@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   fulfilledSplits,
   impliedProjectedRoi,
-  isMaturityDayAllowed,
+  isMonthEndMaturity,
   maturityChoiceLabel,
   maturityNoticeDetail,
   maturityPayoutDateIso,
@@ -124,21 +124,23 @@ describe("maturityChoiceLabel", () => {
 });
 
 describe("maturityPayoutDateIso", () => {
-  it("schedules payout on the 15th of the maturity month", () => {
-    expect(maturityPayoutDateIso("2026-09-03")).toBe("2026-09-15");
-    expect(maturityPayoutDateIso("2026-09-15")).toBe("2026-09-15");
-    expect(maturityPayoutDateIso("2026-02-28")).toBe("2026-02-15");
+  it("schedules payout on the 15th of the following month", () => {
+    expect(maturityPayoutDateIso("2026-09-30")).toBe("2026-10-15");
+    expect(maturityPayoutDateIso("2026-12-31")).toBe("2027-01-15");
+    expect(maturityPayoutDateIso("2028-02-29")).toBe("2028-03-15");
   });
 });
 
-describe("isMaturityDayAllowed", () => {
-  it("allows new cycles maturing on or before the 15th", () => {
-    expect(isMaturityDayAllowed("2026-09-01")).toBe(true);
-    expect(isMaturityDayAllowed("2026-09-15")).toBe(true);
+describe("isMonthEndMaturity", () => {
+  it("allows the last day of each month, including leap years", () => {
+    expect(isMonthEndMaturity("2026-09-30")).toBe(true);
+    expect(isMonthEndMaturity("2026-02-28")).toBe(true);
+    expect(isMonthEndMaturity("2028-02-29")).toBe(true);
   });
 
-  it("rejects new cycles maturing after the payout day", () => {
-    expect(isMaturityDayAllowed("2026-09-16")).toBe(false);
-    expect(isMaturityDayAllowed("2026-09-30")).toBe(false);
+  it("rejects other days and invalid dates", () => {
+    expect(isMonthEndMaturity("2026-09-15")).toBe(false);
+    expect(isMonthEndMaturity("2026-02-29")).toBe(false);
+    expect(isMonthEndMaturity("2026-13-31")).toBe(false);
   });
 });

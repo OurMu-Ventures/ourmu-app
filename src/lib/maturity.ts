@@ -39,11 +39,11 @@ export function maturityChoiceLabel(choice: string): string {
   );
 }
 
-// Scheduled payout day: the 15th of the maturity month (ISO date string).
+// Scheduled payout day: the 15th of the month after maturity.
 export function maturityPayoutDateIso(maturityDateIso: string): string {
   const [year, month] = maturityDateIso.split("-").map(Number);
-  const padded = String(month).padStart(2, "0");
-  return `${year}-${padded}-15`;
+  const nextMonth = new Date(Date.UTC(year, month, 15));
+  return nextMonth.toISOString().slice(0, 10);
 }
 
 // Projected split for a choice, from the placement's own projected figures.
@@ -116,9 +116,10 @@ export function impliedProjectedRoi(
   return projectedPayoutUgx + projectedReinvestUgx - principalUgx;
 }
 
-// Portal cycles must mature on or before the 15th payout day so the payout
-// date (the 15th of the maturity month) never precedes maturity.
-export function isMaturityDayAllowed(maturityDateIso: string): boolean {
-  const day = Number(maturityDateIso.split("-")[2]);
-  return Number.isInteger(day) && day >= 1 && day <= 15;
+// New portal cycles mature on the final calendar day of their month.
+export function isMonthEndMaturity(maturityDateIso: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(maturityDateIso)) return false;
+  const [year, month, day] = maturityDateIso.split("-").map(Number);
+  if (month < 1 || month > 12) return false;
+  return day === new Date(Date.UTC(year, month, 0)).getUTCDate();
 }

@@ -55,7 +55,7 @@ function cycleForm() {
   form.set("name", "October 2026");
   form.set("opensAt", "2026-10-01");
   form.set("closesAt", "2026-10-15");
-  form.set("maturityDate", "2027-03-15");
+  form.set("maturityDate", "2027-03-31");
   form.set("capacityUgx", "125000");
   form.set("agreementVersionId", "stale-client-value");
   return form;
@@ -90,5 +90,24 @@ describe("admin cycle agreement selection", () => {
     const result = await createCycle({ ok: false, message: "" }, cycleForm());
     expect(result).toMatchObject({ ok: false, message: expect.stringContaining("Publish") });
     expect(state.inserted).toBeNull();
+  });
+
+  it("explains when maturity is not at month end", async () => {
+    const form = cycleForm();
+    form.set("maturityDate", "2027-03-15");
+    expect(await createCycle({ ok: false, message: "" }, form)).toMatchObject({
+      ok: false,
+      message: "Maturity date must be the last day of its month.",
+    });
+    expect(state.inserted).toBeNull();
+  });
+
+  it("explains when capacity is too small", async () => {
+    const form = cycleForm();
+    form.set("capacityUgx", "100000");
+    expect(await createCycle({ ok: false, message: "" }, form)).toMatchObject({
+      ok: false,
+      message: "Enter a capacity of at least UGX 125,000 with at most two decimal places.",
+    });
   });
 });
