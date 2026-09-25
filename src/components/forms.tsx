@@ -513,11 +513,7 @@ export function AgreementVersionForm() {
   );
 }
 
-export function CycleForm({
-  agreements,
-}: {
-  agreements: { id: string; title: string; version: string }[];
-}) {
+export function CycleForm() {
   const [state, action] = useActionState(createCycle, initialActionState);
   return (
     <form className="form" action={action}>
@@ -527,12 +523,12 @@ export function CycleForm({
       </label>
       <div className="form-grid">
         <label>
-          Opens at
-          <input name="opensAt" type="datetime-local" required />
+          Opens on (Kampala)
+          <input name="opensAt" type="date" required />
         </label>
         <label>
-          Closes at
-          <input name="closesAt" type="datetime-local" required />
+          Closes on (Kampala)
+          <input name="closesAt" type="date" required />
         </label>
         <label>
           Maturity date
@@ -549,17 +545,6 @@ export function CycleForm({
           />
         </label>
       </div>
-      <label>
-        Agreement
-        <select name="agreementVersionId" required>
-          <option value="">Select…</option>
-          {agreements.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.version} · {a.title}
-            </option>
-          ))}
-        </select>
-      </label>
       <ActionButton>Create draft cycle</ActionButton>
       <StateMessage state={state} />
     </form>
@@ -568,7 +553,6 @@ export function CycleForm({
 
 export function CycleEditForm({
   cycle,
-  agreements,
 }: {
   cycle: {
     id: string;
@@ -577,9 +561,7 @@ export function CycleEditForm({
     closes_at: string;
     maturity_date: string;
     capacity_ugx: number | string | null;
-    agreement_version_id: string | null;
   };
-  agreements: { id: string; title: string; version: string }[];
 }) {
   const [state, action] = useActionState(updateCycle, initialActionState);
   const local = (value: string) =>
@@ -588,12 +570,8 @@ export function CycleEditForm({
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
     })
-      .format(new Date(value))
-      .replace(" ", "T");
+      .format(new Date(value));
   return (
     <form className="form" action={action}>
       <input type="hidden" name="cycleId" value={cycle.id} />
@@ -603,19 +581,19 @@ export function CycleEditForm({
       </label>
       <div className="form-grid">
         <label>
-          Opens at (Kampala)
+          Opens on (Kampala)
           <input
             name="opensAt"
-            type="datetime-local"
+            type="date"
             defaultValue={local(cycle.opens_at)}
             required
           />
         </label>
         <label>
-          Closes at (Kampala)
+          Closes on (Kampala)
           <input
             name="closesAt"
-            type="datetime-local"
+            type="date"
             defaultValue={local(cycle.closes_at)}
             required
           />
@@ -641,20 +619,6 @@ export function CycleEditForm({
           />
         </label>
       </div>
-      <label>
-        Agreement
-        <select
-          name="agreementVersionId"
-          defaultValue={cycle.agreement_version_id ?? ""}
-          required
-        >
-          {agreements.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.version} · {a.title}
-            </option>
-          ))}
-        </select>
-      </label>
       <ActionButton>Save draft</ActionButton>
       <StateMessage state={state} />
     </form>

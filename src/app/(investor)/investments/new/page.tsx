@@ -6,11 +6,14 @@ import { createClient } from "@/lib/supabase/server";
 export default async function NewInvestmentPage() {
   const profile = await requireInvestor();
   const supabase = await createClient();
+  const now = new Date().toISOString();
   const [{ data: cycle }, { data: kin }, { data: bank }] = await Promise.all([
     supabase
       .from("investment_cycles")
       .select("*,agreement_versions(id,title,version,content_hash)")
       .eq("status", "open")
+      .lte("opens_at", now)
+      .gt("closes_at", now)
       .maybeSingle(),
     supabase
       .from("next_of_kin")
