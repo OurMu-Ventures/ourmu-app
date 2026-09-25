@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 export default async function DashboardPage() {
   const profile = await requireInvestor();
   const supabase = await createClient();
+  const now = new Date().toISOString();
   const [{ data: investments }, { data: cycle }, { data: kin }] =
     await Promise.all([
       supabase
@@ -25,6 +26,8 @@ export default async function DashboardPage() {
         .from("investment_cycles")
         .select("*")
         .eq("status", "open")
+        .lte("opens_at", now)
+        .gt("closes_at", now)
         .maybeSingle(),
       supabase
         .from("next_of_kin")

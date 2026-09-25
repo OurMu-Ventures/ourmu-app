@@ -91,7 +91,8 @@ const cycle = {
   unit_price_ugx: 125000,
   projected_return_bps: 3000,
   maturity_date: "2026-07-15T12:00:00.000Z",
-  closes_at: "2026-02-01T00:00:00.000Z",
+  opens_at: "2020-01-01T00:00:00.000Z",
+  closes_at: "2099-02-01T00:00:00.000Z",
   agreement_versions: [
     { id: "agr-1", title: "Current agreement", version: 1, content_hash: "abc" },
   ],
@@ -100,11 +101,22 @@ const cycle = {
 // Minimal thenable-free query builder: terminal reads expose { data }
 // directly, while maybeSingle() resolves { data } like the real client.
 function queryFor(data: unknown) {
-  const terminal = { data } as { data: unknown } & Record<string, () => unknown>;
+  let selected = data;
+  const terminal = { data } as { data: unknown } & Record<string, (...args: unknown[]) => unknown>;
   terminal.select = () => terminal;
   terminal.eq = () => terminal;
+  terminal.lte = (field, value) => {
+    if (field === "opens_at" && selected && typeof selected === "object" &&
+        "opens_at" in selected && String(selected.opens_at) > String(value)) selected = null;
+    return terminal;
+  };
+  terminal.gt = (field, value) => {
+    if (field === "closes_at" && selected && typeof selected === "object" &&
+        "closes_at" in selected && String(selected.closes_at) <= String(value)) selected = null;
+    return terminal;
+  };
   terminal.order = () => terminal;
-  terminal.maybeSingle = () => Promise.resolve({ data });
+  terminal.maybeSingle = () => Promise.resolve({ data: selected });
   return terminal;
 }
 
@@ -183,6 +195,16 @@ afterEach(() => {
 });
 
 describe("partner units visibility across pages", () => {
+  it("hides a past-deadline cycle from the dashboard and investment form", async () => {
+    mockClient({
+      investments: [],
+      investment_cycles: { ...cycle, closes_at: "2026-09-15T21:00:00.000Z" },
+      next_of_kin: { id: "kin-1" },
+    });
+    expect(collectText(await DashboardPage())).toMatch(/No cycle is open/);
+    expect(collectText(await NewInvestmentPage())).toMatch(/No cycle is open/);
+  });
+
   it("dashboard omits units while keeping projected return and maturity", async () => {
     mockClient({
       investments: [placement],
