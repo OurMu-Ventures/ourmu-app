@@ -28,7 +28,7 @@ export async function requestInvestment(
     return {
       ok: false,
       message:
-        "Enter UGX 125,000–62,500,000 with at most two decimals and accept the current agreement.",
+        "Enter UGX 125,000–50,000,000 with at most two decimals and accept the current agreement.",
     };
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";

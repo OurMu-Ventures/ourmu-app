@@ -1,5 +1,5 @@
 begin;
-select plan(87);
+select plan(91);
 select has_schema('private','private identity schema exists');
 select has_table('public','profiles','profiles exists');
 select has_table('private','investor_identities','identities are isolated');
@@ -56,6 +56,10 @@ $$,'investors may hold multiple distinct placements in the same monthly cycle');
 select throws_ok($$insert into public.investment_cycles(name,opens_at,closes_at,maturity_date,capacity_ugx,unit_price_ugx,agreement_version_id,created_by) values('bad',now(),now()+interval '1 day',current_date+2,1250000,1,gen_random_uuid(),gen_random_uuid())$$,'23514',null,'unit price cannot drift');
 select throws_ok($$insert into public.investment_cycles(name,opens_at,closes_at,maturity_date,capacity_ugx,agreement_version_id,created_by) values('bad maturity','2026-09-01'::timestamptz,'2026-09-15'::timestamptz,'2027-03-15',1250000,gen_random_uuid(),gen_random_uuid())$$,'23514','portal cycle maturity must fall on the last day of the month','portal cycles must mature at month end');
 select throws_ok($$insert into public.investments(investor_id,cycle_id,unit_price_ugx,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,maturity_date,status,record_origin) values(gen_random_uuid(),gen_random_uuid(),125000,124999,3000,37499.7,162498.7,current_date,'reserved','portal')$$,'23514',null,'portal records cannot bypass the minimum principal and reservation constraints');
+select throws_ok($$insert into public.investments(investor_id,cycle_id,unit_price_ugx,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,maturity_date,reservation_expires_at,status,record_origin) values(gen_random_uuid(),gen_random_uuid(),125000,50000000.01,3000,15000000.003,65000000.013,current_date,now()+interval '1 day','reserved','portal')$$,'23514',null,'new portal placements cannot exceed UGX 50 million');
+select ok(position('50000000' in pg_get_constraintdef((select oid from pg_constraint where conrelid='public.investments'::regclass and conname='investment_origin_fields'))) > 0,'portal placement constraint uses the new cap');
+select ok(position('62500000' in pg_get_functiondef('public.request_investment(uuid,uuid,numeric,uuid,text,bytea)'::regprocedure)) = 0,'reservation function no longer uses the old cap');
+select ok(position('62500000' in pg_get_functiondef('public.fulfill_maturity_instruction(uuid,uuid,numeric,text,text,boolean,uuid,boolean)'::regprocedure)) = 0,'reinvestment function no longer uses the old cap');
 insert into public.audit_events (action, entity_type, request_id) values ('test.created', 'test', gen_random_uuid());
 select throws_ok($$delete from public.audit_events where action = 'test.created'$$,'55000','audit_events records are immutable','audit history cannot be deleted');
 select ok((select not public from storage.buckets where id='agreements'),'agreement bucket is private');

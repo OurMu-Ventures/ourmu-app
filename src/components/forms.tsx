@@ -337,13 +337,13 @@ export function InvestmentRequestForm({
           name="principalUgx"
           type="number"
           min="125000"
-          max="62500000"
+          max="50000000"
           step="0.01"
           defaultValue="125000"
           required
         />
         <small className="muted">
-          Minimum UGX 125,000. Fractional units are calculated automatically.
+          Minimum UGX 125,000; maximum UGX 50,000,000 per cycle. Fractional units are calculated automatically.
         </small>
       </label>
       <label className="checkbox">

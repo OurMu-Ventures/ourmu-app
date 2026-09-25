@@ -24,7 +24,16 @@ describe("server input validation", () => {
       }).success,
     ).toBe(true);
   });
-  it.each(["124999.99", "62500000.01", "125000.001", "not-money"])(
+  it("accepts exactly UGX 50 million", () => {
+    expect(
+      investmentRequestSchema.safeParse({
+        cycleId: "a1b2c3d4-e5f6-47a8-9123-abcdef123456",
+        principalUgx: "50000000",
+        agreementAccepted: "yes",
+      }).success,
+    ).toBe(true);
+  });
+  it.each(["124999.99", "50000000.01", "62500000", "125000.001", "not-money"])(
     "rejects invalid portal principal %s",
     (principalUgx) => {
       expect(

@@ -33,7 +33,7 @@ export const investmentRequestSchema = z.object({
     .string()
     .trim()
     .regex(/^\d+(?:\.\d{1,2})?$/)
-    .refine((value) => Number(value) >= 125_000 && Number(value) <= 62_500_000),
+    .refine((value) => Number(value) >= 125_000 && Number(value) <= 50_000_000),
   agreementAccepted: z.literal("yes"),
 });
 export const activationSchema = z.object({
