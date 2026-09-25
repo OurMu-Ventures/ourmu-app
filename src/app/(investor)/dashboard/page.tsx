@@ -126,6 +126,8 @@ export default async function DashboardPage() {
           {(investments ?? []).map((item) => {
             const itemCycle = item.investment_cycles;
             const paid = item.payout_basis === "reported_paid";
+            const canChooseMaturity =
+              item.status === "matured" && item.record_origin === "portal";
             const payout = paid
               ? (item.reported_payout_ugx ?? item.projected_value_ugx)
               : item.projected_value_ugx;
@@ -151,8 +153,13 @@ export default async function DashboardPage() {
                   maturityDate: item.maturity_date,
                   startIso: item.requested_at,
                   detailHref: `/investments/${item.id}`,
-                  detailLabel: "View details",
-                  detailStatus: "Opening investment details",
+                  detailLabel: canChooseMaturity
+                    ? "Withdraw or Re-invest"
+                    : "View details",
+                  detailStatus: canChooseMaturity
+                    ? "Opening maturity choices"
+                    : "Opening investment details",
+                  detailAction: canChooseMaturity,
                 }}
               />
             );

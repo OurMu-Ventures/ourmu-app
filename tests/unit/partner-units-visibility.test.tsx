@@ -12,6 +12,7 @@ import InvestmentDetailPage from "@/app/(investor)/investments/[id]/page";
 import InvestmentsPage from "@/app/(investor)/investments/page";
 import NewInvestmentPage from "@/app/(investor)/investments/new/page";
 import { InvestmentRequestForm } from "@/components/forms";
+import { MaturityInstructionForm } from "@/components/maturity-forms";
 import { InvestmentCard } from "@/components/InvestmentCard";
 import {
   CurrentOpportunityRate,
@@ -195,6 +196,35 @@ afterEach(() => {
 });
 
 describe("partner units visibility across pages", () => {
+  it("links matured portal investments to their available maturity choices", async () => {
+    const matured = { ...placement, status: "matured" };
+    mockClient({
+      investments: [matured],
+      investment_cycles: cycle,
+      next_of_kin: { id: "kin-1" },
+      maturity_instructions: null,
+      payout_destinations: [],
+    });
+
+    const dashboard = cardItems(walk(await DashboardPage()));
+    expect(dashboard[0]).toMatchObject({
+      detailHref: "/investments/inv-1",
+      detailLabel: "Withdraw or Re-invest",
+      detailAction: true,
+    });
+
+    mockClient({
+      investments: matured,
+      investment_cycles: [],
+      maturity_instructions: null,
+      payout_destinations: [],
+    });
+    const detail = walk(await InvestmentDetailPage({
+      params: Promise.resolve({ id: "inv-1" }),
+    }));
+    expect(detail.some((element) => element.type === MaturityInstructionForm)).toBe(true);
+  });
+
   it("hides a past-deadline cycle from the dashboard and investment form", async () => {
     mockClient({
       investments: [],
