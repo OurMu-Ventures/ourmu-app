@@ -533,6 +533,7 @@ export function CycleForm() {
         <label>
           Maturity date
           <input name="maturityDate" type="date" required />
+          <small className="muted">Choose a date on or before the 15th of its month.</small>
         </label>
         <label>
           Capacity (UGX)
@@ -606,6 +607,7 @@ export function CycleEditForm({
             defaultValue={cycle.maturity_date}
             required
           />
+          <small className="muted">Choose a date on or before the 15th of its month.</small>
         </label>
         <label>
           Capacity (UGX)

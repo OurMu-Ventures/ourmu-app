@@ -91,4 +91,32 @@ describe("admin cycle agreement selection", () => {
     expect(result).toMatchObject({ ok: false, message: expect.stringContaining("Publish") });
     expect(state.inserted).toBeNull();
   });
+
+  it("explains the payout-day rule when maturity falls after the 15th", async () => {
+    const form = cycleForm();
+    form.set("maturityDate", "2027-03-31");
+    expect(await createCycle({ ok: false, message: "" }, form)).toMatchObject({
+      ok: false,
+      message: "Maturity date must be on or before the 15th of its month.",
+    });
+    expect(state.inserted).toBeNull();
+  });
+
+  it("identifies an invalid capacity", async () => {
+    const form = cycleForm();
+    form.set("capacityUgx", "100000");
+    expect(await createCycle({ ok: false, message: "" }, form)).toMatchObject({
+      ok: false,
+      message: "Enter a capacity of at least UGX 125,000 with at most two decimal places.",
+    });
+  });
+
+  it("identifies a closing date before the opening date", async () => {
+    const form = cycleForm();
+    form.set("closesAt", "2026-09-30");
+    expect(await createCycle({ ok: false, message: "" }, form)).toMatchObject({
+      ok: false,
+      message: "Closing date must be on or after the opening date.",
+    });
+  });
 });

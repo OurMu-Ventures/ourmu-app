@@ -26,7 +26,11 @@ const cycleSchema = z
   .transform((cycle, context) => {
     const bounds = cycleDayBounds(cycle.opensAt, cycle.closesAt);
     if (!bounds) {
-      context.addIssue({ code: "custom", message: "Cycle dates are invalid" });
+      context.addIssue({
+        code: "custom",
+        path: ["closesAt"],
+        message: "Closing date must be on or after the opening date.",
+      });
       return z.NEVER;
     }
     // Payouts are scheduled on the 15th of the maturity month, so a portal
@@ -35,7 +39,8 @@ const cycleSchema = z
     if (Number(cycle.maturityDate.split("-")[2]) > 15) {
       context.addIssue({
         code: "custom",
-        message: "Maturity must fall on or before the 15th payout day",
+        path: ["maturityDate"],
+        message: "Maturity date must be on or before the 15th of its month.",
       });
       return z.NEVER;
     }
@@ -45,6 +50,22 @@ const cycleSchema = z
       closesAt: bounds.closesAt,
     };
   });
+
+function cycleValidationMessage(error: z.ZodError) {
+  const issue = error.issues[0];
+  const field = issue?.path[0];
+  if (issue?.code === "custom" && issue.message.startsWith("Closing date"))
+    return issue.message;
+  if (issue?.code === "custom" && issue.message.startsWith("Maturity date"))
+    return issue.message;
+  if (field === "name") return "Enter a cycle name of at least 3 characters.";
+  if (field === "opensAt") return "Select a valid opening date.";
+  if (field === "closesAt") return "Select a valid closing date.";
+  if (field === "maturityDate") return "Select a valid maturity date.";
+  if (field === "capacityUgx")
+    return "Enter a capacity of at least UGX 125,000 with at most two decimal places.";
+  return "Check the cycle details and try again.";
+}
 
 async function latestAgreementId(admin: ReturnType<typeof createAdminClient>) {
   const { data, error } = await admin
@@ -76,7 +97,7 @@ export async function createCycle(
   if (!parsed.success)
     return {
       ok: false,
-      message: "Enter valid cycle dates and capacity.",
+      message: cycleValidationMessage(parsed.error),
     };
   const admin = createAdminClient();
   const agreementVersionId = await latestAgreementId(admin);
@@ -120,10 +141,12 @@ export async function updateCycle(
     maturityDate: formData.get("maturityDate"),
     capacityUgx: formData.get("capacityUgx"),
   });
-  if (!cycleId.success || !parsed.success)
+  if (!cycleId.success)
+    return { ok: false, message: "Cycle not found." };
+  if (!parsed.success)
     return {
       ok: false,
-      message: "Enter valid cycle dates and capacity.",
+      message: cycleValidationMessage(parsed.error),
     };
   const admin = createAdminClient();
   const agreementVersionId = await latestAgreementId(admin);
