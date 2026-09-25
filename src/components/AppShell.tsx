@@ -8,11 +8,6 @@ const partnerLinks: ShellLink[] = [
     status: "Opening investment form",
   },
   { href: "/investments", label: "Investments", status: "Opening investments" },
-  {
-    href: "/account/closure",
-    label: "Close account",
-    status: "Opening account closure",
-  },
 ];
 const adminLinks: ShellLink[] = [
   { href: "/admin", label: "Admin overview", status: "Opening admin overview" },
