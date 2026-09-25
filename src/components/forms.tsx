@@ -527,12 +527,12 @@ export function CycleForm({
       </label>
       <div className="form-grid">
         <label>
-          Opens at
-          <input name="opensAt" type="datetime-local" required />
+          Opens on (Kampala)
+          <input name="opensAt" type="date" required />
         </label>
         <label>
-          Closes at
-          <input name="closesAt" type="datetime-local" required />
+          Closes on (Kampala)
+          <input name="closesAt" type="date" required />
         </label>
         <label>
           Maturity date
@@ -588,12 +588,8 @@ export function CycleEditForm({
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
     })
-      .format(new Date(value))
-      .replace(" ", "T");
+      .format(new Date(value));
   return (
     <form className="form" action={action}>
       <input type="hidden" name="cycleId" value={cycle.id} />
@@ -603,19 +599,19 @@ export function CycleEditForm({
       </label>
       <div className="form-grid">
         <label>
-          Opens at (Kampala)
+          Opens on (Kampala)
           <input
             name="opensAt"
-            type="datetime-local"
+            type="date"
             defaultValue={local(cycle.opens_at)}
             required
           />
         </label>
         <label>
-          Closes at (Kampala)
+          Closes on (Kampala)
           <input
             name="closesAt"
-            type="datetime-local"
+            type="date"
             defaultValue={local(cycle.closes_at)}
             required
           />

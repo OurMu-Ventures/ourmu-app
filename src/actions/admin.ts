@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth";
+import { cycleDayBounds } from "@/lib/cycle-dates";
 import { audit, requestId } from "@/lib/db";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -13,8 +14,8 @@ import { emailSchema, type ActionState } from "@/lib/validation";
 const cycleSchema = z
   .object({
     name: z.string().trim().min(3).max(100),
-    opensAt: z.string().min(16),
-    closesAt: z.string().min(16),
+    opensAt: z.iso.date(),
+    closesAt: z.iso.date(),
     maturityDate: z.iso.date(),
     capacityUgx: z
       .string()
@@ -24,15 +25,8 @@ const cycleSchema = z
     agreementVersionId: z.uuid(),
   })
   .transform((cycle, context) => {
-    const asKampalaIso = (value: string) =>
-      new Date(`${value.length === 16 ? `${value}:00` : value}+03:00`);
-    const opensAt = asKampalaIso(cycle.opensAt);
-    const closesAt = asKampalaIso(cycle.closesAt);
-    if (
-      !Number.isFinite(opensAt.getTime()) ||
-      !Number.isFinite(closesAt.getTime()) ||
-      opensAt >= closesAt
-    ) {
+    const bounds = cycleDayBounds(cycle.opensAt, cycle.closesAt);
+    if (!bounds) {
       context.addIssue({ code: "custom", message: "Cycle dates are invalid" });
       return z.NEVER;
     }
@@ -48,8 +42,8 @@ const cycleSchema = z
     }
     return {
       ...cycle,
-      opensAt: opensAt.toISOString(),
-      closesAt: closesAt.toISOString(),
+      opensAt: bounds.opensAt,
+      closesAt: bounds.closesAt,
     };
   });
 
