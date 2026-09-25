@@ -19,7 +19,6 @@ import {
   Upload,
   User,
   Users,
-  UserX,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -40,7 +39,6 @@ const icons: Record<string, LucideIcon> = {
   "/profile": User,
   "/investments/new": TrendingUp,
   "/investments": Briefcase,
-  "/account/closure": UserX,
   "/admin": LayoutDashboard,
   "/admin/invitations": Mail,
   "/admin/applications": Inbox,

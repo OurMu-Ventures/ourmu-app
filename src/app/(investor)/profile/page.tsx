@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { AccountEmailsPanel, NextOfKinForm } from "@/components/forms";
 import {
   StandingTermsAcceptForm,
@@ -6,6 +8,7 @@ import {
 import { requireInvestor } from "@/lib/auth";
 import { dateTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { Button } from "@/components/ui/button";
 
 export default async function ProfilePage() {
   const profile = await requireInvestor();
@@ -105,6 +108,16 @@ export default async function ProfilePage() {
             <StandingTermsAcceptForm agreements={standingAgreements ?? []} />
           )}
         </div>
+      </section>
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Close account</h2>
+        <p className="muted">
+          Request to close your portal account and remove access. Investment
+          records that must be retained will remain on file.
+        </p>
+        <Button asChild variant="secondary">
+          <Link href="/account/closure">Close account</Link>
+        </Button>
       </section>
     </>
   );
