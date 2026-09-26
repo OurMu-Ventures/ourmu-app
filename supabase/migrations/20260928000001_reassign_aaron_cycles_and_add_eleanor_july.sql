@@ -21,8 +21,8 @@ begin
 
   -- Fresh local/CI databases intentionally contain no production import data.
   if not exists (
-    select 1 from public.import_batches
-    where id = '970cc816-dafb-5cbb-a454-c73e008cc867'::uuid and status = 'accepted'
+    select 1 from public.investments
+    where id = '43eed86a-cbd5-5a62-9aff-88b5f5260862'::uuid
   ) then
     raise notice 'Skipping production correction because the source import is absent';
     return;

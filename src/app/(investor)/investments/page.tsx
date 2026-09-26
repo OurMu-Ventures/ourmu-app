@@ -86,6 +86,12 @@ export default async function InvestmentsPage() {
         })}
         {!data?.length && <p className="muted">No investment records yet.</p>}
       </div>
+      <p className="notice" style={{ marginTop: "1rem" }}>
+        Missing an investment or spotted an incorrect record? Email{" "}
+        <a href="mailto:community@ourmu.org">community@ourmu.org</a> and
+        include any supporting documentation, such as receipts or deposit
+        confirmations.
+      </p>
     </>
   );
 }
