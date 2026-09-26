@@ -10,6 +10,8 @@ import { audit, requestId } from "@/lib/db";
 import { isMonthEndMaturity } from "@/lib/maturity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { sendTransactionalEmail } from "@/lib/email/send";
+import { getPublicEnv } from "@/lib/env";
 import { emailSchema, type ActionState } from "@/lib/validation";
 
 const cycleSchema = z
@@ -418,6 +420,77 @@ export async function reconcileJobDelivery(formData: FormData) {
     metadata: { outcome, notes: notes || null },
   });
   revalidatePath("/admin/jobs");
+}
+
+export async function sendPartnerPortalWelcomeTest() {
+  const profile = await requireAdmin();
+  const admin = createAdminClient();
+  const { data: campaign } = await admin
+    .from("email_campaigns")
+    .select("status")
+    .eq("campaign_key", "partner_portal_welcome_2026")
+    .maybeSingle();
+  if (campaign?.status && campaign.status !== "draft")
+    return { ok: false, message: "The campaign test has already been sent." };
+
+  const { data: recipient } = await admin
+    .from("account_emails")
+    .select("email")
+    .eq("user_id", profile.id)
+    .eq("is_primary", true)
+    .not("verified_at", "is", null)
+    .maybeSingle();
+  if (!recipient?.email)
+    return { ok: false, message: "Your verified primary email could not be found." };
+
+  try {
+    const messageId = await sendTransactionalEmail({
+      to: recipient.email,
+      template: "portal_announcement",
+      actionUrl: getPublicEnv().NEXT_PUBLIC_APP_URL,
+      idempotencyKey: "ourmu-portal-announcement-test-v1",
+    });
+    if (!messageId) throw new Error("EMAIL_PROVIDER_MESSAGE_ID_MISSING");
+    const supabase = await createClient();
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const { error } = await admin.rpc("mark_partner_portal_welcome_test_sent", {
+      p_admin_id: profile.id,
+      p_provider_message_id: messageId,
+      p_admin_aal2: aal?.currentLevel === "aal2",
+      p_request_id: requestId(),
+    });
+    if (error) return { ok: false, message: "The test email was sent, but its status could not be recorded. Refresh and retry safely." };
+    revalidatePath("/admin/announcements");
+    return { ok: true, message: `Test email sent to your verified admin address (${recipient.email}).` };
+  } catch {
+    return { ok: false, message: "Test email could not be sent. Check the Resend setup and try again." };
+  }
+}
+
+export async function releasePartnerPortalWelcomeCampaign(expectedCount: number) {
+  const profile = await requireAdmin();
+  const parsedCount = z.number().int().min(1).max(500).safeParse(expectedCount);
+  if (!parsedCount.success)
+    return { ok: false, message: "Refresh the audience preview before releasing." };
+  const supabase = await createClient();
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("release_partner_portal_welcome_campaign", {
+    p_admin_id: profile.id,
+    p_admin_aal2: aal?.currentLevel === "aal2",
+    p_expected_count: parsedCount.data,
+    p_request_id: requestId(),
+  });
+  if (error) {
+    const message = error.message.includes("recipient count changed")
+      ? "The audience changed since preview. Refresh and review the updated count."
+      : error.message.includes("test before release")
+        ? "Send the test email before releasing the campaign."
+        : "The campaign could not be released. Refresh to check its current status.";
+    return { ok: false, message };
+  }
+  revalidatePath("/admin/announcements");
+  return { ok: true, message: "Campaign queued.", campaign: data };
 }
 
 export async function resolveClosure(formData: FormData) {
