@@ -70,15 +70,16 @@ export function needsReconciliation(input: {
   return now - new Date(input.firstSendAttemptAt).getTime() > IDEMPOTENCY_WINDOW_MS;
 }
 
-export async function processDueJobs(limit = 10) {
+export async function processDueJobs(limit = 10, campaignId?: string) {
   const admin = createAdminClient();
-  const { data: jobs, error } = await admin
+  let query = admin
     .from("jobs")
     .select("*")
     .in("status", ["pending", "failed"])
-    .lte("available_at", new Date().toISOString())
-    .order("created_at")
-    .limit(limit);
+    .lte("available_at", new Date().toISOString());
+  if (campaignId)
+    query = query.eq("entity_type", "email_campaign").eq("entity_id", campaignId);
+  const { data: jobs, error } = await query.order("created_at").limit(limit);
   if (error) throw new Error("JOB_FETCH_FAILED");
   const result = { processed: 0, succeeded: 0, failed: 0 };
   for (const raw of (jobs ?? []) as JobRow[]) {

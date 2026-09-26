@@ -855,6 +855,66 @@ export type Database = {
           },
         ]
       }
+      email_campaigns: {
+        Row: {
+          admin_count: number | null
+          campaign_key: string
+          created_at: string
+          created_by: string | null
+          id: string
+          partner_count: number | null
+          recipient_count: number | null
+          released_at: string | null
+          released_by: string | null
+          status: string
+          test_provider_message_id: string | null
+          test_sent_at: string | null
+        }
+        Insert: {
+          admin_count?: number | null
+          campaign_key: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          partner_count?: number | null
+          recipient_count?: number | null
+          released_at?: string | null
+          released_by?: string | null
+          status?: string
+          test_provider_message_id?: string | null
+          test_sent_at?: string | null
+        }
+        Update: {
+          admin_count?: number | null
+          campaign_key?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          partner_count?: number | null
+          recipient_count?: number | null
+          released_at?: string | null
+          released_by?: string | null
+          status?: string
+          test_provider_message_id?: string | null
+          test_sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_released_by_fkey"
+            columns: ["released_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs: {
         Row: {
           attempts: number
@@ -1688,6 +1748,24 @@ export type Database = {
         }
         Returns: string
       }
+      mark_partner_portal_welcome_test_sent: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_provider_message_id: string
+          p_request_id: string
+        }
+        Returns: string
+      }
+      release_partner_portal_welcome_campaign: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_expected_count: number
+          p_request_id: string
+        }
+        Returns: Json
+      }
       revoke_standing_reinvest_authorization: {
         Args: { p_investor_id: string; p_request_id: string }
         Returns: undefined
@@ -1903,4 +1981,3 @@ export const Constants = {
     },
   },
 } as const
-
