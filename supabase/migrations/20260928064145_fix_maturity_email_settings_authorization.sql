@@ -39,15 +39,49 @@ $$;
 revoke all on function public.update_maturity_email_settings(uuid,text[],boolean,uuid,boolean) from public, anon, authenticated;
 grant execute on function public.update_maturity_email_settings(uuid,text[],boolean,uuid,boolean) to service_role;
 
--- The original fan-out needs case-insensitive To/CC de-duplication.
-do $$
-declare v_definition text;
+-- Keep To/CC de-duplication case-insensitive even if the recipient's stored
+-- email retains its original casing.
+create or replace function public.fan_out_maturity_email(p_job_id uuid, p_action_url text)
+returns integer language plpgsql security invoker set search_path = '' as $$
+declare
+  v_job public.jobs%rowtype;
+  v_investor uuid;
+  v_settings public.maturity_email_settings%rowtype;
+  v_count integer := 0;
 begin
-  select pg_get_functiondef('public.fan_out_maturity_email(uuid,text)'::regprocedure) into v_definition;
-  if position('where c <> r.email' in v_definition) = 0 then
-    raise exception 'Expected CC comparison not found in fan-out function';
+  select * into v_job from public.jobs where id = p_job_id and kind = 'send_email' for update;
+  if not found or v_job.entity_type <> 'investment'
+    or v_job.payload->>'template' not in ('maturity_notice','maturity_choice_confirmed','maturity_action_needed','maturity_fulfilled') then
+    raise exception using errcode = '22023', message = 'invalid maturity email job';
   end if;
-  execute replace(v_definition, 'where c <> r.email', 'where c <> lower(r.email)');
+  select investor_id into v_investor from public.investments where id = v_job.entity_id;
+  if v_investor is null then raise exception using errcode = '22023', message = 'investment recipient missing'; end if;
+  select * into v_settings from public.maturity_email_settings where id = true;
+  if not found then raise exception 'maturity email settings missing'; end if;
+  with recipients as (
+    select id,email,row_number() over (order by is_primary desc,created_at,id) as ordinal
+    from public.account_emails where user_id = v_investor and verified_at is not null
+  ), inserted as (
+    insert into public.jobs(kind,entity_type,entity_id,payload,email_dedupe_key)
+    select 'send_email','investment',v_job.entity_id,
+      jsonb_build_object('template',v_job.payload->>'template','to',r.email,
+        'accountEmailId',r.id,'actionUrl',p_action_url,
+        'idempotencyKey','job-'||v_job.id||'-'||r.id,
+        'routing',jsonb_build_object('revision',v_settings.revision,
+          'replyTo',case when v_settings.enabled then to_jsonb(v_settings.contacts) else '[]'::jsonb end,
+          'cc',case when v_settings.enabled and r.ordinal=1 then
+            to_jsonb(array(select c from unnest(v_settings.contacts) c where c <> lower(r.email)))
+            else '[]'::jsonb end,
+          'teamCopySelected',v_settings.enabled and r.ordinal=1)),
+      v_job.id||':'||r.id
+    from recipients r
+    on conflict (email_dedupe_key) where kind = 'send_email' and email_dedupe_key is not null do nothing
+    returning id
+  ) select count(*) into v_count from inserted;
+  if not exists(select 1 from public.account_emails where user_id=v_investor and verified_at is not null) then
+    raise exception using errcode = '22023', message = 'investment recipient missing';
+  end if;
+  return v_count;
 end;
 $$;
 

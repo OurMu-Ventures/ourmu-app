@@ -1,8 +1,8 @@
 import {
   reconcileJobDelivery,
-  resolveMaturityCcReview,
   retryJob,
 } from "@/actions/admin";
+import { ResolveMaturityCcReviewForm } from "@/components/ResolveMaturityCcReviewForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { dateTime } from "@/lib/format";
@@ -78,12 +78,7 @@ export default async function JobsPage() {
                 </td>
                 <td>
                   {item.cc_review_required && (
-                    <form action={resolveMaturityCcReview}>
-                      <input type="hidden" name="jobId" value={item.id} />
-                      <SubmitButton pendingLabel="Saving…">
-                        Mark CC reviewed
-                      </SubmitButton>
-                    </form>
+                    <ResolveMaturityCcReviewForm jobId={item.id} />
                   )}
                   {item.last_error_code === "NEEDS_RECONCILIATION" ? (
                     <>

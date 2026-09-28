@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
   aal: "aal2",
   rpc: vi.fn(async (...params: [string, Record<string, unknown>]) => {
     void params;
-    return { error: null };
+    return { error: null as { message: string } | null };
   }),
 }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -28,7 +28,10 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ rpc: state.rpc }),
 }));
 
-import { saveMaturityEmailSettings } from "@/actions/admin";
+import {
+  resolveMaturityCcReview,
+  saveMaturityEmailSettings,
+} from "@/actions/admin";
 
 beforeEach(() => {
   state.aal = "aal2";
@@ -64,5 +67,19 @@ describe("maturity email admin settings", () => {
     form.set("enabled", "on");
     await saveMaturityEmailSettings({ ok: false, message: "" }, form);
     expect(state.rpc.mock.calls[0]?.[1]).toMatchObject({ p_admin_aal2: false });
+  });
+
+  it("returns an inline failure when CC review resolution fails", async () => {
+    state.rpc.mockResolvedValueOnce({ error: { message: "denied" } });
+    const form = new FormData();
+    form.set("jobId", "11111111-1111-4111-8111-111111111111");
+    const result = await resolveMaturityCcReview(
+      { ok: false, message: "" },
+      form,
+    );
+    expect(result).toEqual({
+      ok: false,
+      message: "CC review could not be cleared.",
+    });
   });
 });

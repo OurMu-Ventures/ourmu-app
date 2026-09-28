@@ -73,6 +73,22 @@ declare j uuid; n integer; v_admin_id uuid; v_review_job_id uuid; begin
  if exists(select 1 from public.jobs where cc_review_required) then raise exception 'CC review flag remained'; end if;
  if not exists(select 1 from public.audit_events where action='job.maturity_cc_review_resolved') then raise exception 'CC review audit missing'; end if;
 end $$;
+do $$
+declare v_investor uuid; v_investment uuid; v_job uuid; begin
+ select investor_id, investment_id into v_investor, v_investment from maturity_test_ids;
+ update public.account_emails set email='TEAM@example.test'
+ where user_id=v_investor and is_primary;
+ insert into public.jobs(kind,entity_type,entity_id,payload)
+ values('send_email','investment',v_investment,'{"template":"maturity_choice_confirmed"}'::jsonb)
+ returning id into v_job;
+ perform public.fan_out_maturity_email(v_job,'https://example.test/investments/synthetic');
+ if not exists (
+   select 1 from public.jobs
+   where payload->>'idempotencyKey' like 'job-'||v_job||'-%'
+     and payload->>'to'='TEAM@example.test'
+     and payload->'routing'->'cc'='["other@example.test"]'::jsonb
+ ) then raise exception 'CC still includes the To address with different casing'; end if;
+end $$;
 select pass('maturity routing authorization, audit and fan-out checks pass');
 select * from finish();
 rollback;

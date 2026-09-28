@@ -376,21 +376,29 @@ export async function saveMaturityEmailSettings(
   return { ok: true, message: "Maturity email contacts updated." };
 }
 
-export async function resolveMaturityCcReview(formData: FormData) {
+export async function resolveMaturityCcReview(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  void _previousState;
   const profile = await requireAdmin();
-  const jobId = z.uuid().parse(formData.get("jobId"));
+  const parsedJobId = z.uuid().safeParse(formData.get("jobId"));
+  if (!parsedJobId.success)
+    return { ok: false, message: "Choose a valid job to review." };
   const supabase = await createClient();
   const { data: aal } =
     await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const admin = createAdminClient();
   const { error } = await admin.rpc("resolve_maturity_cc_review", {
     p_admin_id: profile.id,
-    p_job_id: jobId,
+    p_job_id: parsedJobId.data,
     p_admin_aal2: aal?.currentLevel === "aal2",
     p_request_id: requestId(),
   });
-  if (error) throw new Error("CC review could not be cleared");
+  if (error)
+    return { ok: false, message: "CC review could not be cleared." };
   revalidatePath("/admin/jobs");
+  return { ok: true, message: "CC review marked complete." };
 }
 
 export async function retryJob(formData: FormData) {
