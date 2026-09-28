@@ -8,7 +8,10 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/db", () => ({ audit: vi.fn(), requestId: () => "request-1" }));
 const state = vi.hoisted(() => ({
   aal: "aal2",
-  rpc: vi.fn(async (_name: string, _args: Record<string, unknown>) => ({ error: null })),
+  rpc: vi.fn(async (...params: [string, Record<string, unknown>]) => {
+    void params;
+    return { error: null };
+  }),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
