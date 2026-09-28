@@ -135,6 +135,9 @@ describe("admin investment filters", () => {
     expect(call("investments", "select")[0]?.args[1]).toEqual({
       count: "exact",
     });
+    expect(call("investments", "select")[0]?.args[0]).toContain(
+      "investment_receipts!investment_receipts_investment_id_fkey(",
+    );
     expect(call("investments", "range")[0]?.args).toEqual([0, 24]);
     expect(html).toContain("All partners");
     expect(html).toContain("All cycles");

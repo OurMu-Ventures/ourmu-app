@@ -1068,6 +1068,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "investment_receipts_original_investment_id_fkey"
+            columns: ["original_investment_id"]
+            isOneToOne: false
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "investment_receipts_investment_id_fkey"
             columns: ["investment_id"]
             isOneToOne: true

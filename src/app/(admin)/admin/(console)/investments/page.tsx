@@ -148,7 +148,7 @@ export default async function AdminInvestmentsPage({
         let query = admin
           .from("investments")
           .select(
-            "id,investor_id,legacy_partner_id,cycle_id,record_origin,status,units,principal_ugx,projected_value_ugx,reported_payout_ugx,requested_at,maturity_date,profiles(legal_name,email),investment_cycles(name),legacy_partner_identities(canonical_name,normalized_email),investment_receipts(id,receipt_number,pdf_status)",
+            "id,investor_id,legacy_partner_id,cycle_id,record_origin,status,units,principal_ugx,projected_value_ugx,reported_payout_ugx,requested_at,maturity_date,profiles(legal_name,email),investment_cycles(name),legacy_partner_identities(canonical_name,normalized_email),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status)",
             { count: "exact" },
           );
         if (partner.startsWith("profile:")) {
