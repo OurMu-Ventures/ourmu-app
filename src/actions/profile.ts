@@ -7,7 +7,7 @@ import { requireInvestor } from "@/lib/auth";
 import { audit, requestId, toBytea } from "@/lib/db";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { getPublicEnv } from "@/lib/env";
-import { newAccountEmailToken } from "@/lib/security/crypto";
+import { fingerprintRequestValue, newAccountEmailToken } from "@/lib/security/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { emailSchema, nextOfKinSchema, type ActionState } from "@/lib/validation";
@@ -33,6 +33,287 @@ async function sendAccountEmailVerification(email: string, token: string) {
     actionUrl: url.toString(),
     detail: "Confirm this address before it can receive account messages or be used to sign in.",
   });
+}
+
+async function sendPrimaryEmailChangeVerification(email: string, token: string) {
+  const url = new URL("/profile/emails/confirm", getPublicEnv().NEXT_PUBLIC_APP_URL);
+  url.searchParams.set("token", token);
+  await sendTransactionalEmail({
+    to: email,
+    template: "primary_email_change_verification",
+    actionUrl: url.toString(),
+    detail:
+      "Opening this link alone changes nothing. Open it while signed in, review the change, and choose Confirm to make this address your primary email. The link expires in 24 hours and stops working once used.",
+  });
+}
+
+const PRIMARY_EMAIL_CHANGE_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
+
+type PrimaryChangeRequest = {
+  id: string;
+  user_id: string;
+  new_email: string;
+  mode: "new_address" | "promote_alias";
+  account_email_id: string | null;
+  expires_at: string | null;
+  confirmed_at: string | null;
+  finalized_at: string | null;
+};
+
+function primaryChangePendingMessage(email: string) {
+  return `A change to ${email} is already pending. Use the link already sent to that address, or wait for it to expire before starting another.`;
+}
+
+function authEmailConflictMessage(message: string) {
+  return /already|exist|taken|in use|duplicate/i.test(message);
+}
+
+export async function requestPrimaryEmailChange(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireInvestor();
+  if (profile.role !== "investor")
+    return { ok: false, message: "Primary email changes are available for partner accounts." };
+  if (!(await hasFreshManagementSession("investor")))
+    return { ok: false, message: "Use a fresh sign-in link, then try again within 10 minutes." };
+  const parsed = emailSchema.safeParse(formData.get("email"));
+  if (!parsed.success) return { ok: false, message: "Enter a valid email address." };
+
+  const admin = createAdminClient();
+  const { data: contacts } = await admin
+    .from("account_emails")
+    .select("id,email,is_primary")
+    .eq("user_id", profile.id);
+  if ((contacts ?? []).some((item) => item.is_primary && item.email === parsed.data))
+    return { ok: false, message: "That address is already your primary email." };
+  if ((contacts ?? []).some((item) => !item.is_primary && item.email === parsed.data))
+    return { ok: false, message: "That address is already one of your contacts. Use “Make primary” to promote it." };
+  const [{ data: taken }, { data: profileTaken }] = await Promise.all([
+    admin.from("account_emails").select("id").eq("email", parsed.data).maybeSingle(),
+    admin.from("profiles").select("id").eq("email", parsed.data).neq("id", profile.id).maybeSingle(),
+  ]);
+  if (taken || profileTaken)
+    return { ok: false, message: "That email address is already linked to another account." };
+
+  const { data: active } = await admin
+    .from("primary_email_change_requests")
+    .select("id,new_email,mode,confirmed_at,finalized_at,expires_at")
+    .eq("user_id", profile.id)
+    .is("finalized_at", null)
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<PrimaryChangeRequest>();
+  if (active && active.new_email === parsed.data && !active.confirmed_at) {
+    // Same address, still unverified (possibly expired): rotate the token so
+    // a lost mailbox message can be replaced without waiting out the old one.
+    const { token, hash } = newAccountEmailToken();
+    const { error } = await admin
+      .from("primary_email_change_requests")
+      .update({
+        token_hash: toBytea(hash),
+        expires_at: new Date(Date.now() + PRIMARY_EMAIL_CHANGE_REQUEST_TTL_MS).toISOString(),
+      })
+      .eq("id", active.id)
+      .eq("user_id", profile.id)
+      .is("finalized_at", null)
+      .is("confirmed_at", null);
+    if (error) return { ok: false, message: "The change request could not be prepared." };
+    try {
+      await sendPrimaryEmailChangeVerification(parsed.data, token);
+    } catch {
+      return { ok: false, message: "The verification email could not be sent. Please try again." };
+    }
+    await audit({ actorId: profile.id, action: "account_email.primary_change_resent", entityType: "primary_email_change_request", entityId: active.id, requestId: requestId() });
+    revalidatePath("/profile");
+    return { ok: true, message: "A new confirmation link was sent. Nothing changes until you open it and confirm." };
+  }
+  if (active) {
+    return {
+      ok: false,
+      message: active.confirmed_at
+        ? "That address is already verified. Open your confirmation link again to complete the change."
+        : primaryChangePendingMessage(active.new_email),
+    };
+  }
+
+  const { token, hash } = newAccountEmailToken();
+  const { data, error } = await admin
+    .from("primary_email_change_requests")
+    .insert({
+      user_id: profile.id,
+      new_email: parsed.data,
+      mode: "new_address",
+      token_hash: toBytea(hash),
+      expires_at: new Date(Date.now() + PRIMARY_EMAIL_CHANGE_REQUEST_TTL_MS).toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error || !data)
+    return {
+      ok: false,
+      message: error?.code === "23505"
+        ? "A change is already pending. Use the link already sent before starting another."
+        : "The change request could not be created.",
+    };
+  try {
+    await sendPrimaryEmailChangeVerification(parsed.data, token);
+  } catch {
+    await admin.from("primary_email_change_requests").delete().eq("id", data.id).eq("user_id", profile.id);
+    return { ok: false, message: "The verification email could not be sent. Please try again." };
+  }
+  await audit({ actorId: profile.id, action: "account_email.primary_change_requested", entityType: "primary_email_change_request", entityId: data.id, requestId: requestId(), metadata: { mode: "new_address" } });
+  revalidatePath("/profile");
+  return { ok: true, message: "Check the new mailbox for a confirmation link. Nothing changes until you open it and confirm." };
+}
+
+export async function promoteAdditionalEmail(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireInvestor();
+  if (profile.role !== "investor")
+    return { ok: false, message: "Primary email changes are available for partner accounts." };
+  if (!(await hasFreshManagementSession("investor")))
+    return { ok: false, message: "Use a fresh sign-in link, then try again within 10 minutes." };
+  const id = z.uuid().safeParse(formData.get("emailId"));
+  if (!id.success) return { ok: false, message: "The email address is unavailable." };
+  const admin = createAdminClient();
+  const { data: contact } = await admin
+    .from("account_emails")
+    .select("id,email,is_primary,verified_at")
+    .eq("id", id.data)
+    .eq("user_id", profile.id)
+    .maybeSingle();
+  if (!contact || contact.is_primary || !contact.verified_at)
+    return { ok: false, message: "Only verified additional emails can be made primary." };
+  const { data: active } = await admin
+    .from("primary_email_change_requests")
+    .select("id,new_email")
+    .eq("user_id", profile.id)
+    .is("finalized_at", null)
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<PrimaryChangeRequest>();
+  if (active) return { ok: false, message: primaryChangePendingMessage(active.new_email) };
+
+  // Pre-confirmed: the deliberate button press plus the fresh session above
+  // is the confirmation. The database trigger completes the swap atomically
+  // with the Auth update below.
+  const { data: request, error: requestError } = await admin
+    .from("primary_email_change_requests")
+    .insert({
+      user_id: profile.id,
+      new_email: contact.email,
+      mode: "promote_alias",
+      account_email_id: contact.id,
+      confirmed_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (requestError || !request)
+    return {
+      ok: false,
+      message: requestError?.code === "23505"
+        ? "A change is already pending. Use the link already sent before starting another."
+        : "The primary email could not be changed.",
+    };
+  const { error: authError } = await admin.auth.admin.updateUserById(profile.id, {
+    email: contact.email,
+    email_confirm: true,
+  });
+  if (authError) {
+    await admin
+      .from("primary_email_change_requests")
+      .delete()
+      .eq("id", request.id)
+      .eq("user_id", profile.id)
+      .is("finalized_at", null);
+    return {
+      ok: false,
+      message: authEmailConflictMessage(authError.message)
+        ? "That email address is already linked to another account."
+        : "The primary email could not be changed. Your existing primary still works.",
+    };
+  }
+  const [{ data: finalized }, { data: current }] = await Promise.all([
+    admin.from("primary_email_change_requests").select("finalized_at").eq("id", request.id).maybeSingle(),
+    admin.from("profiles").select("email").eq("id", profile.id).maybeSingle(),
+  ]);
+  if (!finalized?.finalized_at || current?.email !== contact.email)
+    return { ok: false, message: "The change could not be completed. If your sign-in still uses the old address, contact support." };
+  await audit({ actorId: profile.id, action: "account_email.primary_change_confirmed", entityType: "primary_email_change_request", entityId: request.id, requestId: requestId(), metadata: { mode: "promote_alias" } });
+  revalidatePath("/profile");
+  return { ok: true, message: `Your primary email is now ${contact.email}. The previous address remains as a verified contact.` };
+}
+
+export async function confirmPrimaryEmailChange(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireInvestor();
+  if (profile.role !== "investor")
+    return { ok: false, message: "Primary email changes are available for partner accounts." };
+  if (!(await hasFreshManagementSession("investor")))
+    return { ok: false, message: "Use a fresh sign-in link, then open the confirmation link again within 10 minutes." };
+  const rawToken = String(formData.get("token") ?? "");
+  if (!rawToken || rawToken.length > 200)
+    return { ok: false, message: "This confirmation link is invalid or has already been used." };
+  const admin = createAdminClient();
+  const hash = toBytea(fingerprintRequestValue("account-email", rawToken));
+  const { data: request } = await admin
+    .from("primary_email_change_requests")
+    .select("id,user_id,new_email,mode,expires_at,confirmed_at,finalized_at")
+    .eq("token_hash", hash)
+    .maybeSingle<PrimaryChangeRequest>();
+  if (!request || request.mode !== "new_address")
+    return { ok: false, message: "This confirmation link is invalid or has already been used." };
+  if (request.user_id !== profile.id)
+    return { ok: false, message: "This confirmation link belongs to a different account. Sign in with the requesting account to continue." };
+  if (request.finalized_at)
+    return { ok: false, message: "This change is already complete. Sign in with your primary email." };
+  if (request.expires_at && new Date(request.expires_at).getTime() <= Date.now())
+    return { ok: false, message: "This confirmation link has expired. Request the change again for a new link." };
+  if (!request.confirmed_at) {
+    const { error } = await admin
+      .from("primary_email_change_requests")
+      .update({ confirmed_at: new Date().toISOString() })
+      .eq("id", request.id)
+      .eq("user_id", profile.id)
+      .is("finalized_at", null)
+      .is("confirmed_at", null);
+    if (error) return { ok: false, message: "The change could not be confirmed. Please try again." };
+    await audit({ actorId: profile.id, action: "account_email.primary_change_confirmed", entityType: "primary_email_change_request", entityId: request.id, requestId: requestId(), metadata: { mode: "new_address" } });
+  }
+  // Re-check conflicts at confirmation time: the address may have been
+  // claimed or added since the request was created.
+  const [{ data: contact }, { data: profileTaken }] = await Promise.all([
+    admin.from("account_emails").select("id,user_id").eq("email", request.new_email).maybeSingle(),
+    admin.from("profiles").select("id").eq("email", request.new_email).neq("id", profile.id).maybeSingle(),
+  ]);
+  if (profileTaken || (contact && contact.user_id !== profile.id))
+    return { ok: false, message: "That email address is already linked to another account." };
+  if (contact && contact.user_id === profile.id)
+    return { ok: false, message: "That address is already one of your contacts. Remove it there before retrying, or use “Make primary”." };
+  const { error: authError } = await admin.auth.admin.updateUserById(profile.id, {
+    email: request.new_email,
+    email_confirm: true,
+  });
+  if (authError)
+    return {
+      ok: false,
+      message: authEmailConflictMessage(authError.message)
+        ? "That email address is already linked to another account."
+        : "The change could not be completed. Your existing primary email still works.",
+    };
+  const [{ data: finalized }, { data: current }] = await Promise.all([
+    admin.from("primary_email_change_requests").select("finalized_at").eq("id", request.id).maybeSingle(),
+    admin.from("profiles").select("email").eq("id", profile.id).maybeSingle(),
+  ]);
+  if (!finalized?.finalized_at || current?.email !== request.new_email)
+    return { ok: false, message: "The change could not be completed. If your sign-in still uses the old address, contact support." };
+  revalidatePath("/profile");
+  return { ok: true, message: `Your primary email is now ${request.new_email}. Sign-in links and notifications will arrive there.` };
 }
 
 export async function addAccountEmail(

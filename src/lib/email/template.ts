@@ -13,6 +13,8 @@ export type EmailTemplate =
   | "investment_activated"
   | "agreement_ready"
   | "account_email_verification"
+  | "primary_email_change_verification"
+  | "primary_email_changed"
   | "maturity_notice"
   | "maturity_choice_confirmed"
   | "maturity_action_needed"
@@ -28,6 +30,8 @@ const subjects: Record<EmailTemplate, string> = {
   investment_activated: "Your OURMU investment is active",
   agreement_ready: "Your OURMU agreement is ready",
   account_email_verification: "Verify your additional OURMU email",
+  primary_email_change_verification: "Confirm your new OURMU primary email",
+  primary_email_changed: "Your OURMU primary email was changed",
   maturity_notice:
     "Your OURMU investment has matured — choose what happens next",
   maturity_choice_confirmed: "Your maturity choice has been recorded",

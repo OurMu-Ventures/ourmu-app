@@ -44,6 +44,9 @@ export type SendEmailPayload = {
   template?: EmailTemplate;
   to?: string;
   actionUrl?: string;
+  // Queued notices (e.g. primary-email change confirmations) carry their own
+  // body; investment templates still compute theirs at send time.
+  detail?: string;
   accountEmailId?: string;
   receiptId?: string;
   idempotencyKey?: string;
@@ -475,7 +478,10 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
     throw new Error("NEEDS_RECONCILIATION");
   }
   let actionUrl = payload.actionUrl;
-  let detail: string | undefined;
+  let detail: string | undefined =
+    typeof payload.detail === "string" && payload.detail.length > 0
+      ? payload.detail
+      : undefined;
   let maturityNotice: MaturityNoticeInput | undefined;
   let activationReceipt:
     import("@/lib/email/template").ActivationReceiptInput | undefined;
