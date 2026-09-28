@@ -96,7 +96,7 @@ export async function requestPrimaryEmailChange(
   if (taken || profileTaken)
     return { ok: false, message: "That email address is already linked to another account." };
 
-  const { data: active } = await admin
+  const { data: activeRequest } = await admin
     .from("primary_email_change_requests")
     .select("id,new_email,mode,confirmed_at,finalized_at,expires_at")
     .eq("user_id", profile.id)
@@ -104,9 +104,25 @@ export async function requestPrimaryEmailChange(
     .order("requested_at", { ascending: false })
     .limit(1)
     .maybeSingle<PrimaryChangeRequest>();
+  let active = activeRequest;
+  if (active?.expires_at && new Date(active.expires_at).getTime() <= Date.now()) {
+    const { error: pruneError } = await admin
+      .from("primary_email_change_requests")
+      .delete()
+      .eq("id", active.id)
+      .eq("user_id", profile.id)
+      .is("finalized_at", null)
+      .lte("expires_at", new Date().toISOString());
+    if (pruneError)
+      return {
+        ok: false,
+        message: "The expired change request could not be cleared. Please try again.",
+      };
+    active = null;
+  }
   if (active && active.new_email === parsed.data && !active.confirmed_at) {
-    // Same address, still unverified (possibly expired): rotate the token so
-    // a lost mailbox message can be replaced without waiting out the old one.
+    // Same address, still unverified: rotate the token so a lost mailbox
+    // message can be replaced without creating another pending request.
     const { token, hash } = newAccountEmailToken();
     const { error } = await admin
       .from("primary_email_change_requests")

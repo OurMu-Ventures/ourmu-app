@@ -244,4 +244,9 @@ after update of email on auth.users
 for each row when (old.email is distinct from new.email)
 execute function private.finalize_primary_email_change();
 
+-- Trigger execution does not require callers to retain EXECUTE permission;
+-- keep this SECURITY DEFINER function unavailable as a callable RPC.
+revoke execute on function private.finalize_primary_email_change()
+  from public, anon, authenticated;
+
 commit;

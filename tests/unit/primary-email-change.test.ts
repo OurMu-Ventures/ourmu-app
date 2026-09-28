@@ -63,6 +63,7 @@ function chain(table: string): Record<string, unknown> {
     eq: next("eq"),
     neq: next("neq"),
     is: next("is"),
+    lte: next("lte"),
     order: next("order"),
     limit: next("limit"),
     insert: next("insert"),
@@ -182,6 +183,34 @@ describe("requestPrimaryEmailChange", () => {
       form({ email: "extra@example.test" }),
     );
     expect(result.ok).toBe(true);
+  });
+
+  it("clears an expired pending request before accepting a different address", async () => {
+    script("account_emails", "list", [PRIMARY]);
+    script("account_emails", "maybeSingle", null);
+    script("profiles", "maybeSingle", null);
+    script("primary_email_change_requests", "maybeSingle", {
+      id: "expired-req",
+      new_email: "expired@example.test",
+      mode: "new_address",
+      confirmed_at: null,
+      finalized_at: null,
+      expires_at: new Date(Date.now() - 1000).toISOString(),
+    });
+    script("primary_email_change_requests", "list", { data: null, error: null });
+    script("primary_email_change_requests", "single", { id: "req-2" });
+
+    const result = await requestPrimaryEmailChange(
+      { ok: false, message: "" },
+      form({ email: "replacement@example.test" }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(callsTo("primary_email_change_requests", "delete")).toHaveLength(1);
+    expect(callsTo("primary_email_change_requests", "lte")).toContainEqual(
+      expect.objectContaining({ args: ["expires_at", expect.any(String)] }),
+    );
+    expect(state.send).toHaveBeenCalledOnce();
   });
 
   it("rejects stale sessions and administrator accounts", async () => {

@@ -53,6 +53,11 @@ declare
   a uuid; b uuid; r uuid; old_primary_id uuid;
   old_primary_email text; new_jobs integer;
 begin
+  if has_function_privilege('anon', 'private.finalize_primary_email_change()', 'EXECUTE')
+    or has_function_privilege('authenticated', 'private.finalize_primary_email_change()', 'EXECUTE') then
+    raise exception 'finalizer: SECURITY DEFINER trigger function is publicly executable';
+  end if;
+
   select investor_a, investor_b into a, b from primary_test_ids;
   select email into old_primary_email from public.profiles where id = a;
   select id into old_primary_id from public.account_emails where user_id = a and is_primary;
