@@ -26,8 +26,8 @@ const adminLinks: ShellLink[] = [
   { href: "/admin/cycles", label: "Cycles", status: "Opening cycles" },
   {
     href: "/admin/investments",
-    label: "Activations",
-    status: "Opening activations",
+    label: "Investments",
+    status: "Opening investments",
   },
   {
     href: "/admin/maturities",

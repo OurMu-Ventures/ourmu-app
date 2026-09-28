@@ -577,6 +577,24 @@ a:focus-visible {
   border-radius: 1rem;
   background: var(--paper);
 }
+.admin-investment-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  align-items: end;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.admin-investment-filter-actions,
+.admin-investment-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.admin-investment-pagination {
+  justify-content: space-between;
+  margin-top: 1.5rem;
+}
 table {
   width: 100%;
   border-collapse: collapse;
