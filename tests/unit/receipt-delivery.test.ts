@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   calls: [] as Array<{ table: string; ops: Op[] }>,
   updates: [] as unknown[],
   upserts: [] as unknown[],
+  rpcCalls: [] as unknown[],
   recipientSingle: { id: "e1" } as unknown,
   recipientList: [{ id: "e1", email: "a@example.com" }] as unknown,
   investorId: "u1",
@@ -72,6 +73,10 @@ function builder(table: string, ops: Op[] = []): Record<string, unknown> {
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => builder(table),
+    rpc: async (...args: unknown[]) => {
+      state.rpcCalls.push(args);
+      return { data: 1, error: null };
+    },
     storage: {
       from: () => ({
         download: async () =>
@@ -121,6 +126,7 @@ beforeEach(() => {
   state.calls = [];
   state.updates = [];
   state.upserts = [];
+  state.rpcCalls = [];
   state.send.mockClear();
   state.recipientSingle = { id: "e1" };
   state.recipientList = [{ id: "e1", email: "a@example.com" }];
@@ -130,6 +136,45 @@ beforeEach(() => {
   state.downloadFile = null;
 });
 
+describe("maturity email routing", () => {
+  it.each([
+    "maturity_notice",
+    "maturity_choice_confirmed",
+    "maturity_action_needed",
+    "maturity_fulfilled",
+  ])("expands %s with an atomic database fan-out", async (template) => {
+    await fanOutInvestmentEmails(sendEmailJob({ template }));
+    expect(state.rpcCalls).toEqual([
+      [
+        "fan_out_maturity_email",
+        {
+          p_job_id: "job-1",
+          p_action_url: "https://example.com/investments/inv-1",
+        },
+      ],
+    ]);
+    expect(state.upserts).toHaveLength(0);
+  });
+
+  it("flags a missed team copy when the selected email is removed", async () => {
+    state.recipientSingle = null;
+    const job = sendEmailJob({
+      template: "maturity_notice",
+      to: "removed@example.com",
+      accountEmailId: "e1",
+      routing: {
+        revision: 2,
+        cc: ["team@example.com"],
+        replyTo: ["team@example.com"],
+        teamCopySelected: true,
+      },
+    });
+    await expect(deliverJobEmail(job)).resolves.toBeNull();
+    expect(state.updates).toContainEqual({ cc_review_required: true });
+    expect(state.send).not.toHaveBeenCalled();
+  });
+});
+
 describe("send-attempt tracking gate", () => {
   it("blocks the provider send when tracking fails", async () => {
     state.trackingError = { message: "db down" };
@@ -137,9 +182,7 @@ describe("send-attempt tracking gate", () => {
       template: "agreement_ready",
       to: "a@example.com",
     });
-    await expect(deliverJobEmail(job)).rejects.toThrow(
-      "SEND_TRACKING_FAILED",
-    );
+    await expect(deliverJobEmail(job)).rejects.toThrow("SEND_TRACKING_FAILED");
     expect(state.send).not.toHaveBeenCalled();
   });
 

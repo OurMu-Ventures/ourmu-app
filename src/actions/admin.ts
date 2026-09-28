@@ -62,7 +62,10 @@ const cycleSchema = z
 function cycleValidationMessage(error: z.ZodError) {
   const issue = error.issues[0];
   const field = issue?.path[0];
-  if (issue?.code === "custom" && (field === "closesAt" || field === "maturityDate"))
+  if (
+    issue?.code === "custom" &&
+    (field === "closesAt" || field === "maturityDate")
+  )
     return issue.message;
   if (field === "name") return "Enter a cycle name of at least 3 characters.";
   if (field === "opensAt") return "Select a valid opening date.";
@@ -108,7 +111,10 @@ export async function createCycle(
   const admin = createAdminClient();
   const agreementVersionId = await latestAgreementId(admin);
   if (!agreementVersionId)
-    return { ok: false, message: "Publish an approved agreement before creating a cycle." };
+    return {
+      ok: false,
+      message: "Publish an approved agreement before creating a cycle.",
+    };
   const { data, error } = await admin
     .from("investment_cycles")
     .insert({
@@ -147,8 +153,7 @@ export async function updateCycle(
     maturityDate: formData.get("maturityDate"),
     capacityUgx: formData.get("capacityUgx"),
   });
-  if (!cycleId.success)
-    return { ok: false, message: "Cycle not found." };
+  if (!cycleId.success) return { ok: false, message: "Cycle not found." };
   if (!parsed.success)
     return {
       ok: false,
@@ -157,7 +162,10 @@ export async function updateCycle(
   const admin = createAdminClient();
   const agreementVersionId = await latestAgreementId(admin);
   if (!agreementVersionId)
-    return { ok: false, message: "Publish an approved agreement before editing a cycle." };
+    return {
+      ok: false,
+      message: "Publish an approved agreement before editing a cycle.",
+    };
   const { data, error } = await admin
     .from("investment_cycles")
     .update({
@@ -326,6 +334,73 @@ export async function saveBankInstructions(
   return { ok: true, message: "Receiving bank instructions updated." };
 }
 
+export async function saveMaturityEmailSettings(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireAdmin();
+  const contacts = String(formData.get("contacts") ?? "")
+    .split(/[\s,;]+/)
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  const unique = [...new Set(contacts)];
+  const enabled = formData.get("enabled") === "on";
+  if (
+    unique.length > 10 ||
+    (enabled && unique.length === 0) ||
+    unique.some((email) => !z.email().safeParse(email).success)
+  ) {
+    return {
+      ok: false,
+      message:
+        "Enter up to 10 valid email addresses; at least one is required when enabled.",
+    };
+  }
+  const supabase = await createClient();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("update_maturity_email_settings", {
+    p_admin_id: profile.id,
+    p_admin_aal2: aal?.currentLevel === "aal2",
+    p_contacts: unique,
+    p_enabled: enabled,
+    p_request_id: requestId(),
+  });
+  if (error)
+    return {
+      ok: false,
+      message: "Maturity email contacts could not be updated.",
+    };
+  revalidatePath("/admin/settings");
+  return { ok: true, message: "Maturity email contacts updated." };
+}
+
+export async function resolveMaturityCcReview(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  void _previousState;
+  const profile = await requireAdmin();
+  const parsedJobId = z.uuid().safeParse(formData.get("jobId"));
+  if (!parsedJobId.success)
+    return { ok: false, message: "Choose a valid job to review." };
+  const supabase = await createClient();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("resolve_maturity_cc_review", {
+    p_admin_id: profile.id,
+    p_job_id: parsedJobId.data,
+    p_admin_aal2: aal?.currentLevel === "aal2",
+    p_request_id: requestId(),
+  });
+  if (error)
+    return { ok: false, message: "CC review could not be cleared." };
+  revalidatePath("/admin/jobs");
+  return { ok: true, message: "CC review marked complete." };
+}
+
 export async function retryJob(formData: FormData) {
   const adminProfile = await requireAdmin();
   const jobId = z.uuid().parse(formData.get("jobId"));
@@ -375,7 +450,9 @@ export async function reconcileJobDelivery(formData: FormData) {
   const outcome = z
     .enum(["confirmed_delivered", "authorize_resend"])
     .parse(formData.get("outcome"));
-  const notes = String(formData.get("notes") ?? "").trim().slice(0, 500);
+  const notes = String(formData.get("notes") ?? "")
+    .trim()
+    .slice(0, 500);
   const admin = createAdminClient();
   const { data: job } = await admin
     .from("jobs")
@@ -441,7 +518,10 @@ export async function sendPartnerPortalWelcomeTest() {
     .not("verified_at", "is", null)
     .maybeSingle();
   if (!recipient?.email)
-    return { ok: false, message: "Your verified primary email could not be found." };
+    return {
+      ok: false,
+      message: "Your verified primary email could not be found.",
+    };
 
   try {
     const messageId = await sendTransactionalEmail({
@@ -452,35 +532,57 @@ export async function sendPartnerPortalWelcomeTest() {
     });
     if (!messageId) throw new Error("EMAIL_PROVIDER_MESSAGE_ID_MISSING");
     const supabase = await createClient();
-    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const { data: aal } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     const { error } = await admin.rpc("mark_partner_portal_welcome_test_sent", {
       p_admin_id: profile.id,
       p_provider_message_id: messageId,
       p_admin_aal2: aal?.currentLevel === "aal2",
       p_request_id: requestId(),
     });
-    if (error) return { ok: false, message: "The test email was sent, but its status could not be recorded. Refresh and retry safely." };
+    if (error)
+      return {
+        ok: false,
+        message:
+          "The test email was sent, but its status could not be recorded. Refresh and retry safely.",
+      };
     revalidatePath("/admin/announcements");
-    return { ok: true, message: `Test email sent to your verified admin address (${recipient.email}).` };
+    return {
+      ok: true,
+      message: `Test email sent to your verified admin address (${recipient.email}).`,
+    };
   } catch {
-    return { ok: false, message: "Test email could not be sent. Check the Resend setup and try again." };
+    return {
+      ok: false,
+      message:
+        "Test email could not be sent. Check the Resend setup and try again.",
+    };
   }
 }
 
-export async function releasePartnerPortalWelcomeCampaign(expectedCount: number) {
+export async function releasePartnerPortalWelcomeCampaign(
+  expectedCount: number,
+) {
   const profile = await requireAdmin();
   const parsedCount = z.number().int().min(1).max(500).safeParse(expectedCount);
   if (!parsedCount.success)
-    return { ok: false, message: "Refresh the audience preview before releasing." };
+    return {
+      ok: false,
+      message: "Refresh the audience preview before releasing.",
+    };
   const supabase = await createClient();
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("release_partner_portal_welcome_campaign", {
-    p_admin_id: profile.id,
-    p_admin_aal2: aal?.currentLevel === "aal2",
-    p_expected_count: parsedCount.data,
-    p_request_id: requestId(),
-  });
+  const { data, error } = await admin.rpc(
+    "release_partner_portal_welcome_campaign",
+    {
+      p_admin_id: profile.id,
+      p_admin_aal2: aal?.currentLevel === "aal2",
+      p_expected_count: parsedCount.data,
+      p_request_id: requestId(),
+    },
+  );
   if (error) {
     const message = error.message.includes("recipient count changed")
       ? "The audience changed since preview. Refresh and review the updated count."

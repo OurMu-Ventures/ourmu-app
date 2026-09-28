@@ -96,9 +96,17 @@ export function renderTransactionalEmail(input: {
   const action = input.actionUrl
     ? `<p><a href="${escapeHtml(input.actionUrl)}" style="background:#d7a747;color:#102923;padding:12px 18px;border-radius:999px;text-decoration:none;display:inline-block">Continue securely</a></p>`
     : "";
+  const help = [
+    "maturity_notice",
+    "maturity_choice_confirmed",
+    "maturity_action_needed",
+    "maturity_fulfilled",
+  ].includes(input.template)
+    ? "Reply to this email to contact the OURMU team. Replies do not change your investment instructions."
+    : "Never forward private application or sign-in links. OURMU will never ask for your NIN or bank details by email.";
   return {
     subject: subjects[input.template],
-    html: `<div style="font-family:Arial,sans-serif;color:#102923;max-width:600px"><h1 style="font-size:24px">OURMU</h1><p>${escapeHtml(input.detail ?? subjects[input.template])}</p>${action}<p style="color:#5d6c67;font-size:13px">Never forward private application or sign-in links. OURMU will never ask for your NIN or bank details by email.</p></div>`,
+    html: `<div style="font-family:Arial,sans-serif;color:#102923;max-width:600px"><h1 style="font-size:24px">OURMU</h1><p>${escapeHtml(input.detail ?? subjects[input.template])}</p>${action}<p style="color:#5d6c67;font-size:13px">${help}</p></div>`,
   };
 }
 
@@ -142,7 +150,7 @@ function renderMaturityNoticeEmail(
     : "";
   return {
     subject: subjects.maturity_notice,
-    html: `<div style="background:#f4f7f6;padding:32px 16px;font-family:Arial,sans-serif;color:#18332f"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:36px"><p style="margin:0 0 24px;color:#2f766b;font-size:13px;font-weight:700;letter-spacing:.12em">OURMU VENTURES</p><h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#18332f">Hello Partner 👋</h1><p style="margin:0 0 24px;font-size:17px;line-height:1.6">Your OURMU investment matured on ${escapeHtml(notice.maturityDate)}. Here is your investment standing and the payout plan you can choose.</p><h2 style="margin:0 0 14px;font-size:18px;color:#18332f">Your investment standing</h2><div style="background:#f4f7f6;border-radius:12px;padding:20px 22px;margin:0 0 28px">${standing}</div><h2 style="margin:0 0 4px;font-size:18px;color:#18332f">The payout plan</h2>${plans}<p style="margin:8px 0 24px;font-size:15px;line-height:1.6">Payouts are scheduled for <strong>${escapeHtml(notice.payoutDate)}</strong>. The amount actually paid follows the return recorded by the fund, which may differ from this projection.</p>${action}<hr style="border:0;border-top:1px solid #dce7e4;margin:0 0 22px"><p style="margin:0;color:#58706b;font-size:13px;line-height:1.6">Need help? Contact <a href="mailto:community@ourmu.org" style="color:#176b5b">community@ourmu.org</a>.</p></div></div>`,
+    html: `<div style="background:#f4f7f6;padding:32px 16px;font-family:Arial,sans-serif;color:#18332f"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:36px"><p style="margin:0 0 24px;color:#2f766b;font-size:13px;font-weight:700;letter-spacing:.12em">OURMU VENTURES</p><h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#18332f">Hello Partner 👋</h1><p style="margin:0 0 24px;font-size:17px;line-height:1.6">Your OURMU investment matured on ${escapeHtml(notice.maturityDate)}. Here is your investment standing and the payout plan you can choose.</p><h2 style="margin:0 0 14px;font-size:18px;color:#18332f">Your investment standing</h2><div style="background:#f4f7f6;border-radius:12px;padding:20px 22px;margin:0 0 28px">${standing}</div><h2 style="margin:0 0 4px;font-size:18px;color:#18332f">The payout plan</h2>${plans}<p style="margin:8px 0 24px;font-size:15px;line-height:1.6">Payouts are scheduled for <strong>${escapeHtml(notice.payoutDate)}</strong>. The amount actually paid follows the return recorded by the fund, which may differ from this projection.</p>${action}<hr style="border:0;border-top:1px solid #dce7e4;margin:0 0 22px"><p style="margin:0;color:#58706b;font-size:13px;line-height:1.6">Reply to this email to contact the OURMU team. Replies do not change your investment instructions.</p></div></div>`,
     text: detail
       ? `${detail}${actionUrl ? `\n\nChoose your payout plan: ${actionUrl}` : ""}`
       : undefined,
@@ -158,7 +166,9 @@ function renderInvestmentActivatedEmail(
   const amount = receipt?.amountUgx?.trim();
   const receiptNo = receipt?.receiptNumber?.trim();
   const isReinvest = receipt?.isReinvestment === true;
-  const heading = isReinvest ? "Your reinvestment is active" : "Your investment is active";
+  const heading = isReinvest
+    ? "Your reinvestment is active"
+    : "Your investment is active";
   const intro = isReinvest
     ? `Your reinvestment${amount ? ` of ${escapeHtml(amount)}` : ""}${receipt?.originalInvestmentRef ? ` from matured investment ${escapeHtml(receipt.originalInvestmentRef)}` : ""} is now active. The amount was transferred from your matured investment.`
     : `Your investment${amount ? ` of ${escapeHtml(amount)}` : ""} is now active.`;
@@ -169,8 +179,12 @@ function renderInvestmentActivatedEmail(
     ? `<p style="margin:0 0 28px"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:#176b5b;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">View investment</a></p>`
     : "";
   const detailRows = [
-    amount ? `<p style="margin:0 0 10px;font-size:14px;color:#58706b">Amount<br><strong style="font-size:20px;color:#18332f">${escapeHtml(amount)}</strong></p>` : "",
-    receiptNo ? `<p style="margin:0 0 10px;font-size:14px;color:#58706b">Receipt number<br><strong style="font-size:16px;color:#18332f">${escapeHtml(receiptNo)}</strong></p>` : "",
+    amount
+      ? `<p style="margin:0 0 10px;font-size:14px;color:#58706b">Amount<br><strong style="font-size:20px;color:#18332f">${escapeHtml(amount)}</strong></p>`
+      : "",
+    receiptNo
+      ? `<p style="margin:0 0 10px;font-size:14px;color:#58706b">Receipt number<br><strong style="font-size:16px;color:#18332f">${escapeHtml(receiptNo)}</strong></p>`
+      : "",
   ].join("");
   return {
     subject: subjects.investment_activated,

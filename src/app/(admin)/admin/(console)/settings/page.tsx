@@ -1,4 +1,7 @@
-import { BankInstructionsForm } from "@/components/forms";
+import {
+  BankInstructionsForm,
+  MaturityEmailContactsForm,
+} from "@/components/forms";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 export default async function SettingsPage() {
@@ -11,6 +14,11 @@ export default async function SettingsPage() {
     )
     .eq("is_active", true)
     .maybeSingle();
+  const { data: maturitySettings } = await admin
+    .from("maturity_email_settings")
+    .select("contacts,enabled,revision,updated_at")
+    .eq("id", true)
+    .maybeSingle();
   return (
     <>
       <p className="eyebrow">Operational configuration</p>
@@ -20,6 +28,13 @@ export default async function SettingsPage() {
           Active: {data.bank_name} · {data.account_name} · {data.account_number}
         </div>
       )}
+      <div className="card">
+        <h2>Maturity email contacts</h2>
+        <MaturityEmailContactsForm
+          contacts={maturitySettings?.contacts ?? []}
+          enabled={maturitySettings?.enabled ?? false}
+        />
+      </div>
       <div className="card">
         <h2>Receiving bank instructions</h2>
         <BankInstructionsForm />

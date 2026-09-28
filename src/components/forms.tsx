@@ -10,6 +10,7 @@ import {
   acceptPartnerImport,
   claimLegacyPartner,
   saveBankInstructions,
+  saveMaturityEmailSettings,
   updateCycle,
 } from "@/actions/admin";
 import {
@@ -61,10 +62,7 @@ export function MagicLinkForm({
 }
 
 export function TestAccountLoginForm({ next }: { next?: string }) {
-  const [state, action] = useActionState(
-    signInTestAccount,
-    initialActionState,
-  );
+  const [state, action] = useActionState(signInTestAccount, initialActionState);
   return (
     <form className="form" action={action}>
       {typeof next === "string" && next.length > 0 && (
@@ -264,23 +262,50 @@ type AccountEmail = {
 };
 
 export function AccountEmailsPanel({ emails }: { emails: AccountEmail[] }) {
-  const [addState, addAction] = useActionState(addAccountEmail, initialActionState);
-  const [resendState, resendAction] = useActionState(resendAccountEmailVerification, initialActionState);
-  const [removeState, removeAction] = useActionState(removeAccountEmail, initialActionState);
+  const [addState, addAction] = useActionState(
+    addAccountEmail,
+    initialActionState,
+  );
+  const [resendState, resendAction] = useActionState(
+    resendAccountEmailVerification,
+    initialActionState,
+  );
+  const [removeState, removeAction] = useActionState(
+    removeAccountEmail,
+    initialActionState,
+  );
   const aliasCount = emails.filter((item) => !item.is_primary).length;
   return (
     <div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
           <tbody>
             {emails.map((item) => (
               <tr key={item.id}>
                 <td>{item.email}</td>
-                <td>{item.is_primary ? "Primary" : item.verified_at ? "Verified" : "Pending"}</td>
+                <td>
+                  {item.is_primary
+                    ? "Primary"
+                    : item.verified_at
+                      ? "Verified"
+                      : "Pending"}
+                </td>
                 <td>
                   {!item.is_primary && (
-                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        flexWrap: "wrap",
+                      }}
+                    >
                       {!item.verified_at && (
                         <form action={resendAction}>
                           <input type="hidden" name="emailId" value={item.id} />
@@ -313,7 +338,10 @@ export function AccountEmailsPanel({ emails }: { emails: AccountEmail[] }) {
           <StateMessage state={addState} />
         </form>
       )}
-      <p className="muted">For security, changes require a sign-in issued within the last 10 minutes. You may add up to two additional emails.</p>
+      <p className="muted">
+        For security, changes require a sign-in issued within the last 10
+        minutes. You may add up to two additional emails.
+      </p>
     </div>
   );
 }
@@ -343,7 +371,8 @@ export function InvestmentRequestForm({
           required
         />
         <small className="muted">
-          Minimum UGX 125,000; maximum UGX 50,000,000 per cycle. Fractional units are calculated automatically.
+          Minimum UGX 125,000; maximum UGX 50,000,000 per cycle. Fractional
+          units are calculated automatically.
         </small>
       </label>
       <label className="checkbox">
@@ -533,7 +562,10 @@ export function CycleForm() {
         <label>
           Maturity date
           <input name="maturityDate" type="date" required />
-          <small className="muted">Choose the last day of the month. Payout follows on the 15th of the next month.</small>
+          <small className="muted">
+            Choose the last day of the month. Payout follows on the 15th of the
+            next month.
+          </small>
         </label>
         <label>
           Capacity (UGX)
@@ -571,8 +603,7 @@ export function CycleEditForm({
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-    })
-      .format(new Date(value));
+    }).format(new Date(value));
   return (
     <form className="form" action={action}>
       <input type="hidden" name="cycleId" value={cycle.id} />
@@ -607,7 +638,10 @@ export function CycleEditForm({
             defaultValue={cycle.maturity_date}
             required
           />
-          <small className="muted">Choose the last day of the month. Payout follows on the 15th of the next month.</small>
+          <small className="muted">
+            Choose the last day of the month. Payout follows on the 15th of the
+            next month.
+          </small>
         </label>
         <label>
           Capacity (UGX)
@@ -661,6 +695,37 @@ export function BankInstructionsForm() {
         <textarea name="instructions" required />
       </label>
       <ActionButton>Activate these instructions</ActionButton>
+      <StateMessage state={state} />
+    </form>
+  );
+}
+
+export function MaturityEmailContactsForm({
+  contacts,
+  enabled,
+}: {
+  contacts: string[];
+  enabled: boolean;
+}) {
+  const [state, action] = useActionState(
+    saveMaturityEmailSettings,
+    initialActionState,
+  );
+  return (
+    <form className="form" action={action}>
+      <label>
+        Team email addresses (one per line)
+        <textarea name="contacts" defaultValue={contacts.join("\n")} rows={4} />
+      </label>
+      <label>
+        <input name="enabled" type="checkbox" defaultChecked={enabled} /> Enable
+        maturity email copies and team replies
+      </label>
+      <p>
+        CC contacts receive investment details and are visible to recipients. A
+        normal reply reaches every listed address.
+      </p>
+      <ActionButton>Save maturity email contacts</ActionButton>
       <StateMessage state={state} />
     </form>
   );
