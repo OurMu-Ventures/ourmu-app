@@ -26,8 +26,8 @@ const adminLinks: ShellLink[] = [
   { href: "/admin/cycles", label: "Cycles", status: "Opening cycles" },
   {
     href: "/admin/investments",
-    label: "Activations",
-    status: "Opening activations",
+    label: "Investments",
+    status: "Opening investments",
   },
   {
     href: "/admin/maturities",
@@ -36,7 +36,11 @@ const adminLinks: ShellLink[] = [
   },
   { href: "/admin/audit", label: "Audit", status: "Opening audit log" },
   { href: "/admin/jobs", label: "Jobs", status: "Opening jobs" },
-  { href: "/admin/announcements", label: "Announcements", status: "Opening announcements" },
+  {
+    href: "/admin/announcements",
+    label: "Announcements",
+    status: "Opening announcements",
+  },
   { href: "/admin/settings", label: "Settings", status: "Opening settings" },
 ];
 export function AppShell({
