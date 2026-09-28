@@ -27,7 +27,7 @@ export default async function InvestmentPage({
   const { data } = await supabase
     .from("investments")
     .select(
-      "*,investment_agreements(id,pdf_status),investment_receipts(id,receipt_number,pdf_status),investment_cycles(name,opens_at)",
+      "*,investment_agreements(id,pdf_status),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status),investment_cycles(name,opens_at)",
     )
     .eq("id", id)
     .eq("investor_id", profile.id)
