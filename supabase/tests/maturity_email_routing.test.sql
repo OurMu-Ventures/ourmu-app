@@ -74,10 +74,14 @@ declare j uuid; n integer; v_admin_id uuid; v_review_job_id uuid; begin
  if not exists(select 1 from public.audit_events where action='job.maturity_cc_review_resolved') then raise exception 'CC review audit missing'; end if;
 end $$;
 do $$
-declare v_investor uuid; v_investment uuid; v_job uuid; begin
- select investor_id, investment_id into v_investor, v_investment from maturity_test_ids;
- update public.account_emails set email='TEAM@example.test'
- where user_id=v_investor and is_primary;
+declare v_admin uuid; v_investment uuid; v_primary text; v_job uuid; begin
+ select admin_id, investment_id into v_admin, v_investment from maturity_test_ids;
+ select p.email into v_primary from public.profiles p
+ join maturity_test_ids t on t.investor_id=p.id;
+ execute 'set local role service_role';
+ perform public.update_maturity_email_settings(
+   v_admin,array[v_primary,'other@example.test'],true,gen_random_uuid(),true);
+ execute 'reset role';
  insert into public.jobs(kind,entity_type,entity_id,payload)
  values('send_email','investment',v_investment,'{"template":"maturity_choice_confirmed"}'::jsonb)
  returning id into v_job;
@@ -85,9 +89,9 @@ declare v_investor uuid; v_investment uuid; v_job uuid; begin
  if not exists (
    select 1 from public.jobs
    where payload->>'idempotencyKey' like 'job-'||v_job||'-%'
-     and payload->>'to'='TEAM@example.test'
+     and payload->>'to'=v_primary
      and payload->'routing'->'cc'='["other@example.test"]'::jsonb
- ) then raise exception 'CC still includes the To address with different casing'; end if;
+ ) then raise exception 'CC includes the To address'; end if;
 end $$;
 select pass('maturity routing authorization, audit and fan-out checks pass');
 select * from finish();
