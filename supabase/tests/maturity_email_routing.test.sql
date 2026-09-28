@@ -30,33 +30,27 @@ update maturity_test_ids set job_id=(select id from public.jobs where entity_id=
 do $$
 declare a uuid; begin
  select admin_id into a from maturity_test_ids;
- perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'aal','aal1')::text,true);
+ execute 'set local role service_role';
  begin
-  execute 'set local role authenticated';
-  perform public.update_maturity_email_settings(array['team@example.test'],true,gen_random_uuid());
+  perform public.update_maturity_email_settings(a,array['team@example.test'],true,gen_random_uuid(),false);
   raise exception 'AAL1 settings change was accepted';
- exception when insufficient_privilege then
-  execute 'reset role';
+ exception when insufficient_privilege then null;
  end;
- perform set_config('request.jwt.claims',jsonb_build_object('sub',gen_random_uuid(),'aal','aal2')::text,true);
  begin
-  execute 'set local role authenticated';
-  perform public.update_maturity_email_settings(array['team@example.test'],true,gen_random_uuid());
+  perform public.update_maturity_email_settings(gen_random_uuid(),array['team@example.test'],true,gen_random_uuid(),true);
   raise exception 'non-admin settings change was accepted';
- exception when insufficient_privilege then
-  execute 'reset role';
+ exception when insufficient_privilege then null;
  end;
- perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'aal','aal2')::text,true);
- execute 'set local role authenticated';
- perform public.update_maturity_email_settings(array[' TEAM@example.test ','team@example.test','other@example.test'],true,gen_random_uuid());
+ perform public.update_maturity_email_settings(a,array[' TEAM@example.test ','team@example.test','other@example.test'],true,gen_random_uuid(),true);
  execute 'reset role';
  if (select contacts from public.maturity_email_settings) is distinct from array['team@example.test','other@example.test'] then raise exception 'contacts not normalized'; end if;
  if not exists(select 1 from public.audit_events where action='maturity_email_settings.updated' and actor_id=a) then raise exception 'settings audit missing'; end if;
 end $$;
 
 do $$
-declare j uuid; n integer; begin
+declare j uuid; n integer; v_admin_id uuid; v_review_job_id uuid; begin
  select job_id into j from maturity_test_ids;
+ select admin_id into v_admin_id from maturity_test_ids;
  n:=public.fan_out_maturity_email(j,'https://example.test/investments/synthetic');
  if n<>3 then raise exception 'expected three deliveries, got %',n; end if;
  n:=public.fan_out_maturity_email(j,'https://example.test/investments/synthetic');
@@ -66,6 +60,18 @@ declare j uuid; n integer; begin
  if (select count(*) from public.jobs where payload->'routing'->'replyTo'='["team@example.test","other@example.test"]'::jsonb)<>3 then raise exception 'reply recipients mismatch'; end if;
  if (select count(*) from public.jobs where payload->'routing'->'cc'='["team@example.test","other@example.test"]'::jsonb)<>1 then raise exception 'CC count mismatch'; end if;
  if not exists(select 1 from public.jobs c join public.account_emails e on e.id=(c.payload->>'accountEmailId')::uuid where c.payload->'routing'->>'teamCopySelected'='true' and e.is_primary) then raise exception 'primary was not selected'; end if;
+ update public.jobs set cc_review_required=true where id=(select id from public.jobs where payload->'routing'->>'teamCopySelected'='true' limit 1);
+ select id into v_review_job_id from public.jobs where cc_review_required limit 1;
+ execute 'set local role service_role';
+ begin
+  perform public.resolve_maturity_cc_review(v_admin_id,v_review_job_id,false,gen_random_uuid());
+  raise exception 'AAL1 CC review resolution was accepted';
+ exception when insufficient_privilege then null;
+ end;
+ perform public.resolve_maturity_cc_review(v_admin_id,v_review_job_id,true,gen_random_uuid());
+ execute 'reset role';
+ if exists(select 1 from public.jobs where cc_review_required) then raise exception 'CC review flag remained'; end if;
+ if not exists(select 1 from public.audit_events where action='job.maturity_cc_review_resolved') then raise exception 'CC review audit missing'; end if;
 end $$;
 select pass('maturity routing authorization, audit and fan-out checks pass');
 select * from finish();

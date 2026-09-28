@@ -18,7 +18,7 @@ export default async function SettingsPage() {
     .from("maturity_email_settings")
     .select("contacts,enabled,revision,updated_at")
     .eq("id", true)
-    .single();
+    .maybeSingle();
   return (
     <>
       <p className="eyebrow">Operational configuration</p>

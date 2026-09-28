@@ -338,7 +338,7 @@ export async function saveMaturityEmailSettings(
   _: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireAdmin();
+  const profile = await requireAdmin();
   const contacts = String(formData.get("contacts") ?? "")
     .split(/[\s,;]+/)
     .map((email) => email.trim().toLowerCase())
@@ -356,8 +356,13 @@ export async function saveMaturityEmailSettings(
         "Enter up to 10 valid email addresses; at least one is required when enabled.",
     };
   }
+  const supabase = await createClient();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const admin = createAdminClient();
   const { error } = await admin.rpc("update_maturity_email_settings", {
+    p_admin_id: profile.id,
+    p_admin_aal2: aal?.currentLevel === "aal2",
     p_contacts: unique,
     p_enabled: enabled,
     p_request_id: requestId(),
@@ -369,6 +374,23 @@ export async function saveMaturityEmailSettings(
     };
   revalidatePath("/admin/settings");
   return { ok: true, message: "Maturity email contacts updated." };
+}
+
+export async function resolveMaturityCcReview(formData: FormData) {
+  const profile = await requireAdmin();
+  const jobId = z.uuid().parse(formData.get("jobId"));
+  const supabase = await createClient();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("resolve_maturity_cc_review", {
+    p_admin_id: profile.id,
+    p_job_id: jobId,
+    p_admin_aal2: aal?.currentLevel === "aal2",
+    p_request_id: requestId(),
+  });
+  if (error) throw new Error("CC review could not be cleared");
+  revalidatePath("/admin/jobs");
 }
 
 export async function retryJob(formData: FormData) {
@@ -488,7 +510,10 @@ export async function sendPartnerPortalWelcomeTest() {
     .not("verified_at", "is", null)
     .maybeSingle();
   if (!recipient?.email)
-    return { ok: false, message: "Your verified primary email could not be found." };
+    return {
+      ok: false,
+      message: "Your verified primary email could not be found.",
+    };
 
   try {
     const messageId = await sendTransactionalEmail({
@@ -499,35 +524,57 @@ export async function sendPartnerPortalWelcomeTest() {
     });
     if (!messageId) throw new Error("EMAIL_PROVIDER_MESSAGE_ID_MISSING");
     const supabase = await createClient();
-    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const { data: aal } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     const { error } = await admin.rpc("mark_partner_portal_welcome_test_sent", {
       p_admin_id: profile.id,
       p_provider_message_id: messageId,
       p_admin_aal2: aal?.currentLevel === "aal2",
       p_request_id: requestId(),
     });
-    if (error) return { ok: false, message: "The test email was sent, but its status could not be recorded. Refresh and retry safely." };
+    if (error)
+      return {
+        ok: false,
+        message:
+          "The test email was sent, but its status could not be recorded. Refresh and retry safely.",
+      };
     revalidatePath("/admin/announcements");
-    return { ok: true, message: `Test email sent to your verified admin address (${recipient.email}).` };
+    return {
+      ok: true,
+      message: `Test email sent to your verified admin address (${recipient.email}).`,
+    };
   } catch {
-    return { ok: false, message: "Test email could not be sent. Check the Resend setup and try again." };
+    return {
+      ok: false,
+      message:
+        "Test email could not be sent. Check the Resend setup and try again.",
+    };
   }
 }
 
-export async function releasePartnerPortalWelcomeCampaign(expectedCount: number) {
+export async function releasePartnerPortalWelcomeCampaign(
+  expectedCount: number,
+) {
   const profile = await requireAdmin();
   const parsedCount = z.number().int().min(1).max(500).safeParse(expectedCount);
   if (!parsedCount.success)
-    return { ok: false, message: "Refresh the audience preview before releasing." };
+    return {
+      ok: false,
+      message: "Refresh the audience preview before releasing.",
+    };
   const supabase = await createClient();
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("release_partner_portal_welcome_campaign", {
-    p_admin_id: profile.id,
-    p_admin_aal2: aal?.currentLevel === "aal2",
-    p_expected_count: parsedCount.data,
-    p_request_id: requestId(),
-  });
+  const { data, error } = await admin.rpc(
+    "release_partner_portal_welcome_campaign",
+    {
+      p_admin_id: profile.id,
+      p_admin_aal2: aal?.currentLevel === "aal2",
+      p_expected_count: parsedCount.data,
+      p_request_id: requestId(),
+    },
+  );
   if (error) {
     const message = error.message.includes("recipient count changed")
       ? "The audience changed since preview. Refresh and review the updated count."

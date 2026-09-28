@@ -1640,7 +1640,8 @@ export type Database = {
     }
     Functions: {
       fan_out_maturity_email: { Args: { p_job_id: string; p_action_url: string }; Returns: number }
-      update_maturity_email_settings: { Args: { p_contacts: string[]; p_enabled: boolean; p_request_id: string }; Returns: undefined }
+      update_maturity_email_settings: { Args: { p_admin_id: string; p_contacts: string[]; p_enabled: boolean; p_request_id: string; p_admin_aal2: boolean }; Returns: undefined }
+      resolve_maturity_cc_review: { Args: { p_admin_id: string; p_job_id: string; p_admin_aal2: boolean; p_request_id: string }; Returns: undefined }
       accept_partner_import: {
         Args: {
           p_admin_aal2: boolean

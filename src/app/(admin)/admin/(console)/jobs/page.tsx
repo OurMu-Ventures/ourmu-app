@@ -1,4 +1,8 @@
-import { reconcileJobDelivery, retryJob } from "@/actions/admin";
+import {
+  reconcileJobDelivery,
+  resolveMaturityCcReview,
+  retryJob,
+} from "@/actions/admin";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { dateTime } from "@/lib/format";
@@ -11,10 +15,30 @@ export default async function JobsPage() {
     .select("*")
     .order("created_at", { ascending: false })
     .limit(250);
+  const { data: flaggedJobsData } = await admin
+    .from("jobs")
+    .select("*")
+    .eq("cc_review_required", true)
+    .order("created_at", { ascending: false });
+  const flaggedJobs = flaggedJobsData ?? [];
+  const visibleJobs = [
+    ...flaggedJobs,
+    ...(data ?? []).filter(
+      (job) => !flaggedJobs.some((flagged) => flagged.id === job.id),
+    ),
+  ];
   return (
     <>
       <p className="eyebrow">Durable side effects</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Jobs</h1>
+      {flaggedJobs.length > 0 && (
+        <div className="notice" role="alert">
+          {flaggedJobs.length} maturity email team{" "}
+          {flaggedJobs.length === 1 ? "copy needs" : "copies need"} review.
+          Confirm the partner recipient and contact the team manually before
+          marking reviewed.
+        </div>
+      )}
       <div className="table-wrap">
         <table>
           <thead>
@@ -31,7 +55,7 @@ export default async function JobsPage() {
             </tr>
           </thead>
           <tbody>
-            {(data ?? []).map((item) => (
+            {visibleJobs.map((item) => (
               <tr key={item.id}>
                 <td>{dateTime(item.created_at)}</td>
                 <td>{item.kind}</td>
@@ -53,6 +77,14 @@ export default async function JobsPage() {
                     .provider_message_id ?? "—"}
                 </td>
                 <td>
+                  {item.cc_review_required && (
+                    <form action={resolveMaturityCcReview}>
+                      <input type="hidden" name="jobId" value={item.id} />
+                      <SubmitButton pendingLabel="Saving…">
+                        Mark CC reviewed
+                      </SubmitButton>
+                    </form>
+                  )}
                   {item.last_error_code === "NEEDS_RECONCILIATION" ? (
                     <>
                       <form action={reconcileJobDelivery}>
