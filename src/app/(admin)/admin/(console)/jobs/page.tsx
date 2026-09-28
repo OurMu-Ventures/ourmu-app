@@ -18,13 +18,14 @@ export default async function JobsPage() {
       <div className="table-wrap">
         <table>
           <thead>
-              <tr>
+            <tr>
               <th>Created</th>
               <th>Kind</th>
               <th>Entity</th>
               <th>Status</th>
               <th>Attempts</th>
               <th>Error code</th>
+              <th>CC review</th>
               <th>Provider message</th>
               <th>Action</th>
             </tr>
@@ -43,7 +44,13 @@ export default async function JobsPage() {
                 </td>
                 <td>{item.last_error_code ?? "—"}</td>
                 <td>
-                  {(item as { provider_message_id?: string | null }).provider_message_id ?? "—"}
+                  {item.cc_review_required
+                    ? "Team copy missed; review recipient"
+                    : "—"}
+                </td>
+                <td>
+                  {(item as { provider_message_id?: string | null })
+                    .provider_message_id ?? "—"}
                 </td>
                 <td>
                   {item.last_error_code === "NEEDS_RECONCILIATION" ? (
@@ -75,7 +82,9 @@ export default async function JobsPage() {
                     ["failed", "dead"].includes(item.status) && (
                       <form action={retryJob}>
                         <input type="hidden" name="jobId" value={item.id} />
-                        <SubmitButton pendingLabel="Retrying…">Retry</SubmitButton>
+                        <SubmitButton pendingLabel="Retrying…">
+                          Retry
+                        </SubmitButton>
                       </form>
                     )
                   )}

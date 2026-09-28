@@ -14,10 +14,7 @@ import {
   type MaturityChoice,
   type MaturityNoticeInput,
 } from "@/lib/maturity";
-import {
-  RECEIPT_TEMPLATE_VERSION,
-  buildReceiptPdf,
-} from "@/lib/receipts/pdf";
+import { RECEIPT_TEMPLATE_VERSION, buildReceiptPdf } from "@/lib/receipts/pdf";
 import { formatUgxExact } from "@/lib/receipts/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -50,6 +47,12 @@ export type SendEmailPayload = {
   accountEmailId?: string;
   receiptId?: string;
   idempotencyKey?: string;
+  routing?: {
+    revision: number;
+    cc: string[];
+    replyTo: string[];
+    teamCopySelected: boolean;
+  };
 };
 
 // Resend honours an idempotency key for 24h. A retry outside that window
@@ -67,7 +70,9 @@ export function needsReconciliation(input: {
   if (input.providerMessageId) return false;
   if (!input.firstSendAttemptAt) return false;
   const now = input.nowMs ?? Date.now();
-  return now - new Date(input.firstSendAttemptAt).getTime() > IDEMPOTENCY_WINDOW_MS;
+  return (
+    now - new Date(input.firstSendAttemptAt).getTime() > IDEMPOTENCY_WINDOW_MS
+  );
 }
 
 export async function processDueJobs(limit = 10, campaignId?: string) {
@@ -116,7 +121,9 @@ export async function processDueJobs(limit = 10, campaignId?: string) {
           status: "succeeded",
           completed_at: new Date().toISOString(),
           last_error_code: null,
-          ...(providerMessageId ? { provider_message_id: providerMessageId } : {}),
+          ...(providerMessageId
+            ? { provider_message_id: providerMessageId }
+            : {}),
         })
         .eq("id", raw.id);
       result.succeeded += 1;
@@ -242,7 +249,10 @@ async function fetchReceipt(receiptId: string): Promise<ReceiptRow | null> {
   const admin = createAdminClient() as never as {
     from: (t: string) => {
       select: (c: string) => {
-        eq: (k: string, v: string) => {
+        eq: (
+          k: string,
+          v: string,
+        ) => {
           maybeSingle: () => Promise<{
             data: ReceiptRow | null;
             error: unknown;
@@ -266,7 +276,11 @@ function receiptDisplayDate(isoDate: string): string {
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
   if (dateOnly) {
     const check = new Date(
-      Date.UTC(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])),
+      Date.UTC(
+        Number(dateOnly[1]),
+        Number(dateOnly[2]) - 1,
+        Number(dateOnly[3]),
+      ),
     );
     return new Intl.DateTimeFormat("en-UG", {
       dateStyle: "medium",
@@ -285,7 +299,9 @@ function receiptDisplayDate(isoDate: string): string {
 // same receipt number and stored document.
 async function generateReceipt(receiptId: string) {
   const admin = createAdminClient() as never as {
-    from: (t: string) => ReturnType<ReturnType<typeof createAdminClient>["from"]>;
+    from: (
+      t: string,
+    ) => ReturnType<ReturnType<typeof createAdminClient>["from"]>;
     storage: ReturnType<typeof createAdminClient>["storage"];
   };
   const receipt = await fetchReceipt(receiptId);
@@ -337,7 +353,9 @@ async function generateReceipt(receiptId: string) {
         .update(Buffer.from(await existing.arrayBuffer()))
         .digest("hex");
     }
-    const { error: updateError } = await (admin as never as ReturnType<typeof createAdminClient>)
+    const { error: updateError } = await (
+      admin as never as ReturnType<typeof createAdminClient>
+    )
       .from("investment_receipts" as never)
       .update({
         pdf_status: "ready",
@@ -349,7 +367,11 @@ async function generateReceipt(receiptId: string) {
       } as never)
       .eq("id", receipt.id);
     if (updateError) throw new Error("PDF_RECORD_FAILED");
-    await queueActivationEmail({ ...receipt, pdf_status: "ready", pdf_path: path });
+    await queueActivationEmail({
+      ...receipt,
+      pdf_status: "ready",
+      pdf_path: path,
+    });
   } catch (error) {
     await (admin as never as ReturnType<typeof createAdminClient>)
       .from("investment_receipts" as never)
@@ -377,12 +399,20 @@ async function queueActivationEmail(receipt: ReceiptRow) {
   if (error) throw new Error("EMAIL_QUEUE_FAILED");
 }
 
-async function receiptForInvestment(investmentId: string): Promise<ReceiptRow | null> {
+async function receiptForInvestment(
+  investmentId: string,
+): Promise<ReceiptRow | null> {
   const admin = createAdminClient() as never as {
     from: (t: string) => {
       select: (c: string) => {
-        eq: (k: string, v: string) => {
-          order: (c: string, o: object) => {
+        eq: (
+          k: string,
+          v: string,
+        ) => {
+          order: (
+            c: string,
+            o: object,
+          ) => {
             limit: (n: number) => Promise<{
               data: ReceiptRow[] | null;
               error: unknown;
@@ -417,7 +447,15 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
       .not("verified_at", "is", null)
       .maybeSingle();
     // Removing an alias immediately suppresses any queued delivery to it.
-    if (!activeRecipient) return null;
+    if (!activeRecipient) {
+      if (payload.routing?.teamCopySelected) {
+        await admin
+          .from("jobs")
+          .update({ cc_review_required: true })
+          .eq("id", job.id);
+      }
+      return null;
+    }
   }
   if (!to && job.entity_type === "investment") {
     await fanOutInvestmentEmails(job);
@@ -440,8 +478,7 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
   let detail: string | undefined;
   let maturityNotice: MaturityNoticeInput | undefined;
   let activationReceipt:
-    | import("@/lib/email/template").ActivationReceiptInput
-    | undefined;
+    import("@/lib/email/template").ActivationReceiptInput | undefined;
   let attachments: { filename: string; content: Buffer }[] | undefined;
   let idempotencyKey = payload.idempotencyKey;
   if (
@@ -465,11 +502,13 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
       ? await fetchReceipt(payload.receiptId)
       : await receiptForInvestment(job.entity_id);
     if (payload.receiptId && !receipt) throw new Error("RECEIPT_NOT_FOUND");
-    if (payload.receiptId && (!receipt || receipt.pdf_status !== "ready" || !receipt.pdf_path))
+    if (
+      payload.receiptId &&
+      (!receipt || receipt.pdf_status !== "ready" || !receipt.pdf_path)
+    )
       throw new Error("RECEIPT_NOT_READY");
     const baseUrl = getPublicEnv().NEXT_PUBLIC_APP_URL;
-    actionUrl =
-      payload.actionUrl ?? `${baseUrl}/investments/${job.entity_id}`;
+    actionUrl = payload.actionUrl ?? `${baseUrl}/investments/${job.entity_id}`;
     if (receipt) {
       activationReceipt = {
         partnerName: receipt.partner_name,
@@ -514,11 +553,14 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
       }
       activationReceipt = {
         partnerName,
-        amountUgx: investment ? formatUgxExact(String(investment.principal_ugx)) : undefined,
+        amountUgx: investment
+          ? formatUgxExact(String(investment.principal_ugx))
+          : undefined,
         actionUrl,
       };
       idempotencyKey =
-        payload.idempotencyKey ?? `job-${job.id}-${payload.accountEmailId ?? to}`;
+        payload.idempotencyKey ??
+        `job-${job.id}-${payload.accountEmailId ?? to}`;
     }
   }
   // Record the first actual provider send attempt (separate from worker
@@ -537,6 +579,12 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
   if (trackingError) throw new Error("SEND_TRACKING_FAILED");
   const messageId = await sendTransactionalEmail({
     to,
+    cc: MATURITY_TEMPLATES.includes(payload.template)
+      ? payload.routing?.cc
+      : undefined,
+    replyTo: MATURITY_TEMPLATES.includes(payload.template)
+      ? payload.routing?.replyTo
+      : undefined,
     template: payload.template,
     actionUrl,
     detail,
@@ -654,6 +702,15 @@ export async function fanOutInvestmentEmails(job: JobRow) {
   const payload = job.payload as SendEmailPayload;
   const template = payload.template;
   if (!template) throw new Error("EMAIL_JOB_INVALID");
+  if (MATURITY_TEMPLATES.includes(template)) {
+    const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${job.entity_id}`;
+    const { error } = await createAdminClient().rpc("fan_out_maturity_email", {
+      p_job_id: job.id,
+      p_action_url: actionUrl,
+    });
+    if (error) throw new Error("EMAIL_FANOUT_FAILED");
+    return;
+  }
   const admin = createAdminClient();
   const { data: investment } = await admin
     .from("investments")

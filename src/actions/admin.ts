@@ -62,7 +62,10 @@ const cycleSchema = z
 function cycleValidationMessage(error: z.ZodError) {
   const issue = error.issues[0];
   const field = issue?.path[0];
-  if (issue?.code === "custom" && (field === "closesAt" || field === "maturityDate"))
+  if (
+    issue?.code === "custom" &&
+    (field === "closesAt" || field === "maturityDate")
+  )
     return issue.message;
   if (field === "name") return "Enter a cycle name of at least 3 characters.";
   if (field === "opensAt") return "Select a valid opening date.";
@@ -108,7 +111,10 @@ export async function createCycle(
   const admin = createAdminClient();
   const agreementVersionId = await latestAgreementId(admin);
   if (!agreementVersionId)
-    return { ok: false, message: "Publish an approved agreement before creating a cycle." };
+    return {
+      ok: false,
+      message: "Publish an approved agreement before creating a cycle.",
+    };
   const { data, error } = await admin
     .from("investment_cycles")
     .insert({
@@ -147,8 +153,7 @@ export async function updateCycle(
     maturityDate: formData.get("maturityDate"),
     capacityUgx: formData.get("capacityUgx"),
   });
-  if (!cycleId.success)
-    return { ok: false, message: "Cycle not found." };
+  if (!cycleId.success) return { ok: false, message: "Cycle not found." };
   if (!parsed.success)
     return {
       ok: false,
@@ -157,7 +162,10 @@ export async function updateCycle(
   const admin = createAdminClient();
   const agreementVersionId = await latestAgreementId(admin);
   if (!agreementVersionId)
-    return { ok: false, message: "Publish an approved agreement before editing a cycle." };
+    return {
+      ok: false,
+      message: "Publish an approved agreement before editing a cycle.",
+    };
   const { data, error } = await admin
     .from("investment_cycles")
     .update({
@@ -326,6 +334,43 @@ export async function saveBankInstructions(
   return { ok: true, message: "Receiving bank instructions updated." };
 }
 
+export async function saveMaturityEmailSettings(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const contacts = String(formData.get("contacts") ?? "")
+    .split(/[\s,;]+/)
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  const unique = [...new Set(contacts)];
+  const enabled = formData.get("enabled") === "on";
+  if (
+    unique.length > 10 ||
+    (enabled && unique.length === 0) ||
+    unique.some((email) => !z.email().safeParse(email).success)
+  ) {
+    return {
+      ok: false,
+      message:
+        "Enter up to 10 valid email addresses; at least one is required when enabled.",
+    };
+  }
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("update_maturity_email_settings", {
+    p_contacts: unique,
+    p_enabled: enabled,
+    p_request_id: requestId(),
+  });
+  if (error)
+    return {
+      ok: false,
+      message: "Maturity email contacts could not be updated.",
+    };
+  revalidatePath("/admin/settings");
+  return { ok: true, message: "Maturity email contacts updated." };
+}
+
 export async function retryJob(formData: FormData) {
   const adminProfile = await requireAdmin();
   const jobId = z.uuid().parse(formData.get("jobId"));
@@ -375,7 +420,9 @@ export async function reconcileJobDelivery(formData: FormData) {
   const outcome = z
     .enum(["confirmed_delivered", "authorize_resend"])
     .parse(formData.get("outcome"));
-  const notes = String(formData.get("notes") ?? "").trim().slice(0, 500);
+  const notes = String(formData.get("notes") ?? "")
+    .trim()
+    .slice(0, 500);
   const admin = createAdminClient();
   const { data: job } = await admin
     .from("jobs")
