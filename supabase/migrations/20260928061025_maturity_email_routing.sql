@@ -10,7 +10,7 @@ create table public.maturity_email_settings (
   constraint maturity_email_contacts_required check (not enabled or cardinality(contacts) > 0)
 );
 insert into public.maturity_email_settings (id, contacts, enabled)
-values (true, array['ssebudde@ourmu.co','bwojji@ourmu.co','tushabe@ourmu.co'], false);
+values (true, '{}', false);
 alter table public.maturity_email_settings enable row level security;
 revoke all on public.maturity_email_settings from public, anon, authenticated;
 grant select on public.maturity_email_settings to authenticated;

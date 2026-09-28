@@ -25,8 +25,8 @@ describe("outbound email headers", () => {
     await sendTransactionalEmail({
       to: "partner@example.com",
       template: "maturity_choice_confirmed",
-      cc: ["ssebudde@ourmu.co", "bwojji@ourmu.co", "tushabe@ourmu.co"],
-      replyTo: ["ssebudde@ourmu.co", "bwojji@ourmu.co", "tushabe@ourmu.co"],
+      cc: ["one@example.test", "two@example.test", "three@example.test"],
+      replyTo: ["one@example.test", "two@example.test", "three@example.test"],
       idempotencyKey: "synthetic-maturity-1",
     });
     const [message, options] = send.mock.calls[0] as unknown as [
@@ -35,9 +35,9 @@ describe("outbound email headers", () => {
     ];
     expect(message.to).toBe("partner@example.com");
     expect(message.cc).toEqual([
-      "ssebudde@ourmu.co",
-      "bwojji@ourmu.co",
-      "tushabe@ourmu.co",
+      "one@example.test",
+      "two@example.test",
+      "three@example.test",
     ]);
     expect(message.replyTo).toEqual(message.cc);
     expect(options.idempotencyKey).toBe("synthetic-maturity-1");
