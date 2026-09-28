@@ -1573,6 +1573,60 @@ export type Database = {
           },
         ]
       }
+      primary_email_change_requests: {
+        Row: {
+          account_email_id: string | null
+          confirmed_at: string | null
+          expires_at: string | null
+          finalized_at: string | null
+          id: string
+          mode: string
+          new_email: string
+          requested_at: string
+          token_hash: string | null
+          user_id: string
+        }
+        Insert: {
+          account_email_id?: string | null
+          confirmed_at?: string | null
+          expires_at?: string | null
+          finalized_at?: string | null
+          id?: string
+          mode: string
+          new_email: string
+          requested_at?: string
+          token_hash?: string | null
+          user_id: string
+        }
+        Update: {
+          account_email_id?: string | null
+          confirmed_at?: string | null
+          expires_at?: string | null
+          finalized_at?: string | null
+          id?: string
+          mode?: string
+          new_email?: string
+          requested_at?: string
+          token_hash?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "primary_email_change_requests_account_email_id_fkey"
+            columns: ["account_email_id"]
+            isOneToOne: false
+            referencedRelation: "account_emails"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "primary_email_change_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           access_status: Database["public"]["Enums"]["access_status"]

@@ -23,14 +23,18 @@ import { requestMagicLink, signInTestAccount } from "@/actions/auth";
 import { activateInvestment, requestInvestment } from "@/actions/investments";
 import {
   addAccountEmail,
+  confirmPrimaryEmailChange,
+  promoteAdditionalEmail,
   removeAccountEmail,
   requestAccountClosure,
+  requestPrimaryEmailChange,
   resendAccountEmailVerification,
   saveNextOfKin,
 } from "@/actions/profile";
 import { ActionButton } from "@/components/ActionButton";
 import { StateMessage } from "@/components/StateMessage";
 import { Button } from "@/components/ui/button";
+import { dateTime } from "@/lib/format";
 import {
   AGREEMENT_TEMPLATE,
   AGREEMENT_TITLE,
@@ -261,7 +265,19 @@ type AccountEmail = {
   verified_at: string | null;
 };
 
-export function AccountEmailsPanel({ emails }: { emails: AccountEmail[] }) {
+export type PrimaryEmailChangePending = {
+  newEmail: string;
+  mode: "new_address" | "promote_alias";
+  expiresAt: string | null;
+};
+
+export function AccountEmailsPanel({
+  emails,
+  pendingChange,
+}: {
+  emails: AccountEmail[];
+  pendingChange?: PrimaryEmailChangePending | null;
+}) {
   const [addState, addAction] = useActionState(
     addAccountEmail,
     initialActionState,
@@ -272,6 +288,14 @@ export function AccountEmailsPanel({ emails }: { emails: AccountEmail[] }) {
   );
   const [removeState, removeAction] = useActionState(
     removeAccountEmail,
+    initialActionState,
+  );
+  const [promoteState, promoteAction] = useActionState(
+    promoteAdditionalEmail,
+    initialActionState,
+  );
+  const [changeRequestState, changeRequestAction] = useActionState(
+    requestPrimaryEmailChange,
     initialActionState,
   );
   const aliasCount = emails.filter((item) => !item.is_primary).length;
@@ -315,6 +339,16 @@ export function AccountEmailsPanel({ emails }: { emails: AccountEmail[] }) {
                           </small>
                         </form>
                       )}
+                      {item.verified_at && (
+                        <form action={promoteAction}>
+                          <input type="hidden" name="emailId" value={item.id} />
+                          <ActionButton>Make primary</ActionButton>
+                          <small className="muted" style={{ display: "block" }}>
+                            Swaps immediately. Your current primary stays as a
+                            verified contact.
+                          </small>
+                        </form>
+                      )}
                       <form action={removeAction}>
                         <input type="hidden" name="emailId" value={item.id} />
                         <ActionButton danger>Remove</ActionButton>
@@ -328,6 +362,34 @@ export function AccountEmailsPanel({ emails }: { emails: AccountEmail[] }) {
         </table>
       </div>
       <StateMessage state={resendState.message ? resendState : removeState} />
+      <StateMessage state={promoteState.message ? promoteState : initialActionState} />
+      {pendingChange ? (
+        <p className="notice" style={{ marginTop: "1rem" }}>
+          A change to <strong>{pendingChange.newEmail}</strong> is pending.
+          Check that mailbox for the confirmation link
+          {pendingChange.expiresAt
+            ? ` (expires ${dateTime(pendingChange.expiresAt)})`
+            : ""}
+          . Nothing changes until you open it and confirm.
+        </p>
+      ) : (
+        <form
+          className="form"
+          action={changeRequestAction}
+          style={{ marginTop: "1rem" }}
+        >
+          <label>
+            Change primary email
+            <input name="email" type="email" autoComplete="email" required />
+          </label>
+          <small className="muted">
+            The new address must be confirmed from its own mailbox within 24
+            hours. It replaces your current primary.
+          </small>
+          <ActionButton>Send confirmation link</ActionButton>
+          <StateMessage state={changeRequestState} />
+        </form>
+      )}
       {aliasCount < 2 && (
         <form className="form" action={addAction} style={{ marginTop: "1rem" }}>
           <label>
@@ -343,6 +405,33 @@ export function AccountEmailsPanel({ emails }: { emails: AccountEmail[] }) {
         minutes. You may add up to two additional emails.
       </p>
     </div>
+  );
+}
+
+export function ConfirmPrimaryEmailForm({
+  token,
+  newEmail,
+  currentEmail,
+}: {
+  token: string;
+  newEmail: string;
+  currentEmail: string;
+}) {
+  const [state, action] = useActionState(
+    confirmPrimaryEmailChange,
+    initialActionState,
+  );
+  return (
+    <form className="form" action={action}>
+      <input type="hidden" name="token" value={token} />
+      <p>
+        Make <strong>{newEmail}</strong> your primary email, replacing{" "}
+        <strong>{currentEmail}</strong>? Sign-in links and account
+        notifications will arrive at the new address.
+      </p>
+      <ActionButton>Confirm change</ActionButton>
+      <StateMessage state={state} />
+    </form>
   );
 }
 

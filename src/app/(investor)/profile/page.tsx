@@ -7,6 +7,7 @@ import {
 } from "@/components/maturity-forms";
 import { requireInvestor } from "@/lib/auth";
 import { dateTime } from "@/lib/format";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 
@@ -24,6 +25,16 @@ export default async function ProfilePage() {
     .eq("user_id", profile.id)
     .order("is_primary", { ascending: false })
     .order("created_at");
+  // Change requests hold token hashes and are invisible to the user-scoped
+  // client, so read the caller's own pending request with the admin client.
+  const { data: pendingChange } = await createAdminClient()
+    .from("primary_email_change_requests")
+    .select("new_email,mode,expires_at")
+    .eq("user_id", profile.id)
+    .is("finalized_at", null)
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   const [{ data: standingAuth }, { data: standingAgreements }] =
     await Promise.all([
       supabase
@@ -69,8 +80,21 @@ export default async function ProfilePage() {
       </div>
       <section style={{ marginTop: "2rem" }}>
         <h2>Email contacts</h2>
-        <p className="muted">Verified contacts receive account notifications and can request a secure sign-in link. Your primary email remains unchanged.</p>
-        <div className="card"><AccountEmailsPanel emails={accountEmails ?? []} /></div>
+        <p className="muted">Verified contacts receive account notifications and can request a secure sign-in link. Promote a verified contact or confirm a new address to change your primary email.</p>
+        <div className="card"><AccountEmailsPanel
+          emails={accountEmails ?? []}
+          pendingChange={
+            pendingChange &&
+            (pendingChange.mode === "new_address" ||
+              pendingChange.mode === "promote_alias")
+              ? {
+                  newEmail: pendingChange.new_email,
+                  mode: pendingChange.mode,
+                  expiresAt: pendingChange.expires_at,
+                }
+              : null
+          }
+        /></div>
       </section>
       <section style={{ marginTop: "2rem" }}>
         <h2>Beneficiary and estate contact</h2>
