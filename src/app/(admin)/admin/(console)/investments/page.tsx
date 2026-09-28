@@ -7,9 +7,11 @@ import { date, dateTime, ugx, units } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const PAGE_SIZE = 25;
+const PARTNER_OPTION_LIMIT = 25;
 
 type SearchParams = Promise<{
   partner?: string | string[];
+  partnerSearch?: string | string[];
   cycle?: string | string[];
   page?: string | string[];
 }>;
@@ -28,9 +30,15 @@ function pageNumber(value: string) {
     : 1;
 }
 
-function pageHref(partner: string, cycle: string, page: number) {
+function pageHref(
+  partner: string,
+  partnerSearch: string,
+  cycle: string,
+  page: number,
+) {
   const params = new URLSearchParams();
   if (partner) params.set("partner", partner);
+  if (partnerSearch) params.set("partnerSearch", partnerSearch);
   if (cycle) params.set("cycle", cycle);
   params.set("page", String(page));
   return `/admin/investments?${params.toString()}`;
@@ -45,23 +53,37 @@ export default async function AdminInvestmentsPage({
   const admin = createAdminClient();
   const params = await searchParams;
   const partner = singleParam(params.partner);
+  const partnerSearch = singleParam(params.partnerSearch).trim().slice(0, 80);
   const cycle = singleParam(params.cycle);
   const page = pageNumber(singleParam(params.page));
 
+  // Escape LIKE wildcards so a name search stays a literal, bounded lookup.
+  const searchPattern = `%${partnerSearch.replace(/[\\%_]/g, "\\$&")}%`;
+  let profileOptionsQuery = admin
+    .from("profiles")
+    .select("id,legal_name,email")
+    .eq("role", "investor");
+  let legacyOptionsQuery = admin
+    .from("legacy_partner_identities")
+    .select("id,canonical_name,normalized_email,profile_id")
+    .is("profile_id", null);
+  if (partnerSearch) {
+    profileOptionsQuery = profileOptionsQuery.ilike(
+      "legal_name",
+      searchPattern,
+    );
+    legacyOptionsQuery = legacyOptionsQuery.ilike(
+      "canonical_name",
+      searchPattern,
+    );
+  }
   const [
     { data: profiles, error: profilesError },
     { data: legacyIdentities, error: legacyError },
     { data: cycles, error: cyclesError },
   ] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("id,legal_name,email")
-      .eq("role", "investor")
-      .order("legal_name"),
-    admin
-      .from("legacy_partner_identities")
-      .select("id,canonical_name,normalized_email,profile_id")
-      .order("canonical_name"),
+    profileOptionsQuery.order("legal_name").limit(PARTNER_OPTION_LIMIT),
+    legacyOptionsQuery.order("canonical_name").limit(PARTNER_OPTION_LIMIT),
     admin
       .from("investment_cycles")
       .select("id,name")
@@ -71,23 +93,51 @@ export default async function AdminInvestmentsPage({
     throw new Error("Unable to load investment filters");
   }
 
-  const partnerOptions = [
+  let partnerOptions = [
     ...(profiles ?? []).map((profile) => ({
       value: `profile:${profile.id}`,
       label: `${profile.legal_name} (${profile.email})`,
     })),
-    ...(legacyIdentities ?? [])
-      .filter((identity) => !identity.profile_id)
-      .map((identity) => ({
-        value: `legacy:${identity.id}`,
-        label: `Unclaimed: ${identity.canonical_name}${
-          identity.normalized_email ? ` (${identity.normalized_email})` : ""
-        }`,
-      })),
+    ...(legacyIdentities ?? []).map((identity) => ({
+      value: `legacy:${identity.id}`,
+      label: `Unclaimed: ${identity.canonical_name}${
+        identity.normalized_email ? ` (${identity.normalized_email})` : ""
+      }`,
+    })),
   ];
-  const selectedPartner = partnerOptions.find(
+  let selectedPartner = partnerOptions.find(
     (option) => option.value === partner,
   );
+  if (partner && !selectedPartner) {
+    if (partner.startsWith("profile:")) {
+      const { data, error } = await admin
+        .from("profiles")
+        .select("id,legal_name,email")
+        .eq("role", "investor")
+        .eq("id", partner.slice("profile:".length))
+        .maybeSingle();
+      if (error) throw new Error("Unable to load selected partner");
+      if (data)
+        selectedPartner = {
+          value: `profile:${data.id}`,
+          label: `${data.legal_name} (${data.email})`,
+        };
+    } else if (partner.startsWith("legacy:")) {
+      const { data, error } = await admin
+        .from("legacy_partner_identities")
+        .select("id,canonical_name,normalized_email,profile_id")
+        .eq("id", partner.slice("legacy:".length))
+        .is("profile_id", null)
+        .maybeSingle();
+      if (error) throw new Error("Unable to load selected partner");
+      if (data)
+        selectedPartner = {
+          value: `legacy:${data.id}`,
+          label: `Unclaimed: ${data.canonical_name}${data.normalized_email ? ` (${data.normalized_email})` : ""}`,
+        };
+    }
+    if (selectedPartner) partnerOptions = [selectedPartner, ...partnerOptions];
+  }
   const selectedCycle = (cycles ?? []).find((option) => option.id === cycle);
   const invalidFilter =
     (partner !== "" && !selectedPartner) || (cycle !== "" && !selectedCycle);
@@ -102,10 +152,17 @@ export default async function AdminInvestmentsPage({
             { count: "exact" },
           );
         if (partner.startsWith("profile:")) {
-          const profileId = partner.slice("profile:".length);
-          const linkedLegacyIds = (legacyIdentities ?? [])
-            .filter((identity) => identity.profile_id === profileId)
-            .map((identity) => identity.id);
+          // selectedPartner was resolved from the database before any raw
+          // PostgREST .or() expression is built. Never interpolate input here.
+          const profileId = selectedPartner!.value.slice("profile:".length);
+          const { data: linkedIdentities, error: linkedError } = await admin
+            .from("legacy_partner_identities")
+            .select("id")
+            .eq("profile_id", profileId);
+          if (linkedError) throw new Error("Unable to load linked partners");
+          const linkedLegacyIds = (linkedIdentities ?? []).map(
+            (identity) => identity.id,
+          );
           query = linkedLegacyIds.length
             ? query.or(
                 `investor_id.eq.${profileId},legacy_partner_id.in.(${linkedLegacyIds.join(",")})`,
@@ -114,7 +171,7 @@ export default async function AdminInvestmentsPage({
         } else if (partner.startsWith("legacy:")) {
           query = query.eq(
             "legacy_partner_id",
-            partner.slice("legacy:".length),
+            selectedPartner!.value.slice("legacy:".length),
           );
         }
         if (cycle) query = query.eq("cycle_id", cycle);
@@ -144,6 +201,15 @@ export default async function AdminInvestmentsPage({
         className="card admin-investment-filters"
       >
         <label>
+          Find partner by name
+          <input
+            name="partnerSearch"
+            type="search"
+            defaultValue={partnerSearch}
+            placeholder="Enter a name"
+          />
+        </label>
+        <label>
           Partner
           <select name="partner" defaultValue={selectedPartner?.value ?? ""}>
             <option value="">All partners</option>
@@ -153,6 +219,10 @@ export default async function AdminInvestmentsPage({
               </option>
             ))}
           </select>
+          <span className="muted">
+            Showing up to {PARTNER_OPTION_LIMIT} matching profiles and unclaimed
+            partners. Search, then choose a partner and apply filters.
+          </span>
         </label>
         <label>
           Cycle
@@ -166,6 +236,9 @@ export default async function AdminInvestmentsPage({
           </select>
         </label>
         <div className="admin-investment-filter-actions">
+          <button className="button-secondary" type="submit">
+            Find partners
+          </button>
           <button className="button" type="submit">
             Apply filters
           </button>
@@ -213,7 +286,7 @@ export default async function AdminInvestmentsPage({
                   </p>
                   <p className="muted">
                     Projected payout {ugx(item.projected_value_ugx)}
-                    {item.reported_payout_ugx !== null &&
+                    {item.reported_payout_ugx != null &&
                       ` · Reported payout ${ugx(item.reported_payout_ugx)}`}
                   </p>
                 </div>
@@ -229,7 +302,7 @@ export default async function AdminInvestmentsPage({
               <ReceiptAdminLine receipts={item.investment_receipts} />
             </article>
           ))}
-          {(page > 1 || page * PAGE_SIZE < count) && (
+          {count > 0 && (page > 1 || page * PAGE_SIZE < count) && (
             <nav
               className="admin-investment-pagination"
               aria-label="Investment pages"
@@ -237,7 +310,7 @@ export default async function AdminInvestmentsPage({
               {page > 1 && (
                 <Link
                   className="button-secondary"
-                  href={pageHref(partner, cycle, page - 1)}
+                  href={pageHref(partner, partnerSearch, cycle, page - 1)}
                 >
                   Previous
                 </Link>
@@ -248,7 +321,7 @@ export default async function AdminInvestmentsPage({
               {page * PAGE_SIZE < count && (
                 <Link
                   className="button-secondary"
-                  href={pageHref(partner, cycle, page + 1)}
+                  href={pageHref(partner, partnerSearch, cycle, page + 1)}
                 >
                   Next
                 </Link>

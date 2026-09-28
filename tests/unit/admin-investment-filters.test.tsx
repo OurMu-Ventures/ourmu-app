@@ -13,7 +13,12 @@ const state = vi.hoisted(() => ({
   calls: [] as Array<{ table: string; method: string; args: unknown[] }>,
   investmentCount: 0,
   profiles: [
-    { id: "profile-1", legal_name: "Partner One", email: "one@example.test" },
+    {
+      id: "profile-1",
+      role: "investor",
+      legal_name: "Partner One",
+      email: "one@example.test",
+    },
   ],
   identities: [
     {
@@ -36,27 +41,61 @@ vi.mock("@/lib/auth", () => ({ requireAdmin: state.requireAdmin }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
+      const filters: Array<(row: Record<string, unknown>) => boolean> = [];
+      let maxRows = Infinity;
       const record = (method: string, ...args: unknown[]) => {
         state.calls.push({ table, method, args });
         return query;
       };
-      const result = () => ({
-        data:
+      const result = () => {
+        const data = (
           table === "profiles"
             ? state.profiles
             : table === "legacy_partner_identities"
               ? state.identities
               : table === "investment_cycles"
                 ? state.cycles
-                : [],
-        count: table === "investments" ? state.investmentCount : null,
-        error: null,
-      });
+                : []
+        )
+          .filter((row) => filters.every((filter) => filter(row)))
+          .slice(0, maxRows);
+        return {
+          data,
+          count: table === "investments" ? state.investmentCount : null,
+          error: null,
+        };
+      };
       const query = {
         select: (...args: unknown[]) => record("select", ...args),
-        eq: (...args: unknown[]) => record("eq", ...args),
+        eq: (column: string, value: unknown) => {
+          filters.push((row) => row[column] === value);
+          return record("eq", column, value);
+        },
+        is: (column: string, value: unknown) => {
+          filters.push((row) => row[column] === value);
+          return record("is", column, value);
+        },
+        ilike: (column: string, value: string) => {
+          const search = value
+            .slice(1, -1)
+            .replace(/\\([\\%_])/g, "$1")
+            .toLowerCase();
+          filters.push((row) =>
+            String(row[column] ?? "")
+              .toLowerCase()
+              .includes(search),
+          );
+          return record("ilike", column, value);
+        },
         or: (...args: unknown[]) => record("or", ...args),
         order: (...args: unknown[]) => record("order", ...args),
+        limit: (value: number) => {
+          maxRows = value;
+          record("limit", value);
+          return Promise.resolve(result());
+        },
+        maybeSingle: () =>
+          Promise.resolve({ data: result().data[0] ?? null, error: null }),
         range: (...args: unknown[]) => {
           record("range", ...args);
           return Promise.resolve(result());
@@ -80,6 +119,7 @@ function call(table: string, method: string) {
 beforeEach(() => {
   state.calls = [];
   state.investmentCount = 0;
+  state.profiles.splice(1);
   state.requireAdmin.mockClear();
 });
 
@@ -134,5 +174,48 @@ describe("admin investment filters", () => {
     expect(renderToStaticMarkup(page)).toContain(
       "Select a valid partner and cycle",
     );
+  });
+
+  it("bounds partner choices and preserves a selected partner outside the first page", async () => {
+    for (let index = 2; index <= 30; index++) {
+      state.profiles.push({
+        id: `profile-${index}`,
+        role: "investor",
+        legal_name: `Partner ${index}`,
+        email: `partner${index}@example.test`,
+      });
+    }
+    const page = await AdminInvestmentsPage({
+      searchParams: Promise.resolve({
+        partner: "profile:profile-29",
+        page: "2",
+      }),
+    });
+    const html = renderToStaticMarkup(page);
+
+    expect(call("profiles", "limit")[0]?.args).toEqual([25]);
+    expect(call("legacy_partner_identities", "limit")[0]?.args).toEqual([25]);
+    expect(html).toContain('value="profile:profile-29" selected=""');
+    expect(call("profiles", "eq")).toContainEqual(
+      expect.objectContaining({ args: ["id", "profile-29"] }),
+    );
+  });
+
+  it("searches names literally and preserves the search across pagination", async () => {
+    state.investmentCount = 40;
+    const page = await AdminInvestmentsPage({
+      searchParams: Promise.resolve({ partnerSearch: "%_" }),
+    });
+    const html = renderToStaticMarkup(page);
+
+    expect(call("profiles", "ilike")[0]?.args).toEqual([
+      "legal_name",
+      "%\\%\\_%",
+    ]);
+    expect(call("legacy_partner_identities", "ilike")[0]?.args).toEqual([
+      "canonical_name",
+      "%\\%\\_%",
+    ]);
+    expect(html).toContain("partnerSearch=%25_&amp;page=2");
   });
 });

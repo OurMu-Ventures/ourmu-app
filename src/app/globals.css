@@ -736,7 +736,11 @@ th {
 }
 .legal {
   font-family:
-    "Open Sans", var(--font-open-sans), ui-sans-serif, system-ui, sans-serif;
+    "Open Sans",
+    var(--font-open-sans),
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
 }
 .legal h1 {
   font-family: var(--font-open-sans);
