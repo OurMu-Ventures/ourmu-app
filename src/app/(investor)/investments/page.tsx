@@ -48,8 +48,7 @@ export default async function InvestmentsPage() {
           const termStart = Array.isArray(item.investment_cycles)
             ? item.investment_cycles[0]?.opens_at
             : item.investment_cycles?.opens_at;
-          const canChooseMaturity =
-            item.status === "matured" && item.record_origin === "portal";
+          const canChooseMaturity = item.status === "matured";
           return (
             <InvestmentCard
               key={item.id}

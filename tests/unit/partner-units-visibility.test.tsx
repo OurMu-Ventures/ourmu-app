@@ -196,8 +196,10 @@ afterEach(() => {
 });
 
 describe("partner units visibility across pages", () => {
-  it("links matured portal investments to their available maturity choices", async () => {
-    const matured = { ...placement, status: "matured" };
+  it.each(["portal", "legacy_import"])(
+    "links matured %s investments to their available maturity choices",
+    async (recordOrigin) => {
+    const matured = { ...placement, status: "matured", record_origin: recordOrigin };
     mockClient({
       investments: [matured],
       investment_cycles: cycle,
@@ -223,7 +225,8 @@ describe("partner units visibility across pages", () => {
       params: Promise.resolve({ id: "inv-1" }),
     }));
     expect(detail.some((element) => element.type === MaturityInstructionForm)).toBe(true);
-  });
+    },
+  );
 
   it("hides a past-deadline cycle from the dashboard and investment form", async () => {
     mockClient({

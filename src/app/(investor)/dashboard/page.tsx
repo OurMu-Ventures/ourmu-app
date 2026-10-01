@@ -126,8 +126,7 @@ export default async function DashboardPage() {
           {(investments ?? []).map((item) => {
             const itemCycle = item.investment_cycles;
             const paid = item.payout_basis === "reported_paid";
-            const canChooseMaturity =
-              item.status === "matured" && item.record_origin === "portal";
+            const canChooseMaturity = item.status === "matured";
             const payout = paid
               ? (item.reported_payout_ugx ?? item.projected_value_ugx)
               : item.projected_value_ugx;
