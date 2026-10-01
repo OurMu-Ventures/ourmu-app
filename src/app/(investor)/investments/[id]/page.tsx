@@ -42,10 +42,9 @@ export default async function InvestmentPage({
       ? receiptRaw[0]
       : receiptRaw
   ) as { id: string; receipt_number: string; pdf_status: string } | undefined;
-  const isPortalMatured =
-    data.status === "matured" && data.record_origin === "portal";
+  const isMatured = data.status === "matured";
   const [{ data: instruction }, { data: destinations }, { data: openCycles }] =
-    isPortalMatured
+    isMatured
       ? await Promise.all([
           supabase
             .from("maturity_instructions")
@@ -199,7 +198,7 @@ export default async function InvestmentPage({
           </p>
         )}
       </div>
-      {isPortalMatured && (
+      {isMatured && (
         <div className="card" style={{ marginTop: "1rem" }}>
           <p className="eyebrow">Matured investment choices</p>
           <h2>What should happen to this placement?</h2>
@@ -284,14 +283,6 @@ export default async function InvestmentPage({
               actual return of {ugx(instruction.actual_roi_ugx ?? 0)}.
             </p>
           )}
-        </div>
-      )}
-      {data.status === "matured" && data.record_origin !== "portal" && (
-        <div className="card" style={{ marginTop: "1rem" }}>
-          <p className="muted">
-            Historical record. Maturity choices apply to newly matured portal
-            placements; this imported record is unchanged.
-          </p>
         </div>
       )}
     </>
