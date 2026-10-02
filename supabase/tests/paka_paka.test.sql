@@ -1,10 +1,9 @@
 begin;
 select no_plan();
 
--- Receipt flow integration, executed as service_role (the only role granted
--- the activation functions). Covers the allocator grant, bank activation,
--- reinvestment fulfillment, payout-only fulfillment (no receipt), and
--- activation idempotency.
+-- Flexible Paka Paka integration: custom and legacy terms, validation,
+-- confirmation, processing locks, payout verification, receipts and retries.
+-- Mutating RPCs run as service_role; ownership and grants are also checked.
 
 -- Fixtures (as the test superuser; RLS is bypassed, FKs still apply).
 insert into auth.users (id, email) values

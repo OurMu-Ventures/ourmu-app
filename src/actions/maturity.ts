@@ -204,7 +204,7 @@ export async function submitMaturityInstruction(
     p_investor_id: profile.id,
     p_investment_id: input.investmentId,
     p_choice: input.choice,
-    p_custom_split: true,
+    p_custom_split: input.choice === "withdraw_roi_reinvest_principal",
     p_requested_withdrawal_ugx: (input.choice ===
     "withdraw_roi_reinvest_principal"
       ? Number(input.requestedWithdrawalUgx)

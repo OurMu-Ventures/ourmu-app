@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
 import {
-  fulfilledSplits,
+  safeFulfilledSplits,
+  UNAVAILABLE_MATURITY_AMOUNTS,
   maturityInstructionTerms,
   maturityChoiceLabel,
   maturityPayoutDateIso,
@@ -67,6 +68,12 @@ export default async function InvestmentPage({
             .eq("record_origin", "portal"),
         ])
       : [{ data: null }, { data: null }, { data: null }];
+  const instructionTerms = instruction
+    ? maturityInstructionTerms(
+        instruction.choice,
+        instruction.requested_withdrawal_ugx,
+      )
+    : null;
   const cycleOptions: OpenCycleOption[] = (openCycles ?? []).map((cycle) => {
     const version = Array.isArray(cycle.agreement_versions)
       ? cycle.agreement_versions[0]
@@ -226,18 +233,7 @@ export default async function InvestmentPage({
               isRevision={false}
             />
           )}
-          {instruction &&
-            maturityInstructionTerms(
-              instruction.choice,
-              instruction.requested_withdrawal_ugx,
-            ) && (
-              <p className="muted">
-                {maturityInstructionTerms(
-                  instruction.choice,
-                  instruction.requested_withdrawal_ugx,
-                )}
-              </p>
-            )}
+          {instructionTerms && <p className="muted">{instructionTerms}</p>}
           {instruction?.status === "requested" && (
             <>
               <p className="notice">
@@ -276,7 +272,7 @@ export default async function InvestmentPage({
                 instruction.confirmed_actual_roi_ugx !==
                   instruction.proposed_actual_roi_ugx &&
                 (() => {
-                  const proposed = fulfilledSplits(
+                  const proposed = safeFulfilledSplits(
                     Number(data.principal_ugx),
                     Number(instruction.proposed_actual_roi_ugx),
                     instruction.choice,
@@ -286,11 +282,21 @@ export default async function InvestmentPage({
                           requestedWithdrawalUgx: Number(
                             instruction.requested_withdrawal_ugx,
                           ),
+                          projectedPayoutUgx: Number(
+                            instruction.projected_payout_ugx,
+                          ),
+                          projectedReinvestUgx: Number(
+                            instruction.projected_reinvest_ugx,
+                          ),
                           projectedTotalUgx:
                             Number(instruction.projected_payout_ugx) +
                             Number(instruction.projected_reinvest_ugx),
                         },
                   );
+                  if (!proposed)
+                    return (
+                      <p className="notice">{UNAVAILABLE_MATURITY_AMOUNTS}</p>
+                    );
                   return (
                     <MaturityConfirmAmountsForm
                       instructionId={instruction.id}

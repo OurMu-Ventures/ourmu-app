@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   customWithdrawalError,
   fulfilledSplits,
+  safeFulfilledSplits,
   maturitySplits,
   maturityInstructionTerms,
 } from "@/lib/maturity";
@@ -77,6 +78,47 @@ describe("custom Paka Paka splits", () => {
     expect(customWithdrawalError("100000.01", 225_000)).not.toBeNull();
     expect(customWithdrawalError("15000000", 65_000_000)).toBeNull();
     expect(customWithdrawalError("14999999.99", 65_000_000)).not.toBeNull();
+  });
+  it.each([NaN, Infinity, -1, 0])(
+    "handles unavailable total %s without throwing",
+    (total) => {
+      expect(customWithdrawalError("5000000", total)).toBe(
+        "This investment total is unavailable. Please reload.",
+      );
+    },
+  );
+  it.each([NaN, Infinity, -1, 0, 1e22])(
+    "holds invalid stored projected total %s",
+    (total) => {
+      expect(
+        safeFulfilledSplits(1_000_000, 300_000, choice, {
+          requestedWithdrawalUgx: 500_000,
+          projectedTotalUgx: total,
+        }),
+      ).toBeNull();
+    },
+  );
+  it("holds invalid stored amounts and preserves valid legacy previews", () => {
+    expect(safeFulfilledSplits(NaN, 300_000, choice)).toBeNull();
+    expect(safeFulfilledSplits(1_000_000, Infinity, choice)).toBeNull();
+    expect(
+      safeFulfilledSplits(1_000_000, 300_000, choice, {
+        requestedWithdrawalUgx: NaN,
+        projectedTotalUgx: 1_300_000,
+      }),
+    ).toBeNull();
+    expect(
+      safeFulfilledSplits(1_000_000, 300_000, choice, {
+        requestedWithdrawalUgx: 500_000,
+        projectedTotalUgx: 1_300_000,
+        projectedPayoutUgx: -1,
+        projectedReinvestUgx: 1_300_001,
+      }),
+    ).toBeNull();
+    expect(safeFulfilledSplits(1_000_000, 300_000, choice)).toEqual({
+      payoutUgx: 300_000,
+      reinvestUgx: 1_000_000,
+    });
   });
   it("requires the field only for new Paka Paka submissions", () => {
     const base = { investmentId: "f7213635-be92-5ebe-b501-b39276a45bf1" };

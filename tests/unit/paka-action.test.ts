@@ -133,7 +133,10 @@ describe("custom maturity action", () => {
       ).toBe(true);
       expect(state.rpc).toHaveBeenCalledWith(
         "submit_maturity_instruction",
-        expect.objectContaining({ p_requested_withdrawal_ugx: null }),
+        expect.objectContaining({
+          p_requested_withdrawal_ugx: null,
+          p_custom_split: false,
+        }),
       );
     },
   );

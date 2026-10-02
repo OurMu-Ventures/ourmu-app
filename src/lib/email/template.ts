@@ -147,7 +147,7 @@ function renderMaturityNoticeEmail(
     );
     const amounts =
       option.value === "withdraw_roi_reinvest_principal"
-        ? "Amounts adjust proportionally if the final return changes; you will confirm revised amounts before processing."
+        ? `Projected total: ${ugx(notice.projectedValueUgx)}. Amounts adjust proportionally if the final return changes; you will confirm revised amounts before processing.`
         : [
             split.payoutUgx > 0
               ? `Projected payout: ${ugx(split.payoutUgx)}`

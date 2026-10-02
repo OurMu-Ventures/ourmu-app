@@ -49,6 +49,11 @@ describe("Paka Paka withdrawal form", () => {
     expect(screen.getByText(/Choose Dobolo/)).toBeVisible();
     fireEvent.change(input, { target: { value: "5940688" } });
     expect(screen.getByText(/Choose Bijjodolo/)).toBeVisible();
+    fireEvent.change(input, { target: { value: "5000000" } });
+    expect(input).toBeValid();
+    fireEvent.click(screen.getByRole("radio", { name: /C. Dobolo/ }));
+    selectPaka();
+    expect(screen.getByLabelText("Amount to withdraw (UGX)")).toBeValid();
   });
   it("restores a saved withdrawal and hides it when another option is chosen", () => {
     render(
@@ -69,6 +74,14 @@ describe("Paka Paka withdrawal form", () => {
     expect(screen.getByLabelText("Amount to withdraw (UGX)")).toHaveValue(
       "5000000",
     );
+  });
+  it("shows a reload message for unavailable investment figures", () => {
+    render(<MaturityInstructionForm {...props} principalUgx={-1} />);
+    selectPaka();
+    fireEvent.change(screen.getByLabelText("Amount to withdraw (UGX)"), {
+      target: { value: "100000" },
+    });
+    expect(screen.getByText(/investment total is unavailable/)).toBeVisible();
   });
   it("explains legacy terms without silently converting them", () => {
     render(

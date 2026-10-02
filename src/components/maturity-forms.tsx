@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -69,7 +69,15 @@ export function MaturityInstructionForm({
     existingWithdrawalUgx == null ? "" : String(existingWithdrawalUgx),
   );
   const total = principalUgx + projectedReturnUgx;
-  const withdrawalError = customWithdrawalError(withdrawal, total);
+  const withdrawalError = [principalUgx, projectedReturnUgx].some(
+    (amount) => !Number.isFinite(amount) || amount < 0,
+  )
+    ? "This investment total is unavailable. Please reload."
+    : customWithdrawalError(withdrawal, total);
+  const withdrawalInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    withdrawalInput.current?.setCustomValidity(withdrawalError ?? "");
+  }, [choice, withdrawalError]);
   const customSplit = withdrawalError
     ? null
     : maturitySplits(
@@ -145,9 +153,7 @@ export function MaturityInstructionForm({
               name="requestedWithdrawalUgx"
               type="text"
               inputMode="decimal"
-              ref={(element) => {
-                element?.setCustomValidity(withdrawalError ?? "");
-              }}
+              ref={withdrawalInput}
               value={withdrawal}
               onChange={(event) => setWithdrawal(event.target.value)}
               required

@@ -50,7 +50,8 @@ export const PAKA_PAKA_EXPLANATION =
 
 // Match PostgreSQL numeric arithmetic at the database's eight-decimal scale.
 function moneyUnits(value: number): bigint {
-  if (!Number.isFinite(value) || value < 0) throw new Error("Invalid amount");
+  if (!Number.isFinite(value) || value < 0 || value >= 1e21)
+    throw new Error("Invalid amount");
   return BigInt(value.toFixed(8).replace(".", ""));
 }
 
@@ -62,14 +63,16 @@ export function customWithdrawalError(
   amount: string,
   totalUgx: number,
 ): string | null {
+  if (!Number.isFinite(totalUgx) || totalUgx <= 0 || totalUgx >= 1e21)
+    return "This investment total is unavailable. Please reload.";
   if (
     !/^\d+(?:\.\d{1,2})?$/.test(amount.trim()) ||
     !Number.isFinite(Number(amount))
   )
     return "Enter an amount to withdraw with up to two decimal places.";
-  if (Number(amount) >= totalUgx)
-    return "Choose Bijjodolo to withdraw everything, or enter a smaller amount.";
-  const withdrawal = moneyUnits(Number(amount));
+  const [whole, fraction = ""] = amount.trim().split(".");
+  const withdrawal =
+    BigInt(whole) * 100_000_000n + BigInt(fraction.padEnd(8, "0"));
   const total = moneyUnits(totalUgx);
   if (withdrawal === 0n) return "Choose Dobolo to reinvest everything.";
   if (withdrawal >= total)
@@ -85,6 +88,8 @@ export function customWithdrawalError(
 export type CustomMaturityBasis = {
   requestedWithdrawalUgx: number;
   projectedTotalUgx: number;
+  projectedPayoutUgx?: number;
+  projectedReinvestUgx?: number;
 };
 
 export function maturityInstructionTerms(
@@ -148,6 +153,42 @@ export function fulfilledSplits(
   if (choice === "withdraw_roi_reinvest_principal")
     return { payoutUgx: actualRoiUgx, reinvestUgx: principalUgx };
   return { payoutUgx: 0, reinvestUgx: principalUgx + actualRoiUgx };
+}
+
+// Stored rows can be incomplete or corrupt. Never offer confirmation of an
+// unavailable split, and let other instructions and email jobs continue.
+export const UNAVAILABLE_MATURITY_AMOUNTS =
+  "Amounts unavailable. Please ask our team to reopen this instruction for revision.";
+
+export function safeFulfilledSplits(
+  ...args: Parameters<typeof fulfilledSplits>
+): ReturnType<typeof fulfilledSplits> | null {
+  const [principal, roi, , basis] = args;
+  const valid = (value: number) =>
+    Number.isFinite(value) && value >= 0 && value < 1e21;
+  if (!valid(principal) || !valid(roi) || principal + roi <= 0) return null;
+  if (
+    basis &&
+    (!valid(basis.requestedWithdrawalUgx) ||
+      !valid(basis.projectedTotalUgx) ||
+      basis.projectedTotalUgx <= 0 ||
+      basis.requestedWithdrawalUgx <= 0 ||
+      basis.requestedWithdrawalUgx >= basis.projectedTotalUgx)
+  )
+    return null;
+  if (
+    basis &&
+    [basis.projectedPayoutUgx, basis.projectedReinvestUgx].some(
+      (value) => value !== undefined && !valid(value),
+    )
+  )
+    return null;
+  try {
+    const split = fulfilledSplits(...args);
+    return valid(split.payoutUgx) && valid(split.reinvestUgx) ? split : null;
+  } catch {
+    return null;
+  }
 }
 
 // Pure composer for the maturity notice email body. Kept here (instead of

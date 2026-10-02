@@ -7,7 +7,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { dateTime, ugx } from "@/lib/format";
 import {
-  fulfilledSplits,
+  safeFulfilledSplits,
+  UNAVAILABLE_MATURITY_AMOUNTS,
   maturityChoiceLabel,
   maturityInstructionTerms,
 } from "@/lib/maturity";
@@ -133,6 +134,10 @@ export default async function AdminMaturitiesPage() {
           const destination = alreadyPaid
             ? null
             : await revealDestination(destinationRow ?? null);
+          const instructionTerms = maturityInstructionTerms(
+            item.choice,
+            item.requested_withdrawal_ugx,
+          );
           const awaitingConfirmation =
             item.proposed_actual_roi_ugx != null &&
             item.confirmed_actual_roi_ugx !== item.proposed_actual_roi_ugx;
@@ -168,22 +173,12 @@ export default async function AdminMaturitiesPage() {
                         : item.status}
                 </span>
               </div>
-              {maturityInstructionTerms(
-                item.choice,
-                item.requested_withdrawal_ugx,
-              ) && (
-                <p className="muted">
-                  {maturityInstructionTerms(
-                    item.choice,
-                    item.requested_withdrawal_ugx,
-                  )}
-                </p>
-              )}
+              {instructionTerms && <p className="muted">{instructionTerms}</p>}
               {!alreadyPaid &&
                 item.proposed_actual_roi_ugx != null &&
                 source &&
                 (() => {
-                  const split = fulfilledSplits(
+                  const split = safeFulfilledSplits(
                     Number(source.principal_ugx),
                     Number(item.proposed_actual_roi_ugx),
                     item.choice,
@@ -193,11 +188,19 @@ export default async function AdminMaturitiesPage() {
                           requestedWithdrawalUgx: Number(
                             item.requested_withdrawal_ugx,
                           ),
+                          projectedPayoutUgx: Number(item.projected_payout_ugx),
+                          projectedReinvestUgx: Number(
+                            item.projected_reinvest_ugx,
+                          ),
                           projectedTotalUgx:
                             Number(item.projected_payout_ugx) +
                             Number(item.projected_reinvest_ugx),
                         },
                   );
+                  if (!split)
+                    return (
+                      <p className="notice">{UNAVAILABLE_MATURITY_AMOUNTS}</p>
+                    );
                   return (
                     <p>
                       Proposed payout {ugx(split.payoutUgx)} · proposed
