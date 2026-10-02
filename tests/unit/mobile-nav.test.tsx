@@ -61,6 +61,21 @@ describe("ShellNav", () => {
     expect(active[0]).toHaveTextContent(tab === "withdrawals" ? "Withdrawals" : "Maturities");
   });
 
+  it.each(["", "tab=unknown"])("highlights Withdrawals for default tab query %s", (query) => {
+    route.pathname = "/admin/maturities";
+    route.query = query;
+    render(<AppShell admin>Admin content</AppShell>);
+    expect(screen.getByRole("link", { name: "Withdrawals" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Maturities" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("uses the base section for nested maturity routes", () => {
+    route.pathname = "/admin/maturities/instruction";
+    render(<AppShell admin>Admin content</AppShell>);
+    expect(screen.getByRole("link", { name: "Maturities" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Withdrawals" })).not.toHaveAttribute("aria-current");
+  });
+
   it("marks the current page and labels the section bar", () => {
     renderNav();
     expect(screen.getByRole("link", { name: "Investments" })).toHaveAttribute(

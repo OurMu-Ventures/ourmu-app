@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   payoutBasis: "reported_paid",
   status: "requested",
   calls: [] as unknown[][],
+  error: null as { message: string } | null,
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({
@@ -32,6 +33,7 @@ vi.mock("@/lib/supabase/admin", () => ({
         in: (...args: unknown[]) => { state.calls.push(["in", ...args]); return query; },
         or: (...args: unknown[]) => { state.calls.push(["or", ...args]); return query; },
         range: async (...args: unknown[]) => { state.calls.push(["range", ...args]); return ({
+          error: state.error,
           data: [
             {
               id: "instruction-1",
@@ -66,7 +68,7 @@ describe("paid records in the admin maturity queue", () => {
     async (status) => {
       state.payoutBasis = "reported_paid";
       state.status = status;
-      const html = renderToStaticMarkup(await AdminMaturitiesPage({}));
+      const html = renderToStaticMarkup(await AdminMaturitiesPage({ searchParams: Promise.resolve({ tab: "history" }) }));
       expect(html).toContain("Reported paid");
       expect(html).not.toContain("Begin processing");
       expect(html).not.toContain("Fulfill instruction");
@@ -83,6 +85,21 @@ describe("paid records in the admin maturity queue", () => {
 });
 
 describe("maturity views", () => {
+  it("defaults to pending withdrawals without search params", async () => {
+    state.calls = [];
+    const html = renderToStaticMarkup(await AdminMaturitiesPage({}));
+    expect(state.calls).toContainEqual(["gt", "projected_payout_ugx", 0]);
+    expect(state.calls).not.toContainEqual(["eq", "paid_investment.payout_basis", "reported_paid"]);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    expect(container.querySelector('nav[aria-label="Maturity views"] [aria-current="page"]')?.textContent).toBe("Withdrawals");
+  });
+  it("surfaces query failures instead of reporting an empty queue", async () => {
+    state.error = { message: "query failed" };
+    try {
+      await expect(AdminMaturitiesPage({})).rejects.toThrow("Unable to load maturity instructions.");
+    } finally { state.error = null; }
+  });
   it.each(["withdrawals", "reinvestments"])("filters pending %s before pagination", async (tab) => {
     state.calls = [];
     await AdminMaturitiesPage({ searchParams: Promise.resolve({ tab, page: "2" }) });
@@ -90,10 +107,12 @@ describe("maturity views", () => {
     expect(state.calls).toContainEqual(["neq", "investments.payout_basis", "reported_paid"]);
     expect(state.calls).toContainEqual(["gt", tab === "withdrawals" ? "projected_payout_ugx" : "projected_reinvest_ugx", 0]);
     expect(state.calls).toContainEqual(["range", 25, 49]);
+    expect(state.calls).not.toContainEqual(["eq", "paid_investment.payout_basis", "reported_paid"]);
   });
   it("includes completed and legacy paid records in history", async () => {
     state.calls = [];
     await AdminMaturitiesPage({ searchParams: Promise.resolve({ tab: "history" }) });
+    expect(state.calls).toContainEqual(["eq", "paid_investment.payout_basis", "reported_paid"]);
     expect(state.calls).toContainEqual(["or", "status.eq.fulfilled,paid_investment.not.is.null"]);
     expect(state.calls.some(([method]) => method === "gt")).toBe(false);
   });

@@ -83,10 +83,17 @@ export function ShellNav({
   const current =
     links.find((link) => {
       const [path, query] = link.href.split("?");
-      return query && pathname === path && [...new URLSearchParams(query)].every(([key, value]) => searchParams.get(key) === value);
+      return query && pathname === path && [...new URLSearchParams(query)].every(([key, value]) => {
+        const actual = searchParams.get(key);
+        // The server defaults unknown or absent maturity tabs to withdrawals.
+        const selected = path === "/admin/maturities" && key === "tab"
+          ? (actual === "history" || actual === "reinvestments" ? actual : "withdrawals")
+          : actual;
+        return selected === value;
+      });
     }) ??
     links.find((link) => pathname === link.href) ??
-    [...links]
+    links.filter((link) => !link.href.includes("?"))
       .sort((a, b) => b.href.length - a.href.length)
       .find((link) => pathname.startsWith(`${link.href}/`));
 
