@@ -71,23 +71,25 @@ export default async function AdminMaturitiesPage() {
   const { data } = await admin
     .from("maturity_instructions")
     .select(
-      "*,profiles(legal_name,email),investments(principal_ugx,projected_return_ugx,maturity_date),investment_cycles!maturity_instructions_target_cycle_id_fkey(name),payout_destinations!maturity_instructions_payout_destination_id_fkey(channel,provider_label,account_name,account_last_four,account_ref_ciphertext,account_ref_iv,account_ref_auth_tag,key_version)",
+      "*,profiles(legal_name,email),investments!maturity_instructions_investment_id_fkey(principal_ugx,projected_return_ugx,maturity_date,payout_basis),investment_cycles!maturity_instructions_target_cycle_id_fkey(name),payout_destinations!maturity_instructions_payout_destination_id_fkey(channel,provider_label,account_name,account_last_four,account_ref_ciphertext,account_ref_iv,account_ref_auth_tag,key_version)",
     )
     .order("created_at", { ascending: false })
     .limit(100);
   const items = data ?? [];
   const heldAudits = items.some((item) => item.needs_resolution)
-    ? (
+    ? ((
         await admin
           .from("audit_events")
           .select("entity_id,metadata,created_at")
           .eq("action", "maturity_instruction.held")
           .in(
             "entity_id",
-            items.filter((item) => item.needs_resolution).map((item) => item.id),
+            items
+              .filter((item) => item.needs_resolution)
+              .map((item) => item.id),
           )
           .order("created_at", { ascending: false })
-      ).data ?? []
+      ).data ?? [])
     : [];
   const heldReason = (instructionId: string) => {
     const entry = heldAudits.find((audit) => audit.entity_id === instructionId);
@@ -117,13 +119,16 @@ export default async function AdminMaturitiesPage() {
           const source = Array.isArray(item.investments)
             ? item.investments[0]
             : item.investments;
+          const alreadyPaid = source?.payout_basis === "reported_paid";
           const target = Array.isArray(item.investment_cycles)
             ? item.investment_cycles[0]
             : item.investment_cycles;
           const destinationRow = Array.isArray(item.payout_destinations)
             ? item.payout_destinations[0]
             : item.payout_destinations;
-          const destination = await revealDestination(destinationRow ?? null);
+          const destination = alreadyPaid
+            ? null
+            : await revealDestination(destinationRow ?? null);
           const awaitingConfirmation =
             item.proposed_actual_roi_ugx != null &&
             item.confirmed_actual_roi_ugx !== item.proposed_actual_roi_ugx;
@@ -136,7 +141,8 @@ export default async function AdminMaturitiesPage() {
               <div className="page-head">
                 <div>
                   <h2>
-                    {partner?.legal_name ?? "Partner"} · {maturityChoiceLabel(item.choice)}
+                    {partner?.legal_name ?? "Partner"} ·{" "}
+                    {maturityChoiceLabel(item.choice)}
                   </h2>
                   <p>
                     Principal {ugx(source?.principal_ugx ?? 0)} · projected
@@ -149,19 +155,28 @@ export default async function AdminMaturitiesPage() {
                   </p>
                 </div>
                 <span className="badge">
-                  {item.needs_resolution
-                    ? "needs resolution"
-                    : awaitingConfirmation
-                      ? "awaiting partner"
-                      : item.status}
+                  {alreadyPaid
+                    ? "Reported paid"
+                    : item.needs_resolution
+                      ? "needs resolution"
+                      : awaitingConfirmation
+                        ? "awaiting partner"
+                        : item.status}
                 </span>
               </div>
+              {alreadyPaid && (
+                <p className="notice">
+                  This investment was reported paid. Withdrawal and reinvestment
+                  processing are unavailable.
+                </p>
+              )}
               {destination && (
                 <div className="notice">
                   <strong>Payout destination (revealed for transfer).</strong>{" "}
                   {destination.channel === "bank" ? "Bank" : "Mobile money"} ·{" "}
                   {destination.provider_label} · {destination.account_name} ·{" "}
-                  {destination.reference ?? `•••• ${destination.account_last_four ?? "****"}`}
+                  {destination.reference ??
+                    `•••• ${destination.account_last_four ?? "****"}`}
                   {item.destination_verified_at
                     ? ` · verified ${dateTime(item.destination_verified_at)}`
                     : " · not yet verified"}
@@ -181,38 +196,44 @@ export default async function AdminMaturitiesPage() {
                     : ""}
                 </p>
               )}
-              {awaitingConfirmation && (
+              {!alreadyPaid && awaitingConfirmation && (
                 <p className="notice">
                   Awaiting partner confirmation of the actual return{" "}
                   {ugx(item.proposed_actual_roi_ugx ?? 0)}. Nothing has been
                   paid or reinvested.
                 </p>
               )}
-              {item.status === "requested" && !item.needs_resolution && (
-                <form action={beginMaturityProcessing}>
-                  <input type="hidden" name="instructionId" value={item.id} />
-                  <SubmitButton pendingLabel="Working…">
-                    Begin processing (locks revisions)
-                  </SubmitButton>
-                </form>
-              )}
-              {item.status === "processing" && !item.needs_resolution && (
-                <MaturityFulfillmentForm
-                  instructionId={item.id}
-                  needsPayout={Number(item.projected_payout_ugx) > 0}
-                />
-              )}
-              {item.status === "processing" && item.needs_resolution && (
-                <>
-                  {heldReason(item.id) && (
-                    <p className="notice">
-                      Held: <strong>{heldReason(item.id)}</strong>. Reopen with
-                      notes so the partner can revise and re-confirm.
-                    </p>
-                  )}
-                  <MaturityReopenForm instructionId={item.id} />
-                </>
-              )}
+              {!alreadyPaid &&
+                item.status === "requested" &&
+                !item.needs_resolution && (
+                  <form action={beginMaturityProcessing}>
+                    <input type="hidden" name="instructionId" value={item.id} />
+                    <SubmitButton pendingLabel="Working…">
+                      Begin processing (locks revisions)
+                    </SubmitButton>
+                  </form>
+                )}
+              {!alreadyPaid &&
+                item.status === "processing" &&
+                !item.needs_resolution && (
+                  <MaturityFulfillmentForm
+                    instructionId={item.id}
+                    needsPayout={Number(item.projected_payout_ugx) > 0}
+                  />
+                )}
+              {!alreadyPaid &&
+                item.status === "processing" &&
+                item.needs_resolution && (
+                  <>
+                    {heldReason(item.id) && (
+                      <p className="notice">
+                        Held: <strong>{heldReason(item.id)}</strong>. Reopen
+                        with notes so the partner can revise and re-confirm.
+                      </p>
+                    )}
+                    <MaturityReopenForm instructionId={item.id} />
+                  </>
+                )}
               {item.resolution_notes && (
                 <p className="muted">
                   Resolution notes: {item.resolution_notes}
@@ -221,8 +242,8 @@ export default async function AdminMaturitiesPage() {
               {item.status === "fulfilled" && (
                 <p className="muted">
                   Fulfilled{" "}
-                  {item.fulfilled_at ? dateTime(item.fulfilled_at) : ""}:
-                  actual ROI {ugx(item.actual_roi_ugx ?? 0)} · payout{" "}
+                  {item.fulfilled_at ? dateTime(item.fulfilled_at) : ""}: actual
+                  ROI {ugx(item.actual_roi_ugx ?? 0)} · payout{" "}
                   {ugx(item.actual_payout_ugx ?? 0)}
                   {item.payout_reference
                     ? ` (ref ${item.payout_reference})`

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
 import { fulfilledSplits, maturityChoiceLabel, maturityPayoutDateIso } from "@/lib/maturity";
-import { investmentPeriod } from "@/lib/investments";
+import { canChooseMaturity, investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentPage({
@@ -42,7 +42,7 @@ export default async function InvestmentPage({
       ? receiptRaw[0]
       : receiptRaw
   ) as { id: string; receipt_number: string; pdf_status: string } | undefined;
-  const isMatured = data.status === "matured";
+  const isMatured = canChooseMaturity(data);
   const [{ data: instruction }, { data: destinations }, { data: openCycles }] =
     isMatured
       ? await Promise.all([
@@ -100,7 +100,7 @@ export default async function InvestmentPage({
         Investment details
       </h1>
       <p>
-        <span className="badge">{data.status}</span>
+        <span className="badge">{data.payout_basis === "reported_paid" ? "Reported paid" : data.status}</span>
       </p>
       <div className="grid">
         <article className="card">

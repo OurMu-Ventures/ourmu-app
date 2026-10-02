@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { date, dateTime } from "@/lib/format";
-import { investmentPeriod } from "@/lib/investments";
+import { canChooseMaturity, investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -19,7 +19,9 @@ export default async function DashboardPage() {
     await Promise.all([
       supabase
         .from("investments")
-        .select("*,investment_cycles(name,status,maturity_date,opens_at)")
+        .select(
+          "*,investment_cycles(name,status,maturity_date,opens_at),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
+        )
         .eq("investor_id", profile.id)
         .order("requested_at", { ascending: false }),
       supabase
@@ -117,8 +119,7 @@ export default async function DashboardPage() {
           </div>
           <Button asChild variant="secondary">
             <Link href="/investments">
-              View all placements{" "}
-              <LinkStatus label="Opening investments" />
+              View all placements <LinkStatus label="Opening investments" />
             </Link>
           </Button>
         </div>
@@ -126,7 +127,10 @@ export default async function DashboardPage() {
           {(investments ?? []).map((item) => {
             const itemCycle = item.investment_cycles;
             const paid = item.payout_basis === "reported_paid";
-            const canChooseMaturity = item.status === "matured";
+            const maturityAction = canChooseMaturity(
+              item,
+              item.maturity_instructions?.status,
+            );
             const payout = paid
               ? (item.reported_payout_ugx ?? item.projected_value_ugx)
               : item.projected_value_ugx;
@@ -135,10 +139,9 @@ export default async function DashboardPage() {
                 key={item.id}
                 item={{
                   name:
-                    investmentPeriod(
-                      itemCycle?.opens_at,
-                      item.maturity_date,
-                    ) ?? (itemCycle?.name ?? "OURMU placement"),
+                    investmentPeriod(itemCycle?.opens_at, item.maturity_date) ??
+                    itemCycle?.name ??
+                    "OURMU placement",
                   status: item.status,
                   statusLabel: paid
                     ? "Reported paid"
@@ -152,20 +155,22 @@ export default async function DashboardPage() {
                   maturityDate: item.maturity_date,
                   startIso: item.requested_at,
                   detailHref: `/investments/${item.id}`,
-                  detailLabel: canChooseMaturity
+                  detailLabel: maturityAction
                     ? "Withdraw or Re-invest"
                     : "View details",
-                  detailStatus: canChooseMaturity
+                  detailStatus: maturityAction
                     ? "Opening maturity choices"
                     : "Opening investment details",
-                  detailAction: canChooseMaturity,
+                  detailAction: maturityAction,
                 }}
               />
             );
           })}
           {!investments?.length && (
             <article className="card">
-              <p className="muted">Your placements will appear here once recorded.</p>
+              <p className="muted">
+                Your placements will appear here once recorded.
+              </p>
             </article>
           )}
         </div>

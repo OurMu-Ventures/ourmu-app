@@ -5,7 +5,7 @@ import { InvestmentCard } from "@/components/InvestmentCard";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { requireInvestor } from "@/lib/auth";
-import { investmentPeriod } from "@/lib/investments";
+import { canChooseMaturity, investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentsPage() {
@@ -13,7 +13,7 @@ export default async function InvestmentsPage() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("investments")
-    .select("*,investment_cycles(name,opens_at)")
+    .select("*,investment_cycles(name,opens_at),maturity_instructions!maturity_instructions_investment_id_fkey(status)")
     .eq("investor_id", profile.id)
     .order("requested_at", { ascending: false });
   return (
@@ -48,7 +48,10 @@ export default async function InvestmentsPage() {
           const termStart = Array.isArray(item.investment_cycles)
             ? item.investment_cycles[0]?.opens_at
             : item.investment_cycles?.opens_at;
-          const canChooseMaturity = item.status === "matured";
+          const maturityAction = canChooseMaturity(
+            item,
+            item.maturity_instructions?.status,
+          );
           return (
             <InvestmentCard
               key={item.id}
@@ -56,7 +59,10 @@ export default async function InvestmentsPage() {
                 name:
                   investmentPeriod(termStart, item.maturity_date) ?? cycleName,
                 status: item.status,
-                statusLabel: item.status,
+                statusLabel:
+                  item.payout_basis === "reported_paid"
+                    ? "Reported paid"
+                    : item.status,
                 principalUgx: item.principal_ugx,
                 isPaid: item.payout_basis === "reported_paid",
                 profitUgx: Number(payout ?? 0) - Number(item.principal_ugx),
@@ -64,13 +70,13 @@ export default async function InvestmentsPage() {
                 maturityDate: item.maturity_date,
                 startIso: item.requested_at,
                 detailHref: `/investments/${item.id}`,
-                detailLabel: canChooseMaturity
+                detailLabel: maturityAction
                   ? "Withdraw or Re-invest"
-                  : "View",
-                detailStatus: canChooseMaturity
+                  : "View details",
+                detailStatus: maturityAction
                   ? "Opening maturity choices"
                   : "Opening investment details",
-                detailAction: canChooseMaturity,
+                detailAction: maturityAction,
               }}
               actions={
                 isCancellable ? (
@@ -87,9 +93,8 @@ export default async function InvestmentsPage() {
       </div>
       <p className="notice" style={{ marginTop: "1rem" }}>
         Missing an investment or spotted an incorrect record? Email{" "}
-        <a href="mailto:community@ourmu.org">community@ourmu.org</a> and
-        include any supporting documentation, such as receipts or deposit
-        confirmations.
+        <a href="mailto:community@ourmu.org">community@ourmu.org</a> and include
+        any supporting documentation, such as receipts or deposit confirmations.
       </p>
     </>
   );

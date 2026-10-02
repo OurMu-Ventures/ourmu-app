@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { investmentPeriod, maturityProgress } from "@/lib/investments";
+import {
+  canChooseMaturity,
+  investmentPeriod,
+  maturityProgress,
+} from "@/lib/investments";
 
 const START = "2026-01-01T00:00:00.000Z";
 const MATURITY = "2026-07-01T00:00:00.000Z"; // 181 days later
-const MID = new Date(
-  (Date.parse(START) + Date.parse(MATURITY)) / 2,
-).getTime();
+const MID = new Date((Date.parse(START) + Date.parse(MATURITY)) / 2).getTime();
 
 describe("maturityProgress", () => {
   it("reads 100 for matured placements regardless of dates", () => {
@@ -102,5 +104,37 @@ describe("investmentPeriod", () => {
       if (previous === undefined) delete process.env.TZ;
       else process.env.TZ = previous;
     }
+  });
+});
+
+describe("canChooseMaturity", () => {
+  const unpaid = {
+    status: "matured",
+    record_origin: "portal",
+    payout_basis: "projected",
+  };
+  it("allows unpaid portal maturities awaiting a choice", () => {
+    expect(canChooseMaturity(unpaid)).toBe(true);
+    expect(canChooseMaturity(unpaid, "requested")).toBe(true);
+  });
+  it("excludes paid records regardless of origin", () => {
+    for (const record_origin of ["portal", "legacy_import", "hybrid"]) {
+      expect(
+        canChooseMaturity({
+          ...unpaid,
+          record_origin,
+          payout_basis: "reported_paid",
+        }),
+      ).toBe(false);
+    }
+  });
+  it("excludes completed payouts and reinvestments even with projected payout basis", () => {
+    expect(canChooseMaturity(unpaid, "fulfilled")).toBe(false);
+  });
+  it("excludes non-matured placements and permits unpaid imported maturities", () => {
+    expect(canChooseMaturity({ ...unpaid, status: "active" })).toBe(false);
+    expect(
+      canChooseMaturity({ ...unpaid, record_origin: "legacy_import" }),
+    ).toBe(true);
   });
 });

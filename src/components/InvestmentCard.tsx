@@ -36,6 +36,7 @@ export function InvestmentCard({
     item.status,
   );
   const isPaid = item.isPaid ?? false;
+  const detailAction = Boolean(item.detailAction) && !isPaid;
   return (
     <article className="card invest-card">
       <div className="invest-head">
@@ -118,12 +119,13 @@ export function InvestmentCard({
         <Link
           href={item.detailHref}
           className={
-            item.detailAction
-              ? `${buttonVariants()} maturity-action`
-              : undefined
+            detailAction ? `${buttonVariants()} maturity-action` : undefined
           }
         >
-          {item.detailLabel} <LinkStatus label={item.detailStatus} />
+          {isPaid ? "View details" : item.detailLabel}{" "}
+          <LinkStatus
+            label={isPaid ? "Opening investment details" : item.detailStatus}
+          />
         </Link>
         {actions}
       </div>

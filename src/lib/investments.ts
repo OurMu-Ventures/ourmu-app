@@ -37,3 +37,19 @@ export function investmentPeriod(
   if (!maturity || maturity === start) return start;
   return `${start} - ${maturity}`;
 }
+
+// Paid records and completed instructions are history, even when status remains matured.
+export function canChooseMaturity(
+  investment: {
+    status: string;
+    record_origin: string;
+    payout_basis: string;
+  },
+  instructionStatus?: string | null,
+): boolean {
+  return (
+    investment.status === "matured" &&
+    investment.payout_basis !== "reported_paid" &&
+    instructionStatus !== "fulfilled"
+  );
+}
