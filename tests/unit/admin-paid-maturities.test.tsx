@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   payoutBasis: "reported_paid",
   status: "requested",
+  calls: [] as unknown[][],
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({
@@ -25,7 +26,12 @@ vi.mock("@/lib/supabase/admin", () => ({
       const query = {
         select: () => query,
         order: () => query,
-        limit: async () => ({
+        eq: (...args: unknown[]) => { state.calls.push(["eq", ...args]); return query; },
+        neq: (...args: unknown[]) => { state.calls.push(["neq", ...args]); return query; },
+        gt: (...args: unknown[]) => { state.calls.push(["gt", ...args]); return query; },
+        in: (...args: unknown[]) => { state.calls.push(["in", ...args]); return query; },
+        or: (...args: unknown[]) => { state.calls.push(["or", ...args]); return query; },
+        range: async (...args: unknown[]) => { state.calls.push(["range", ...args]); return ({
           data: [
             {
               id: "instruction-1",
@@ -45,7 +51,7 @@ vi.mock("@/lib/supabase/admin", () => ({
               payout_destinations: null,
             },
           ],
-        }),
+        }); },
       };
       return query;
     },
@@ -60,7 +66,7 @@ describe("paid records in the admin maturity queue", () => {
     async (status) => {
       state.payoutBasis = "reported_paid";
       state.status = status;
-      const html = renderToStaticMarkup(await AdminMaturitiesPage());
+      const html = renderToStaticMarkup(await AdminMaturitiesPage({}));
       expect(html).toContain("Reported paid");
       expect(html).not.toContain("Begin processing");
       expect(html).not.toContain("Fulfill instruction");
@@ -70,8 +76,25 @@ describe("paid records in the admin maturity queue", () => {
   it("keeps processing available for unpaid requests", async () => {
     state.payoutBasis = "projected";
     state.status = "requested";
-    expect(renderToStaticMarkup(await AdminMaturitiesPage())).toContain(
+    expect(renderToStaticMarkup(await AdminMaturitiesPage({}))).toContain(
       "Begin processing",
     );
+  });
+});
+
+describe("maturity views", () => {
+  it.each(["withdrawals", "reinvestments"])("filters pending %s before pagination", async (tab) => {
+    state.calls = [];
+    await AdminMaturitiesPage({ searchParams: Promise.resolve({ tab, page: "2" }) });
+    expect(state.calls).toContainEqual(["in", "status", ["requested", "processing"]]);
+    expect(state.calls).toContainEqual(["neq", "investments.payout_basis", "reported_paid"]);
+    expect(state.calls).toContainEqual(["gt", tab === "withdrawals" ? "projected_payout_ugx" : "projected_reinvest_ugx", 0]);
+    expect(state.calls).toContainEqual(["range", 25, 49]);
+  });
+  it("includes completed and legacy paid records in history", async () => {
+    state.calls = [];
+    await AdminMaturitiesPage({ searchParams: Promise.resolve({ tab: "history" }) });
+    expect(state.calls).toContainEqual(["or", "status.eq.fulfilled,paid_investment.not.is.null"]);
+    expect(state.calls.some(([method]) => method === "gt")).toBe(false);
   });
 });

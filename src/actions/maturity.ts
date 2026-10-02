@@ -225,6 +225,7 @@ export async function submitMaturityInstruction(
   revalidatePath(`/investments/${input.investmentId}`);
   revalidatePath("/investments");
   revalidatePath("/dashboard");
+  revalidatePath("/admin/maturities");
   return {
     ok: true,
     message:
@@ -329,6 +330,7 @@ export async function confirmMaturityAmounts(
     };
   revalidatePath(`/investments`);
   revalidatePath("/dashboard");
+  revalidatePath("/admin/maturities");
   return {
     ok: true,
     message:

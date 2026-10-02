@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/AppShell";
 import { ShellNav, type ShellLink } from "@/components/ShellNav";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/investments" }));
+const route = vi.hoisted(() => ({ pathname: "/investments", query: "" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => route.pathname,
+  useSearchParams: () => new URLSearchParams(route.query),
+}));
 vi.mock("@/components/ui/link-status", () => ({
   LinkStatus: () => null,
 }));
@@ -27,6 +31,8 @@ function renderNav() {
 
 beforeEach(() => {
   document.body.style.overflow = "";
+  route.pathname = "/investments";
+  route.query = "";
 });
 
 afterEach(() => {
@@ -40,9 +46,19 @@ describe("ShellNav", () => {
     expect(adminLinks[0]).toHaveTextContent("Admin overview");
     expect(adminLinks[1]).toHaveTextContent("Activations");
     expect(adminLinks[1]).toHaveAttribute("href", "/admin/activations");
+    expect(adminLinks[2]).toHaveAttribute("href", "/admin/maturities?tab=withdrawals");
     unmount();
     render(<AppShell>Partner content</AppShell>);
     expect(screen.queryByRole("link", { name: "Activations" })).not.toBeInTheDocument();
+  });
+
+  it.each(["withdrawals", "reinvestments", "history"])("highlights one admin sidebar entry for %s", (tab) => {
+    route.pathname = "/admin/maturities";
+    route.query = `tab=${tab}&page=2`;
+    render(<AppShell admin>Admin content</AppShell>);
+    const active = screen.getAllByRole("link").filter((link) => link.getAttribute("aria-current") === "page");
+    expect(active).toHaveLength(1);
+    expect(active[0]).toHaveTextContent(tab === "withdrawals" ? "Withdrawals" : "Maturities");
   });
 
   it("marks the current page and labels the section bar", () => {
