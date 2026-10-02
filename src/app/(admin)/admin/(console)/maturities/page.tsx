@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { beginMaturityProcessing } from "@/actions/maturity";
 import {
   MaturityFulfillmentForm,
@@ -70,16 +71,37 @@ async function revealDestination(
   };
 }
 
-export default async function AdminMaturitiesPage() {
+export default async function AdminMaturitiesPage({
+  searchParams,
+}: { searchParams?: Promise<{ tab?: string; page?: string }> }) {
   await requireAdmin();
   const admin = createAdminClient();
-  const { data } = await admin
-    .from("maturity_instructions")
-    .select(
-      "*,profiles(legal_name,email),investments!maturity_instructions_investment_id_fkey(principal_ugx,projected_return_ugx,maturity_date,payout_basis),investment_cycles!maturity_instructions_target_cycle_id_fkey(name),payout_destinations!maturity_instructions_payout_destination_id_fkey(channel,provider_label,account_name,account_last_four,account_ref_ciphertext,account_ref_iv,account_ref_auth_tag,key_version)",
-    )
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const params = await searchParams;
+  const tab = params?.tab === "history" || params?.tab === "reinvestments"
+    ? params.tab : "withdrawals";
+  const parsedPage = Number(params?.page ?? 1);
+  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const pageSize = 25;
+  // The investment FK prevents orphans; !inner applies pending source filters.
+  // The filtered empty embed lets History include legacy reported-paid
+  // instructions even when their instruction status was never fulfilled.
+  let query = admin.from("maturity_instructions").select(
+    "*,profiles(legal_name,email),investments!maturity_instructions_investment_id_fkey!inner(principal_ugx,projected_return_ugx,maturity_date,payout_basis),paid_investment:investments!maturity_instructions_investment_id_fkey(),investment_cycles!maturity_instructions_target_cycle_id_fkey(name),payout_destinations!maturity_instructions_payout_destination_id_fkey(channel,provider_label,account_name,account_last_four,account_ref_ciphertext,account_ref_iv,account_ref_auth_tag,key_version)",
+    { count: "exact" },
+  );
+  if (tab === "history") {
+    query = query.eq("paid_investment.payout_basis", "reported_paid")
+      .or("status.eq.fulfilled,paid_investment.not.is.null");
+  } else {
+    query = query.in("status", ["requested", "processing"])
+      .neq("investments.payout_basis", "reported_paid")
+      .gt(tab === "withdrawals" ? "projected_payout_ugx" : "projected_reinvest_ugx", 0);
+  }
+  const { data, count, error } = await query
+    .order("created_at", { ascending: tab !== "history" })
+    .order("id", { ascending: true })
+    .range((page - 1) * pageSize, page * pageSize - 1);
+  if (error) throw new Error("Unable to load maturity instructions.");
   const items = data ?? [];
   const heldAudits = items.some((item) => item.needs_resolution)
     ? ((
@@ -115,6 +137,20 @@ export default async function AdminMaturitiesPage() {
         Revisions lock once processing begins. A changed actual ROI needs
         partner confirmation before anything moves, and held instructions are
         resolved by reopening them for partner revision — never silently.
+      </p>
+      <nav aria-label="Maturity views" className="admin-investment-pagination">
+        {(["withdrawals", "reinvestments", "history"] as const).map((view) => (
+          <Link key={view} href={`/admin/maturities?tab=${view}`}
+            className={tab === view ? "button" : "button-secondary"}
+            aria-current={tab === view ? "page" : undefined}>
+            {view === "withdrawals" ? "Withdrawals" : view === "reinvestments" ? "Reinvestments" : "History"}
+          </Link>
+        ))}
+      </nav>
+      <p className="muted">
+        {tab === "history" ? "Completed and reported-paid instructions." :
+          tab === "withdrawals" ? "Pending requests with a payout. Mixed withdrawal and reinvestment requests also appear under Reinvestments." :
+          "Pending requests with a reinvestment. Mixed requests share the same instruction and processing status with Withdrawals."}
       </p>
       {await Promise.all(
         items.map(async (item) => {
@@ -301,9 +337,14 @@ export default async function AdminMaturitiesPage() {
       )}
       {!items.length && (
         <article className="card">
-          <p className="muted">No maturity instructions yet.</p>
+          <p className="muted">No instructions in this view.</p>
         </article>
       )}
+      <nav aria-label="Maturity pagination" className="admin-investment-pagination">
+        {page > 1 && <Link className="button-secondary" href={`/admin/maturities?tab=${tab}&page=${page - 1}`}>Previous</Link>}
+        <span>Page {page} · {count ?? 0} instructions</span>
+        {page * pageSize < (count ?? 0) && <Link className="button-secondary" href={`/admin/maturities?tab=${tab}&page=${page + 1}`}>Next</Link>}
+      </nav>
     </>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   BadgeCheck,
@@ -20,6 +20,7 @@ import {
   Upload,
   User,
   Users,
+  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -42,6 +43,7 @@ const icons: Record<string, LucideIcon> = {
   "/investments": Briefcase,
   "/admin": LayoutDashboard,
   "/admin/activations": CircleCheck,
+  "/admin/maturities?tab=withdrawals": Wallet,
   "/admin/invitations": Mail,
   "/admin/applications": Inbox,
   "/admin/partners": Users,
@@ -65,11 +67,13 @@ export function ShellNav({
   label: string;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const location = `${pathname}?${searchParams.toString()}`;
   const [open, setOpen] = useState(false);
-  const [lastPath, setLastPath] = useState(pathname);
-  if (lastPath !== pathname) {
+  const [lastPath, setLastPath] = useState(location);
+  if (lastPath !== location) {
     // A completed navigation (link tap, back/forward) dismisses the drawer.
-    setLastPath(pathname);
+    setLastPath(location);
     setOpen(false);
   }
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -77,8 +81,19 @@ export function ShellNav({
   const wasOpen = useRef(false);
   const navId = useId();
   const current =
+    links.find((link) => {
+      const [path, query] = link.href.split("?");
+      return query && pathname === path && [...new URLSearchParams(query)].every(([key, value]) => {
+        const actual = searchParams.get(key);
+        // The server defaults unknown or absent maturity tabs to withdrawals.
+        const selected = path === "/admin/maturities" && key === "tab"
+          ? (actual === "history" || actual === "reinvestments" ? actual : "withdrawals")
+          : actual;
+        return selected === value;
+      });
+    }) ??
     links.find((link) => pathname === link.href) ??
-    [...links]
+    links.filter((link) => !link.href.includes("?"))
       .sort((a, b) => b.href.length - a.href.length)
       .find((link) => pathname.startsWith(`${link.href}/`));
 
@@ -145,7 +160,7 @@ export function ShellNav({
         </button>
         {links.map((link) => {
           const Icon = icons[link.href];
-          const active = pathname === link.href;
+          const active = current?.href === link.href;
           return (
             <Link
               href={link.href}
@@ -156,7 +171,7 @@ export function ShellNav({
               // lastPath check above closes it on pathname change.
               // Same-page taps navigate nowhere, so close those immediately.
               onClick={() => {
-                if (link.href === pathname) setOpen(false);
+                if (active) setOpen(false);
               }}
             >
               {Icon && <Icon className="nav-icon" aria-hidden="true" />}
