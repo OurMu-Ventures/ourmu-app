@@ -66,13 +66,23 @@ export function MaturityInstructionForm({
     submitMaturityInstruction,
     initialActionState,
   );
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    const element = form.current;
+    const preserveValues = (event: Event) => event.preventDefault();
+    element?.addEventListener("reset", preserveValues);
+    return () => element?.removeEventListener("reset", preserveValues);
+  }, []);
   const confirmation = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (state.ok && state.message) {
-      confirmation.current?.focus();
+      confirmation.current?.focus({ preventScroll: true });
       confirmation.current?.scrollIntoView?.({
         block: "center",
-        behavior: "smooth",
+        behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")
+          .matches
+          ? "auto"
+          : "smooth",
       });
     }
   }, [state]);
@@ -109,9 +119,15 @@ export function MaturityInstructionForm({
   const selectedCycle = openCycles.find((cycle) => cycle.id === targetCycleId);
 
   return (
-    <form className="form" action={action}>
+    <form className="form" action={action} ref={form}>
       {state.ok && state.message && (
-        <div className="success" role="status" tabIndex={-1} ref={confirmation}>
+        <div
+          className="success"
+          role="region"
+          aria-label="Maturity choice saved"
+          tabIndex={-1}
+          ref={confirmation}
+        >
           <h3>
             <CheckCircle2 aria-hidden="true" size={22} /> Your maturity choice
             is saved
