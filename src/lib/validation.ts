@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_INVESTMENT_LIMIT_UGX } from "@/lib/investment-limits";
 
 const phone = z.string().trim().min(7).max(30);
 export const emailSchema = z
@@ -27,15 +28,25 @@ export const nextOfKinSchema = z.object({
   email: z.union([emailSchema, z.literal("")]),
   address: z.string().trim().min(5).max(300),
 });
-export const investmentRequestSchema = z.object({
-  cycleId: z.uuid(),
-  principalUgx: z
-    .string()
-    .trim()
-    .regex(/^\d+(?:\.\d{1,2})?$/)
-    .refine((value) => Number(value) >= 125_000 && Number(value) <= 50_000_000),
-  agreementAccepted: z.literal("yes"),
-});
+export const investmentRequestSchemaForLimit = (limitUgx: number) =>
+  z.object({
+    cycleId: z.uuid(),
+    principalUgx: z
+      .string()
+      .trim()
+      .regex(/^\d+(?:\.\d{1,2})?$/)
+      .refine(
+        (value) =>
+          Number.isFinite(Number(value)) &&
+          Number(value) >= 125_000 &&
+          Number(value) <= limitUgx,
+      ),
+    agreementAccepted: z.literal("yes"),
+  });
+export const investmentRequestSchema = investmentRequestSchemaForLimit(
+  DEFAULT_INVESTMENT_LIMIT_UGX,
+);
+
 export const activationSchema = z.object({
   investmentId: z.uuid(),
   bankReference: z.string().trim().min(3).max(120),

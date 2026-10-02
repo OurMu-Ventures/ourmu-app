@@ -1,4 +1,5 @@
 import { InvestmentRequestForm } from "@/components/forms";
+import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import { requireInvestor } from "@/lib/auth";
 import { date, ugx } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -81,6 +82,7 @@ export default async function NewInvestmentPage() {
           cycle limit and the remaining cycle capacity.
         </p>
         <InvestmentRequestForm
+          limitUgx={effectiveInvestmentLimit(profile.investment_limit_ugx)}
           cycleId={cycle.id}
           agreementId={agreement.id}
           agreementTitle={agreement?.title ?? "Current agreement"}

@@ -34,7 +34,8 @@ import {
 import { ActionButton } from "@/components/ActionButton";
 import { StateMessage } from "@/components/StateMessage";
 import { Button } from "@/components/ui/button";
-import { dateTime } from "@/lib/format";
+import { DEFAULT_INVESTMENT_LIMIT_UGX } from "@/lib/investment-limits";
+import { dateTime, ugx } from "@/lib/format";
 import {
   AGREEMENT_TEMPLATE,
   AGREEMENT_TITLE,
@@ -436,6 +437,7 @@ export function ConfirmPrimaryEmailForm({
 }
 
 export function InvestmentRequestForm({
+  limitUgx = DEFAULT_INVESTMENT_LIMIT_UGX,
   cycleId,
   agreementId,
   agreementTitle,
@@ -443,6 +445,7 @@ export function InvestmentRequestForm({
   cycleId: string;
   agreementId: string;
   agreementTitle: string;
+  limitUgx?: number;
 }) {
   const [state, action] = useActionState(requestInvestment, initialActionState);
   return (
@@ -454,13 +457,13 @@ export function InvestmentRequestForm({
           name="principalUgx"
           type="number"
           min="125000"
-          max="50000000"
+          max={limitUgx}
           step="0.01"
           defaultValue="125000"
           required
         />
         <small className="muted">
-          Minimum UGX 125,000; maximum UGX 50,000,000 per cycle. Fractional
+          Minimum UGX 125,000; maximum {ugx(limitUgx)} per cycle. Fractional
           units are calculated automatically.
         </small>
       </label>
