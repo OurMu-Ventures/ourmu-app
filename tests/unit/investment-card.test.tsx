@@ -50,6 +50,26 @@ describe("InvestmentCard computed-metric hints", () => {
     expect(action).toHaveClass("maturity-action");
   });
 
+  it("renders paid records as details even if a caller supplies a maturity action", () => {
+    render(
+      <InvestmentCard
+        item={{
+          ...baseItem,
+          status: "matured",
+          isPaid: true,
+          detailLabel: "Withdraw or Re-invest",
+          detailAction: true,
+        }}
+      />,
+    );
+    expect(
+      screen.queryByRole("link", { name: "Withdraw or Re-invest" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View details" })).not.toHaveClass(
+      "maturity-action",
+    );
+  });
+
   it("shows principal without a unit count", async () => {
     render(<InvestmentCard item={baseItem} />);
 

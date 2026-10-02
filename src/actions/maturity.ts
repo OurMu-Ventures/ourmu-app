@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin, requireInvestor } from "@/lib/auth";
+import { canChooseMaturity } from "@/lib/investments";
 import { publicError, requestId, toBytea } from "@/lib/db";
 import {
   encryptPayoutReference,
@@ -23,8 +24,7 @@ import {
 
 function involvesPayout(choice: string) {
   return (
-    choice === "withdraw_all" ||
-    choice === "withdraw_roi_reinvest_principal"
+    choice === "withdraw_all" || choice === "withdraw_roi_reinvest_principal"
   );
 }
 
@@ -58,6 +58,21 @@ export async function submitMaturityInstruction(
     };
   const input = parsed.data;
   const admin = createAdminClient();
+  const { data: investment } = await admin
+    .from("investments")
+    .select("status,record_origin,payout_basis,maturity_instructions!maturity_instructions_investment_id_fkey(status)")
+    .eq("id", input.investmentId)
+    .eq("investor_id", profile.id)
+    .maybeSingle();
+  if (
+    !investment ||
+    !canChooseMaturity(investment, investment.maturity_instructions?.status)
+  )
+    return {
+      ok: false,
+      message:
+        "This investment is not available for withdrawal or reinvestment.",
+    };
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
 
@@ -157,8 +172,7 @@ export async function submitMaturityInstruction(
     if (!input.targetCycleId || input.agreementAccepted !== "yes")
       return {
         ok: false,
-        message:
-          "Select a destination cycle and accept its current agreement.",
+        message: "Select a destination cycle and accept its current agreement.",
       };
     targetCycleId = input.targetCycleId;
   }
@@ -332,7 +346,6 @@ export async function reopenMaturityInstruction(
     message: "Instruction reopened. The partner can now revise and re-confirm.",
   };
 }
-
 
 export async function acceptStandingTerms(
   _: ActionState,
