@@ -231,7 +231,7 @@ export async function submitMaturityInstruction(
   return {
     ok: true,
     message:
-      "Maturity choice recorded. You can revise it until an admin begins processing.",
+      "Your instructions have been recorded. No further action is needed now. You can revise your choice until our team begins processing.",
   };
 }
 

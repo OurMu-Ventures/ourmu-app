@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/actions/maturity", () => ({
   submitMaturityInstruction: vi.fn(),
@@ -9,6 +15,7 @@ vi.mock("@/actions/maturity", () => ({
   reopenMaturityInstruction: vi.fn(),
   revokeStandingTerms: vi.fn(),
 }));
+import { submitMaturityInstruction } from "@/actions/maturity";
 import { MaturityInstructionForm } from "@/components/maturity-forms";
 afterEach(cleanup);
 const props = {
@@ -82,6 +89,45 @@ describe("Paka Paka withdrawal form", () => {
       target: { value: "100000" },
     });
     expect(screen.getByText(/investment total is unavailable/)).toBeVisible();
+  });
+  it("focuses the saved confirmation and retains it when the form becomes a revision", async () => {
+    vi.mocked(submitMaturityInstruction).mockResolvedValueOnce({
+      ok: true,
+      message: "No further action is needed now.",
+    });
+    const view = render(<MaturityInstructionForm {...props} />);
+    await act(async () => {
+      fireEvent.submit(view.container.querySelector("form")!);
+    });
+    const confirmation = await screen.findByRole("status");
+    expect(confirmation).toHaveTextContent("Your maturity choice is saved");
+    expect(confirmation).toHaveTextContent("No further action is needed now.");
+    expect(confirmation).toHaveFocus();
+    view.rerender(
+      <MaturityInstructionForm
+        {...props}
+        existingChoice="withdraw_all"
+        isRevision
+      />,
+    );
+    expect(screen.getByRole("status")).toBe(confirmation);
+    expect(
+      screen.getByRole("button", { name: "Revise maturity choice" }),
+    ).toBeVisible();
+  });
+  it("shows failed saves as an alert without a saved confirmation", async () => {
+    vi.mocked(submitMaturityInstruction).mockResolvedValueOnce({
+      ok: false,
+      message: "The maturity choice could not be saved.",
+    });
+    const view = render(<MaturityInstructionForm {...props} />);
+    await act(async () => {
+      fireEvent.submit(view.container.querySelector("form")!);
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "could not be saved",
+    );
+    expect(screen.queryByRole("status")).toBeNull();
   });
   it("explains legacy terms without silently converting them", () => {
     render(

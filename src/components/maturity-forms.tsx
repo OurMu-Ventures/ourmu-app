@@ -3,7 +3,7 @@
 import { DEFAULT_INVESTMENT_LIMIT_UGX } from "@/lib/investment-limits";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { CheckCircle2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -66,6 +66,16 @@ export function MaturityInstructionForm({
     submitMaturityInstruction,
     initialActionState,
   );
+  const confirmation = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state.ok && state.message) {
+      confirmation.current?.focus();
+      confirmation.current?.scrollIntoView?.({
+        block: "center",
+        behavior: "smooth",
+      });
+    }
+  }, [state]);
   const [choice, setChoice] = useState<MaturityChoice | "">(
     existingChoice ?? "",
   );
@@ -100,6 +110,15 @@ export function MaturityInstructionForm({
 
   return (
     <form className="form" action={action}>
+      {state.ok && state.message && (
+        <div className="success" role="status" tabIndex={-1} ref={confirmation}>
+          <h3>
+            <CheckCircle2 aria-hidden="true" size={22} /> Your maturity choice
+            is saved
+          </h3>
+          <p>{state.message}</p>
+        </div>
+      )}
       <input type="hidden" name="investmentId" value={investmentId} />
       <fieldset>
         <legend>Your maturity choice</legend>
@@ -304,7 +323,7 @@ export function MaturityInstructionForm({
       <ActionButton>
         {isRevision ? "Revise maturity choice" : "Record maturity choice"}
       </ActionButton>
-      <StateMessage state={state} />
+      {!state.ok && <StateMessage state={state} />}
     </form>
   );
 }
