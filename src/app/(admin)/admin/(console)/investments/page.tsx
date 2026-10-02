@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { getReceiptDownloadUrl } from "@/actions/receipts";
-import { ActivationForm } from "@/components/forms";
 import { requireAdmin } from "@/lib/auth";
 import { date, dateTime, ugx, units } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -190,9 +189,8 @@ export default async function AdminInvestmentsPage({
       <p className="eyebrow">Partner investment records</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investments</h1>
       <p className="notice">
-        Compare bank statements independently before activating a reservation.
-        Activation requires the exact amount, a unique reference, the received
-        date, typed confirmation, and your current AAL2 session.
+        Browse all partner investment records. Review and activate pending
+        reservations on the <Link href="/admin/activations">Activations</Link> page.
       </p>
 
       <form
@@ -294,10 +292,9 @@ export default async function AdminInvestmentsPage({
               </div>
               {item.status === "reserved" &&
                 item.record_origin === "portal" && (
-                  <ActivationForm
-                    investmentId={item.id}
-                    expectedAmount={Number(item.principal_ugx)}
-                  />
+                  <Link className="button-secondary" href="/admin/activations">
+                    Review in Activations
+                  </Link>
                 )}
               <ReceiptAdminLine receipts={item.investment_receipts} />
             </article>

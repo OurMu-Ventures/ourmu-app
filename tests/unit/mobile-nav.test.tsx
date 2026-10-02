@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AppShell } from "@/components/AppShell";
 import { ShellNav, type ShellLink } from "@/components/ShellNav";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/investments" }));
@@ -33,6 +34,17 @@ afterEach(() => {
 });
 
 describe("ShellNav", () => {
+  it("places Activations directly after admin overview and keeps it out of partner navigation", () => {
+    const { unmount } = render(<AppShell admin>Admin content</AppShell>);
+    const adminLinks = screen.getAllByRole("link");
+    expect(adminLinks[0]).toHaveTextContent("Admin overview");
+    expect(adminLinks[1]).toHaveTextContent("Activations");
+    expect(adminLinks[1]).toHaveAttribute("href", "/admin/activations");
+    unmount();
+    render(<AppShell>Partner content</AppShell>);
+    expect(screen.queryByRole("link", { name: "Activations" })).not.toBeInTheDocument();
+  });
+
   it("marks the current page and labels the section bar", () => {
     renderNav();
     expect(screen.getByRole("link", { name: "Investments" })).toHaveAttribute(

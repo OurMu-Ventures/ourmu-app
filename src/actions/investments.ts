@@ -122,7 +122,9 @@ export async function activateInvestment(
         "Activation failed. No records were changed.",
       ),
     };
+  revalidatePath("/admin/activations");
   revalidatePath("/admin/investments");
+  revalidatePath("/admin");
   return {
     ok: true,
     message:
