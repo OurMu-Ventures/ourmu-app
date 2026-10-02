@@ -7,8 +7,10 @@ import { sendTransactionalEmail, type EmailTemplate } from "@/lib/email/send";
 import { getPublicEnv } from "@/lib/env";
 import { bpsToPercent, date, ugx } from "@/lib/format";
 import {
-  fulfilledSplits,
+  safeFulfilledSplits,
+  UNAVAILABLE_MATURITY_AMOUNTS,
   maturityChoiceLabel,
+  maturityInstructionTerms,
   maturityNoticeDetail,
   maturityPayoutDateIso,
   type MaturityChoice,
@@ -86,7 +88,9 @@ export async function processDueJobs(limit = 10, campaignId?: string) {
     .in("status", ["pending", "failed"])
     .lte("available_at", new Date().toISOString());
   if (campaignId)
-    query = query.eq("entity_type", "email_campaign").eq("entity_id", campaignId);
+    query = query
+      .eq("entity_type", "email_campaign")
+      .eq("entity_id", campaignId);
   const { data: jobs, error } = await query.order("created_at").limit(limit);
   if (error) throw new Error("JOB_FETCH_FAILED");
   const result = { processed: 0, succeeded: 0, failed: 0 };
@@ -629,7 +633,7 @@ async function maturityEmailContent(
   const { data: instruction } = await admin
     .from("maturity_instructions")
     .select(
-      "choice,status,projected_payout_ugx,projected_reinvest_ugx,actual_payout_ugx,actual_reinvest_ugx,actual_roi_ugx,proposed_actual_roi_ugx,resolution_notes",
+      "choice,requested_withdrawal_ugx,status,projected_payout_ugx,projected_reinvest_ugx,actual_payout_ugx,actual_reinvest_ugx,actual_roi_ugx,proposed_actual_roi_ugx,resolution_notes",
     )
     .eq("investment_id", investmentId)
     .maybeSingle();
@@ -654,12 +658,16 @@ async function maturityEmailContent(
     };
   }
   if (template === "maturity_choice_confirmed" && instruction) {
+    const instructionTerms = maturityInstructionTerms(
+      instruction.choice as MaturityChoice,
+      instruction.requested_withdrawal_ugx,
+    );
     return {
       actionUrl,
       detail:
         `Your maturity choice (${maturityChoiceLabel(instruction.choice)}) is recorded: projected payout ` +
         `${ugx(instruction.projected_payout_ugx)}, projected reinvestment ` +
-        `${ugx(instruction.projected_reinvest_ugx)}. You can revise it until our team begins ` +
+        `${ugx(instruction.projected_reinvest_ugx)}. ${instructionTerms ? `${instructionTerms} ` : ""}You can revise it until our team begins ` +
         `processing. Scheduled payout date: ${payoutDate}.`,
     };
   }
@@ -677,11 +685,24 @@ async function maturityEmailContent(
     template === "maturity_action_needed" &&
     instruction?.proposed_actual_roi_ugx != null
   ) {
-    const proposed = fulfilledSplits(
+    const proposed = safeFulfilledSplits(
       principal,
       Number(instruction.proposed_actual_roi_ugx),
       instruction.choice as MaturityChoice,
+      instruction.requested_withdrawal_ugx == null
+        ? undefined
+        : {
+            requestedWithdrawalUgx: Number(
+              instruction.requested_withdrawal_ugx,
+            ),
+            projectedPayoutUgx: Number(instruction.projected_payout_ugx),
+            projectedReinvestUgx: Number(instruction.projected_reinvest_ugx),
+            projectedTotalUgx:
+              Number(instruction.projected_payout_ugx) +
+              Number(instruction.projected_reinvest_ugx),
+          },
     );
+    if (!proposed) return { actionUrl, detail: UNAVAILABLE_MATURITY_AMOUNTS };
     return {
       actionUrl,
       detail:

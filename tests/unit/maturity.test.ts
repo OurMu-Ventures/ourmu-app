@@ -108,7 +108,7 @@ describe("maturityNoticeDetail", () => {
     expect(detail).toContain("B. Paka Paka payout");
     expect(detail).toContain("UGX 1,300,000.00 payout");
     expect(detail).toContain(
-      "UGX 300,000.00 payout, UGX 1,000,000.00 reinvested",
+      "choose how much to withdraw and reinvest the rest",
     );
     expect(detail).toContain("15 Aug 2026");
     expect(detail).toContain("may differ from this projection");

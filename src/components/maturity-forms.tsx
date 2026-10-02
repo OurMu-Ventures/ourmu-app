@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -17,6 +17,8 @@ import { StateMessage } from "@/components/StateMessage";
 import { ugx } from "@/lib/format";
 import {
   MATURITY_CHOICES,
+  PAKA_PAKA_EXPLANATION,
+  customWithdrawalError,
   maturitySplits,
   type MaturityChoice,
 } from "@/lib/maturity";
@@ -44,6 +46,7 @@ export function MaturityInstructionForm({
   savedDestinations,
   openCycles,
   existingChoice,
+  existingWithdrawalUgx,
   isRevision,
 }: {
   investmentId: string;
@@ -52,6 +55,7 @@ export function MaturityInstructionForm({
   savedDestinations: SavedDestination[];
   openCycles: OpenCycleOption[];
   existingChoice?: MaturityChoice;
+  existingWithdrawalUgx?: number | null;
   isRevision: boolean;
 }) {
   const [state, action] = useActionState(
@@ -61,6 +65,27 @@ export function MaturityInstructionForm({
   const [choice, setChoice] = useState<MaturityChoice | "">(
     existingChoice ?? "",
   );
+  const [withdrawal, setWithdrawal] = useState(
+    existingWithdrawalUgx == null ? "" : String(existingWithdrawalUgx),
+  );
+  const total = principalUgx + projectedReturnUgx;
+  const withdrawalError = [principalUgx, projectedReturnUgx].some(
+    (amount) => !Number.isFinite(amount) || amount < 0,
+  )
+    ? "This investment total is unavailable. Please reload."
+    : customWithdrawalError(withdrawal, total);
+  const withdrawalInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    withdrawalInput.current?.setCustomValidity(withdrawalError ?? "");
+  }, [choice, withdrawalError]);
+  const customSplit = withdrawalError
+    ? null
+    : maturitySplits(
+        principalUgx,
+        projectedReturnUgx,
+        "withdraw_roi_reinvest_principal",
+        Number(withdrawal),
+      );
   const [useSaved, setUseSaved] = useState(savedDestinations.length > 0);
   const [targetCycleId, setTargetCycleId] = useState("");
   const needsPayout =
@@ -94,14 +119,63 @@ export function MaturityInstructionForm({
                 <strong>{option.label}</strong> — {option.description}
                 <br />
                 <small className="muted">
-                  Projected payout {ugx(splits.payoutUgx)} · projected
-                  reinvestment {ugx(splits.reinvestUgx)}
+                  {option.value === "withdraw_roi_reinvest_principal" ? (
+                    "Enter your withdrawal amount below to see the split."
+                  ) : (
+                    <>
+                      Projected payout {ugx(splits.payoutUgx)} · projected
+                      reinvestment {ugx(splits.reinvestUgx)}
+                    </>
+                  )}
                 </small>
               </span>
             </label>
           );
         })}
       </fieldset>
+
+      {choice === "withdraw_roi_reinvest_principal" && (
+        <fieldset>
+          <legend>Your withdrawal amount</legend>
+          <p>
+            Available projected total: <strong>{ugx(total)}</strong>
+          </p>
+          {existingChoice === "withdraw_roi_reinvest_principal" &&
+            existingWithdrawalUgx == null && (
+              <p className="notice">
+                Your recorded instruction withdraws ROI and reinvests principal.
+                Enter an amount and submit to replace those original terms.
+              </p>
+            )}
+          <label>
+            Amount to withdraw (UGX)
+            <input
+              name="requestedWithdrawalUgx"
+              type="text"
+              inputMode="decimal"
+              ref={withdrawalInput}
+              value={withdrawal}
+              onChange={(event) => setWithdrawal(event.target.value)}
+              required
+              aria-describedby="withdrawal-help withdrawal-preview"
+              aria-invalid={withdrawal !== "" && !!withdrawalError}
+            />
+          </label>
+          <p id="withdrawal-preview" aria-live="polite">
+            {customSplit ? (
+              <>
+                Projected payout {ugx(customSplit.payoutUgx)} · projected
+                reinvestment {ugx(customSplit.reinvestUgx)}
+              </>
+            ) : (
+              withdrawalError
+            )}
+          </p>
+          <p id="withdrawal-help" className="muted">
+            {PAKA_PAKA_EXPLANATION}
+          </p>
+        </fieldset>
+      )}
 
       {needsPayout && (
         <fieldset>
