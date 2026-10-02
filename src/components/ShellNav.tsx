@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   BadgeCheck,
+  CircleCheck,
   Briefcase,
   History,
   Inbox,
@@ -40,6 +41,7 @@ const icons: Record<string, LucideIcon> = {
   "/investments/new": TrendingUp,
   "/investments": Briefcase,
   "/admin": LayoutDashboard,
+  "/admin/activations": CircleCheck,
   "/admin/invitations": Mail,
   "/admin/applications": Inbox,
   "/admin/partners": Users,

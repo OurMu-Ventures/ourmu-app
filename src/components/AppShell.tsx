@@ -11,6 +11,7 @@ const partnerLinks: ShellLink[] = [
 ];
 const adminLinks: ShellLink[] = [
   { href: "/admin", label: "Admin overview", status: "Opening admin overview" },
+  { href: "/admin/activations", label: "Activations", status: "Opening activations" },
   {
     href: "/admin/invitations",
     label: "Invitations",
