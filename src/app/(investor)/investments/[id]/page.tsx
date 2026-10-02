@@ -12,7 +12,12 @@ import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
-import { fulfilledSplits, maturityChoiceLabel, maturityPayoutDateIso } from "@/lib/maturity";
+import {
+  fulfilledSplits,
+  maturityInstructionTerms,
+  maturityChoiceLabel,
+  maturityPayoutDateIso,
+} from "@/lib/maturity";
 import { canChooseMaturity, investmentPeriod } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
@@ -36,12 +41,10 @@ export default async function InvestmentPage({
   const agreement = Array.isArray(data.investment_agreements)
     ? data.investment_agreements[0]
     : data.investment_agreements;
-  const receiptRaw = (data as unknown as { investment_receipts?: unknown }).investment_receipts;
-  const receipt = (
-    Array.isArray(receiptRaw)
-      ? receiptRaw[0]
-      : receiptRaw
-  ) as { id: string; receipt_number: string; pdf_status: string } | undefined;
+  const receiptRaw = (data as unknown as { investment_receipts?: unknown })
+    .investment_receipts;
+  const receipt = (Array.isArray(receiptRaw) ? receiptRaw[0] : receiptRaw) as
+    { id: string; receipt_number: string; pdf_status: string } | undefined;
   const isMatured = canChooseMaturity(data);
   const [{ data: instruction }, { data: destinations }, { data: openCycles }] =
     isMatured
@@ -53,9 +56,7 @@ export default async function InvestmentPage({
             .maybeSingle(),
           supabase
             .from("payout_destinations")
-            .select(
-              "id,channel,provider_label,account_name,account_last_four",
-            )
+            .select("id,channel,provider_label,account_name,account_last_four")
             .eq("investor_id", profile.id)
             .eq("is_active", true)
             .order("created_at", { ascending: false }),
@@ -96,11 +97,13 @@ export default async function InvestmentPage({
   return (
     <>
       <p className="eyebrow">Investment record</p>
-      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
-        Investment details
-      </h1>
+      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investment details</h1>
       <p>
-        <span className="badge">{data.payout_basis === "reported_paid" ? "Reported paid" : data.status}</span>
+        <span className="badge">
+          {data.payout_basis === "reported_paid"
+            ? "Reported paid"
+            : data.status}
+        </span>
       </p>
       <div className="grid">
         <article className="card">
@@ -173,7 +176,9 @@ export default async function InvestmentPage({
               can retry it without reversing your investment.
             </p>
           ) : (
-            <p className="muted">Receipt {receipt.receipt_number} is generating…</p>
+            <p className="muted">
+              Receipt {receipt.receipt_number} is generating…
+            </p>
           )
         ) : data.status === "active" ? (
           <p className="muted">Receipt generation pending…</p>
@@ -181,8 +186,8 @@ export default async function InvestmentPage({
         {isCancellable && (
           <div style={{ marginTop: "1rem" }}>
             <p className="muted" style={{ marginBottom: "0.5rem" }}>
-              Reserved — transfer the exact amount before expiry or cancel
-              this reservation.
+              Reserved — transfer the exact amount before expiry or cancel this
+              reservation.
             </p>
             <CancelInvestmentButton
               action={cancelInvestment}
@@ -193,8 +198,8 @@ export default async function InvestmentPage({
         )}
         {isExpired && (
           <p className="muted" style={{ marginTop: "1rem" }}>
-            This reservation has expired. It will be marked expired on the
-            next maintenance run.
+            This reservation has expired. It will be marked expired on the next
+            maintenance run.
           </p>
         )}
       </div>
@@ -204,11 +209,9 @@ export default async function InvestmentPage({
           <h2>What should happen to this placement?</h2>
           <p>
             Projected return{" "}
-            <strong>
-              {bpsToPercent(data.projected_return_bps ?? 3000)}%
-            </strong>{" "}
-            ({ugx(data.projected_return_ugx)}) on{" "}
-            {ugx(data.principal_ugx)} principal. Payouts are scheduled for{" "}
+            <strong>{bpsToPercent(data.projected_return_bps ?? 3000)}%</strong>{" "}
+            ({ugx(data.projected_return_ugx)}) on {ugx(data.principal_ugx)}{" "}
+            principal. Payouts are scheduled for{" "}
             <strong>{date(maturityPayoutDateIso(data.maturity_date))}</strong>.
             The amount actually paid follows the return recorded by the fund,
             which may differ from this projection.
@@ -223,10 +226,23 @@ export default async function InvestmentPage({
               isRevision={false}
             />
           )}
+          {instruction &&
+            maturityInstructionTerms(
+              instruction.choice,
+              instruction.requested_withdrawal_ugx,
+            ) && (
+              <p className="muted">
+                {maturityInstructionTerms(
+                  instruction.choice,
+                  instruction.requested_withdrawal_ugx,
+                )}
+              </p>
+            )}
           {instruction?.status === "requested" && (
             <>
               <p className="notice">
-                Choice recorded: <strong>{maturityChoiceLabel(instruction.choice)}</strong>{" "}
+                Choice recorded:{" "}
+                <strong>{maturityChoiceLabel(instruction.choice)}</strong>{" "}
                 (projected payout {ugx(instruction.projected_payout_ugx)} ·
                 projected reinvestment {ugx(instruction.projected_reinvest_ugx)}
                 ). You can revise it until an admin begins processing.
@@ -244,6 +260,7 @@ export default async function InvestmentPage({
                 savedDestinations={(destinations ?? []) as SavedDestination[]}
                 openCycles={cycleOptions}
                 existingChoice={instruction.choice}
+                existingWithdrawalUgx={instruction.requested_withdrawal_ugx}
                 isRevision
               />
             </>
@@ -251,8 +268,9 @@ export default async function InvestmentPage({
           {instruction?.status === "processing" && (
             <>
               <p className="notice">
-                Your choice (<strong>{maturityChoiceLabel(instruction.choice)}</strong>) is being
-                processed by our team and can no longer be revised.
+                Your choice (
+                <strong>{maturityChoiceLabel(instruction.choice)}</strong>) is
+                being processed by our team and can no longer be revised.
               </p>
               {instruction.proposed_actual_roi_ugx != null &&
                 instruction.confirmed_actual_roi_ugx !==
@@ -262,6 +280,16 @@ export default async function InvestmentPage({
                     Number(data.principal_ugx),
                     Number(instruction.proposed_actual_roi_ugx),
                     instruction.choice,
+                    instruction.requested_withdrawal_ugx == null
+                      ? undefined
+                      : {
+                          requestedWithdrawalUgx: Number(
+                            instruction.requested_withdrawal_ugx,
+                          ),
+                          projectedTotalUgx:
+                            Number(instruction.projected_payout_ugx) +
+                            Number(instruction.projected_reinvest_ugx),
+                        },
                   );
                   return (
                     <MaturityConfirmAmountsForm

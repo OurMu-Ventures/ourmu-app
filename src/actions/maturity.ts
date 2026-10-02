@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireAdmin, requireInvestor } from "@/lib/auth";
 import { canChooseMaturity } from "@/lib/investments";
+import { customWithdrawalError } from "@/lib/maturity";
 import { publicError, requestId, toBytea } from "@/lib/db";
 import {
   encryptPayoutReference,
@@ -42,6 +43,7 @@ export async function submitMaturityInstruction(
   const parsed = maturityInstructionSchema.safeParse({
     investmentId: formData.get("investmentId"),
     choice: formData.get("choice"),
+    requestedWithdrawalUgx: formData.get("requestedWithdrawalUgx") ?? undefined,
     payoutDestinationId: formData.get("payoutDestinationId") ?? "",
     channel: formData.get("channel") ?? undefined,
     providerLabel: formData.get("providerLabel") ?? undefined,
@@ -60,7 +62,9 @@ export async function submitMaturityInstruction(
   const admin = createAdminClient();
   const { data: investment } = await admin
     .from("investments")
-    .select("status,record_origin,payout_basis,maturity_instructions!maturity_instructions_investment_id_fkey(status)")
+    .select(
+      "status,record_origin,payout_basis,principal_ugx,projected_return_ugx,maturity_instructions!maturity_instructions_investment_id_fkey(status)",
+    )
     .eq("id", input.investmentId)
     .eq("investor_id", profile.id)
     .maybeSingle();
@@ -73,6 +77,23 @@ export async function submitMaturityInstruction(
       message:
         "This investment is not available for withdrawal or reinvestment.",
     };
+  if (
+    investment.maturity_instructions &&
+    investment.maturity_instructions.status !== "requested"
+  )
+    return {
+      ok: false,
+      message:
+        "This choice is already being processed and can no longer be revised.",
+    };
+  if (input.choice === "withdraw_roi_reinvest_principal") {
+    const message = customWithdrawalError(
+      input.requestedWithdrawalUgx ?? "",
+      Number(investment.principal_ugx) +
+        Number(investment.projected_return_ugx),
+    );
+    if (message) return { ok: false, message };
+  }
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
 
@@ -183,6 +204,11 @@ export async function submitMaturityInstruction(
     p_investor_id: profile.id,
     p_investment_id: input.investmentId,
     p_choice: input.choice,
+    p_custom_split: true,
+    p_requested_withdrawal_ugx: (input.choice ===
+    "withdraw_roi_reinvest_principal"
+      ? Number(input.requestedWithdrawalUgx)
+      : null) as unknown as number,
     p_target_cycle_id: targetCycleId as unknown as string,
     p_payout_destination_id: payoutDestinationId as unknown as string,
     p_agreement_accepted: input.agreementAccepted === "yes",

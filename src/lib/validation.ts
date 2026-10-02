@@ -65,25 +65,43 @@ export const payoutDestinationSchema = z.object({
   accountReference: z.string().trim().min(3).max(64),
 });
 
-export const maturityInstructionSchema = z.object({
-  investmentId: z.uuid(),
-  choice: maturityChoiceSchema,
-  // Present when the choice involves a payout: either a saved destination
-  // or a new one plus an explicit confirmation on submission.
-  payoutDestinationId: z.union([z.uuid(), z.literal("")]).optional(),
-  ...payoutDestinationSchema.partial().shape,
-  destinationConfirmed: z.union([z.literal("yes"), z.literal("")]).optional(),
-  // Present when the choice involves reinvestment: the destination cycle
-  // plus acceptance of that cycle's current agreement.
-  targetCycleId: z.union([z.uuid(), z.literal("")]).optional(),
-  agreementAccepted: z.union([z.literal("yes"), z.literal("")]).optional(),
-});
+export const maturityInstructionSchema = z
+  .object({
+    requestedWithdrawalUgx: z.string().trim().optional(),
+    investmentId: z.uuid(),
+    choice: maturityChoiceSchema,
+    // Present when the choice involves a payout: either a saved destination
+    // or a new one plus an explicit confirmation on submission.
+    payoutDestinationId: z.union([z.uuid(), z.literal("")]).optional(),
+    ...payoutDestinationSchema.partial().shape,
+    destinationConfirmed: z.union([z.literal("yes"), z.literal("")]).optional(),
+    // Present when the choice involves reinvestment: the destination cycle
+    // plus acceptance of that cycle's current agreement.
+    targetCycleId: z.union([z.uuid(), z.literal("")]).optional(),
+    agreementAccepted: z.union([z.literal("yes"), z.literal("")]).optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (
+      input.choice === "withdraw_roi_reinvest_principal" &&
+      (!input.requestedWithdrawalUgx ||
+        !/^\d+(?:\.\d{1,2})?$/.test(input.requestedWithdrawalUgx) ||
+        !Number.isFinite(Number(input.requestedWithdrawalUgx)))
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["requestedWithdrawalUgx"],
+        message: "Enter an amount to withdraw with up to two decimal places.",
+      });
+    }
+  });
 
 export function maturityInstructionValidationMessage(
   error: z.ZodError,
 ): string {
   const fields = new Set(error.issues.map((issue) => issue.path[0]));
   if (fields.has("choice")) return "Choose one of the three maturity options.";
+  if (fields.has("requestedWithdrawalUgx"))
+    return "Enter an amount to withdraw with up to two decimal places.";
 
   const payoutLabels = [
     ["channel", "payment channel"],

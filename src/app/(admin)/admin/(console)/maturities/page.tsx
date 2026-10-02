@@ -6,7 +6,11 @@ import {
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { dateTime, ugx } from "@/lib/format";
-import { maturityChoiceLabel } from "@/lib/maturity";
+import {
+  fulfilledSplits,
+  maturityChoiceLabel,
+  maturityInstructionTerms,
+} from "@/lib/maturity";
 import { decryptPayoutReference } from "@/lib/security/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -164,6 +168,43 @@ export default async function AdminMaturitiesPage() {
                         : item.status}
                 </span>
               </div>
+              {maturityInstructionTerms(
+                item.choice,
+                item.requested_withdrawal_ugx,
+              ) && (
+                <p className="muted">
+                  {maturityInstructionTerms(
+                    item.choice,
+                    item.requested_withdrawal_ugx,
+                  )}
+                </p>
+              )}
+              {!alreadyPaid &&
+                item.proposed_actual_roi_ugx != null &&
+                source &&
+                (() => {
+                  const split = fulfilledSplits(
+                    Number(source.principal_ugx),
+                    Number(item.proposed_actual_roi_ugx),
+                    item.choice,
+                    item.requested_withdrawal_ugx == null
+                      ? undefined
+                      : {
+                          requestedWithdrawalUgx: Number(
+                            item.requested_withdrawal_ugx,
+                          ),
+                          projectedTotalUgx:
+                            Number(item.projected_payout_ugx) +
+                            Number(item.projected_reinvest_ugx),
+                        },
+                  );
+                  return (
+                    <p>
+                      Proposed payout {ugx(split.payoutUgx)} · proposed
+                      reinvestment {ugx(split.reinvestUgx)}
+                    </p>
+                  );
+                })()}
               {alreadyPaid && (
                 <p className="notice">
                   This investment was reported paid. Withdrawal and reinvestment

@@ -1228,6 +1228,7 @@ export type Database = {
           projected_reinvest_ugx: number
           proposed_actual_roi_ugx: number | null
           request_id: string
+          requested_withdrawal_ugx: number | null
           resolution_notes: string | null
           revision_count: number
           standing_authorization_id: string | null
@@ -1266,6 +1267,7 @@ export type Database = {
           projected_reinvest_ugx: number
           proposed_actual_roi_ugx?: number | null
           request_id: string
+          requested_withdrawal_ugx?: number | null
           resolution_notes?: string | null
           revision_count?: number
           standing_authorization_id?: string | null
@@ -1304,6 +1306,7 @@ export type Database = {
           projected_reinvest_ugx?: number
           proposed_actual_roi_ugx?: number | null
           request_id?: string
+          requested_withdrawal_ugx?: number | null
           resolution_notes?: string | null
           revision_count?: number
           standing_authorization_id?: string | null
@@ -1852,12 +1855,14 @@ export type Database = {
         Args: {
           p_agreement_accepted: boolean
           p_choice: Database["public"]["Enums"]["maturity_choice"]
+          p_custom_split?: boolean
           p_destination_confirmed: boolean
           p_investment_id: string
           p_investor_id: string
           p_ip_fingerprint: string
           p_payout_destination_id: string
           p_request_id: string
+          p_requested_withdrawal_ugx?: number
           p_target_cycle_id: string
           p_user_agent: string
         }

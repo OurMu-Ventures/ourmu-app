@@ -73,7 +73,7 @@ select has_table('public','maturity_policy_gates','maturity launch gates exist')
 select has_table('public','maturity_reinvest_authorizations','standing reinvest authorizations exist');
 select ok((select relrowsecurity from pg_class where oid = 'public.payout_destinations'::regclass),'payout destinations RLS enabled');
 select ok((select relrowsecurity from pg_class where oid = 'public.maturity_instructions'::regclass),'maturity instructions RLS enabled');
-select function_privs_are('public','submit_maturity_instruction',array['uuid','uuid','public.maturity_choice','uuid','uuid','boolean','boolean','uuid','text','bytea'],'service_role',array['EXECUTE'],'service role alone executes maturity submission');
+select function_privs_are('public','submit_maturity_instruction',array['uuid','uuid','public.maturity_choice','uuid','uuid','boolean','boolean','uuid','text','bytea','numeric','boolean'],'service_role',array['EXECUTE'],'service role alone executes maturity submission');
 select function_privs_are('public','begin_maturity_instruction_processing',array['uuid','uuid','boolean','uuid'],'service_role',array['EXECUTE'],'service role alone begins maturity processing');
 select function_privs_are('public','fulfill_maturity_instruction',array['uuid','uuid','numeric','text','text','boolean','uuid','boolean'],'service_role',array['EXECUTE'],'service role alone fulfills maturity instructions');
 select function_privs_are('public','confirm_maturity_amounts',array['uuid','uuid','uuid'],'service_role',array['EXECUTE'],'service role alone confirms maturity amounts');

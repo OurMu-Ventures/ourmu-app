@@ -58,15 +58,21 @@ export function renderTransactionalEmail(input: {
   activationReceipt?: ActivationReceiptInput;
 }) {
   if (input.template === "portal_announcement") {
-    const portalUrl = escapeHtml(input.actionUrl ?? "https://partners.ourmu.org");
-    const intro = "The ninth month of the year has brought us something worth fishing for 😄🎣 — the OurMU Partner Portal is finally live!";
-    const invite = "The team has been working on this throughout the year, and we’re excited for you to try it out and tell us what works, what doesn’t, and what could be better.";
+    const portalUrl = escapeHtml(
+      input.actionUrl ?? "https://partners.ourmu.org",
+    );
+    const intro =
+      "The ninth month of the year has brought us something worth fishing for 😄🎣 — the OurMU Partner Portal is finally live!";
+    const invite =
+      "The team has been working on this throughout the year, and we’re excited for you to try it out and tell us what works, what doesn’t, and what could be better.";
     const features = [
       "📊 View your current and past investments (2026 only)",
       "💰 Make new investments",
       "🔄 Reinvest your returns or request withdrawals",
     ];
-    const featureList = features.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+    const featureList = features
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join("");
     const html = `<html lang="en" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OURMU Partner Portal is live</title></head><body style="margin:0;background:#f4f7f6;padding:24px 12px;font-family:Arial,sans-serif;color:#18332f"><div lang="en" dir="ltr" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px"><p style="margin:0 0 18px;color:#2f766b;font-size:13px;font-weight:700;letter-spacing:.12em">OURMU VENTURES</p><h1 style="margin:0 0 16px;font-size:25px;line-height:1.3">🐟 Attention Partners!</h1><p style="font-size:16px;line-height:1.6">${escapeHtml(intro)}</p><p style="font-size:16px;line-height:1.6">${escapeHtml(invite)}</p><p style="font-size:16px;line-height:1.6">It’s designed to work well on your phone 📱. For now, log in with your email to:</p><ul style="padding-left:24px;font-size:16px;line-height:1.8">${featureList}</ul><p style="font-size:16px;line-height:1.6">That’s it.</p><p style="margin:26px 0"><a href="${portalUrl}" style="display:inline-block;background:#176b5b;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">👉 Open the OURMU Partner Portal</a></p><p style="font-size:16px;line-height:1.6">Please give it a try today. You can WhatsApp me with feedback or email <a href="mailto:community@ourmu.org" style="color:#176b5b">community@ourmu.org</a>.</p><p style="font-size:14px;line-height:1.6;color:#58706b">— The OurMU Community Team</p><p style="font-size:13px;line-height:1.6;color:#58706b">You’re receiving this one-time update as an active OurMU partner or administrator.</p></div></body></html>`;
     return {
       subject: subjects.portal_announcement,
@@ -139,14 +145,19 @@ function renderMaturityNoticeEmail(
       notice.projectedReturnUgx,
       option.value,
     );
-    const amounts = [
-      split.payoutUgx > 0 ? `Projected payout: ${ugx(split.payoutUgx)}` : null,
-      split.reinvestUgx > 0
-        ? `Projected reinvestment: ${ugx(split.reinvestUgx)}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
+    const amounts =
+      option.value === "withdraw_roi_reinvest_principal"
+        ? "Amounts adjust proportionally if the final return changes; you will confirm revised amounts before processing."
+        : [
+            split.payoutUgx > 0
+              ? `Projected payout: ${ugx(split.payoutUgx)}`
+              : null,
+            split.reinvestUgx > 0
+              ? `Projected reinvestment: ${ugx(split.reinvestUgx)}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
     return `<div style="border-top:1px solid #dce7e4;padding:16px 0"><p style="margin:0 0 5px;font-size:16px;line-height:1.5;font-weight:700;color:#18332f">${escapeHtml(option.label)}</p><p style="margin:0 0 5px;font-size:15px;line-height:1.6">${escapeHtml(option.description)}</p><p style="margin:0;font-size:13px;line-height:1.6;color:#58706b">${escapeHtml(amounts)}</p></div>`;
   }).join("");
   const action = actionUrl
