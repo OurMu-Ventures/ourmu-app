@@ -49,3 +49,16 @@ For race tests, prepare a disposable schema database named
 then run `node scripts/test-partner-limit-concurrency.mjs`. The script clones
 that database, uses synthetic fixtures, and removes its clone afterward.
 It checks cumulative partner caps, shared cycle capacity and override-change locking.
+
+## Operator rules
+
+Overrides have no business maximum beyond the database money representation;
+this is intentional. The approving administrator chooses the permitted allocation.
+Cycle capacity still caps real money; test accounts are exempt from shared cycle
+capacity but still obey partner limits. Reasons must contain 3–1000 characters.
+The helper treats malformed, non-finite or below-default runtime values as the default.
+Reserved portal principal, ownership and cycle cannot be changed through UPDATE;
+status changes remain allowed so existing reservations can activate after a cap reduction.
+Custom Paka Paka submissions and fulfillment also use the partner override.
+Run the manual Docker race harness with `npm run db:test:limit-races`;
+it expects `supabase_db_ourmu-app` and the disposable template database described above.

@@ -1,3 +1,4 @@
+import { DEFAULT_INVESTMENT_LIMIT_UGX } from "@/lib/investment-limits";
 export type MaturityChoice =
   "withdraw_all" | "withdraw_roi_reinvest_principal" | "reinvest_all";
 
@@ -62,6 +63,7 @@ function moneyValue(value: bigint): number {
 export function customWithdrawalError(
   amount: string,
   totalUgx: number,
+  limitUgx = DEFAULT_INVESTMENT_LIMIT_UGX,
 ): string | null {
   if (!Number.isFinite(totalUgx) || totalUgx <= 0 || totalUgx >= 1e21)
     return "This investment total is unavailable. Please reload.";
@@ -78,8 +80,8 @@ export function customWithdrawalError(
   if (withdrawal >= total)
     return "Choose Bijjodolo to withdraw everything, or enter a smaller amount.";
   const remainder = total - withdrawal;
-  if (remainder < moneyUnits(125_000) || remainder > moneyUnits(50_000_000))
-    return "The amount reinvested must be between UGX 125,000 and UGX 50,000,000.";
+  if (remainder < moneyUnits(125_000) || remainder > moneyUnits(limitUgx))
+    return `The amount reinvested must be between UGX 125,000 and UGX ${limitUgx.toLocaleString("en-UG")}.`;
   if (remainder % 1_000_000n !== 0n)
     return "The amount reinvested must have no more than two decimal places.";
   return null;

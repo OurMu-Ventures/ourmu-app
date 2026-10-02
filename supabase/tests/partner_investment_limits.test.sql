@@ -82,11 +82,25 @@ select throws_ok($$select public.set_partner_investment_limit('22222222-2222-222
 select lives_ok($$select public.set_partner_investment_limit('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 100000000, 'Approved partner exception', gen_random_uuid())$$, 'admin sets persistent 100m override');
 select is((select investment_limit_ugx from public.profiles where id = '22222222-2222-2222-2222-222222222222'), 100000000::numeric, 'override is stored');
 select ok(exists(select 1 from public.audit_events where action = 'partner.investment_limit_changed' and entity_id = '22222222-2222-2222-2222-222222222222' and metadata->>'new_limit_ugx' = '100000000' and metadata->>'reason' = 'Approved partner exception'), 'change is audited');
+insert into public.investments(id,investor_id,cycle_id,unit_price_ugx,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,maturity_date,reservation_expires_at,status,record_origin)
+select 'abababab-abab-abab-abab-abababababab',investor_id,cycle_id,unit_price_ugx,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,maturity_date,reservation_expires_at,status,record_origin
+from public.investments where id='eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+select lives_ok($$select public.submit_maturity_instruction(
+ '22222222-2222-2222-2222-222222222222', 'abababab-abab-abab-abab-abababababab',
+ 'withdraw_roi_reinvest_principal', 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+ '99999999-9999-9999-9999-999999999999', true, true, gen_random_uuid(), 'test', '\x01', 5000000, true)$$,
+ 'custom Paka Paka submission allows 60m reinvestment under the override');
 select throws_ok($$select public.request_investment('22222222-2222-2222-2222-222222222222', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 100000000.01, gen_random_uuid(), 'test', '\x01')$$, '22023', null, 'override rejects amount above 100m');
 select ok((public.fulfill_maturity_instruction('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa', 10000000, '', 'FULFILL', true, gen_random_uuid(), false)->>'fulfilled')::boolean, '60m reinvestment honors override');
 select lives_ok($$select public.request_investment('22222222-2222-2222-2222-222222222222', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 40000000, gen_random_uuid(), 'test', '\x01')$$, '40m placement reaches cumulative 100m');
 select throws_ok($$select public.request_investment('22222222-2222-2222-2222-222222222222', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 125000, gen_random_uuid(), 'test', '\x01')$$, '23514', null, 'cumulative override rejects additional placement');
 select throws_ok($$insert into public.investments (investor_id,cycle_id,unit_price_ugx,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,maturity_date,reservation_expires_at,status,record_origin) values ('22222222-2222-2222-2222-222222222222','cccccccc-cccc-cccc-cccc-cccccccccccc',125000,125000,3000,125000*0.3,125000*1.3,current_date,now()+interval '1 day','reserved','portal')$$, '23514', 'investor cycle limit exceeded', 'direct inserts cannot bypass the cumulative override');
+select throws_ok($$update public.investments set principal_ugx = 150000000
+  where cycle_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc' and status = 'reserved'$$,
+  '55000', 'portal investment principal and ownership are immutable', 'reserved principal cannot bypass the cap through UPDATE');
+select throws_ok($$update public.investments set cycle_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+  where cycle_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc' and status = 'reserved'$$,
+  '55000', 'portal investment principal and ownership are immutable', 'reserved investments cannot move to evade cumulative caps');
 select lives_ok($$select public.set_partner_investment_limit('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', NULL, 'Approved partner exception', gen_random_uuid())$$, 'clearing override restores default');
 select is((select sum(principal_ugx) from public.investments where cycle_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc' and status in ('active','reserved')), 100000000::numeric, 'clearing preserves existing investments');
 select lives_ok($$update public.investments set requested_at = requested_at where cycle_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'$$, 'existing placements remain updatable after clearing');

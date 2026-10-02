@@ -72,6 +72,21 @@ try {
   assert.notEqual(reservation.code, 0);
   assert.match(reservation.output, /within your partner limit/);
   console.log("PASS: placements wait for override changes and use the committed limit");
+  await successful(`${limit(partner, 100000000)}
+    update public.maturity_instructions set proposed_actual_roi_ugx=10000000,
+    confirmed_actual_roi_ugx=10000000 where id='aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa';`);
+  const fulfillmentSetter = query(`begin; set application_name='partner-limit-fulfill-race'; ${limit(partner, "null")} select pg_sleep(1); commit;`);
+  let fulfillmentLocked = false;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const state = await successful("select count(*) from pg_stat_activity where application_name='partner-limit-fulfill-race' and wait_event='PgSleep';");
+    if (state.trim() === "1") { fulfillmentLocked = true; break; }
+  }
+  assert.ok(fulfillmentLocked, "setter must hold its lock before fulfillment starts");
+  const fulfilled = await successful(`select public.fulfill_maturity_instruction('${admin}', 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa',10000000,'','FULFILL',true,gen_random_uuid(),false);`);
+  assert.equal((await fulfillmentSetter).code, 0);
+  assert.equal(JSON.parse(fulfilled.trim()).reason, "reinvestment amount is outside placement limits");
+  console.log("PASS: reinvestment waits for a reduction and holds under the committed default");
+
 } finally {
   const dropped = await run(["dropdb", "-U", "supabase_admin", database]);
   assert.equal(dropped.code, 0, dropped.output);

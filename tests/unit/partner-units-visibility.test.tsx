@@ -367,7 +367,6 @@ describe("partner units visibility across pages", () => {
   });
 });
 
-
 describe("partner limit in the existing investment form", () => {
   it.each([50_000_000, 100_000_000])(
     "uses the effective maximum %s",

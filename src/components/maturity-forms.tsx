@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_INVESTMENT_LIMIT_UGX } from "@/lib/investment-limits";
+
 import { useActionState, useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
@@ -40,6 +42,7 @@ export type OpenCycleOption = {
 };
 
 export function MaturityInstructionForm({
+  limitUgx = DEFAULT_INVESTMENT_LIMIT_UGX,
   investmentId,
   principalUgx,
   projectedReturnUgx,
@@ -49,6 +52,7 @@ export function MaturityInstructionForm({
   existingWithdrawalUgx,
   isRevision,
 }: {
+  limitUgx?: number;
   investmentId: string;
   principalUgx: number;
   projectedReturnUgx: number;
@@ -73,7 +77,7 @@ export function MaturityInstructionForm({
     (amount) => !Number.isFinite(amount) || amount < 0,
   )
     ? "This investment total is unavailable. Please reload."
-    : customWithdrawalError(withdrawal, total);
+    : customWithdrawalError(withdrawal, total, limitUgx);
   const withdrawalInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     withdrawalInput.current?.setCustomValidity(withdrawalError ?? "");

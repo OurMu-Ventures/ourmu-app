@@ -38,7 +38,7 @@ function form(amount: string) {
   data.set("investmentLimitUgx", "999999999");
   return data;
 }
-function profile(limit: number | null) {
+function profile(limit: number | string | null) {
   vi.mocked(requireInvestor).mockResolvedValue({
     id: "partner-1",
     investment_limit_ugx: limit,
@@ -54,7 +54,7 @@ describe("authenticated investment limit validation", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
   it("accepts 60m using the authenticated 100m override", async () => {
-    profile(100_000_000);
+    profile("100000000");
     expect(
       (await requestInvestment({ ok: false, message: "" }, form("60000000")))
         .ok,
