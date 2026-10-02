@@ -1,5 +1,7 @@
 "use server";
 
+import { effectiveInvestmentLimit } from "@/lib/investment-limits";
+
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
@@ -91,6 +93,7 @@ export async function submitMaturityInstruction(
       input.requestedWithdrawalUgx ?? "",
       Number(investment.principal_ugx) +
         Number(investment.projected_return_ugx),
+      effectiveInvestmentLimit(profile.investment_limit_ugx),
     );
     if (message) return { ok: false, message };
   }

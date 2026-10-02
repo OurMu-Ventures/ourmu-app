@@ -366,3 +366,44 @@ describe("partner units visibility across pages", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("partner limit in the existing investment form", () => {
+  it.each([50_000_000, 100_000_000])(
+    "uses the effective maximum %s",
+    (limitUgx) => {
+      render(
+        <InvestmentRequestForm
+          cycleId="cycle-1"
+          agreementId="agr-1"
+          agreementTitle="Agreement"
+          limitUgx={limitUgx}
+        />,
+      );
+      expect(screen.getByLabelText(/investment amount/i)).toHaveAttribute(
+        "max",
+        String(limitUgx),
+      );
+      expect(screen.getByText(/minimum UGX/i).textContent).toContain(
+        limitUgx.toLocaleString("en-UG"),
+      );
+    },
+  );
+  it("passes the authenticated partner override from the page", async () => {
+    vi.mocked(requireInvestor).mockResolvedValue({
+      ...profile,
+      investment_limit_ugx: 100_000_000,
+    });
+    mockClient({
+      investment_cycles: cycle,
+      next_of_kin: { id: "kin-1" },
+      bank_instructions: null,
+    });
+    const tree = await NewInvestmentPage();
+    const form = walk(tree).find(
+      (element) => element.type === InvestmentRequestForm,
+    );
+    expect(form?.props as Record<string, unknown>).toMatchObject({
+      limitUgx: 100_000_000,
+    });
+  });
+});

@@ -1,3 +1,4 @@
+import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cancelInvestment } from "@/actions/investments";
@@ -225,6 +226,7 @@ export default async function InvestmentPage({
           </p>
           {!instruction && (
             <MaturityInstructionForm
+              limitUgx={effectiveInvestmentLimit(profile.investment_limit_ugx)}
               investmentId={data.id}
               principalUgx={Number(data.principal_ugx)}
               projectedReturnUgx={Number(data.projected_return_ugx)}
@@ -250,6 +252,9 @@ export default async function InvestmentPage({
                 </p>
               )}
               <MaturityInstructionForm
+                limitUgx={effectiveInvestmentLimit(
+                  profile.investment_limit_ugx,
+                )}
                 investmentId={data.id}
                 principalUgx={Number(data.principal_ugx)}
                 projectedReturnUgx={Number(data.projected_return_ugx)}

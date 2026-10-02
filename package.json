@@ -20,7 +20,8 @@
     "db:types": "supabase gen types typescript --local --schema public,private > src/lib/database.types.ts",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "public:scan": "node scripts/public-release-scan.mjs",
-    "release:check": "node scripts/release-check.mjs"
+    "release:check": "node scripts/release-check.mjs",
+    "db:test:limit-races": "node scripts/test-partner-limit-concurrency.mjs"
   },
   "engines": {
     "node": "24.x",

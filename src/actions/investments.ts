@@ -3,6 +3,8 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
+import { effectiveInvestmentLimit } from "@/lib/investment-limits";
+import { ugx } from "@/lib/format";
 import { requireAdmin, requireInvestor } from "@/lib/auth";
 import { publicError, requestId, toBytea } from "@/lib/db";
 import { fingerprintRequestValue } from "@/lib/security/crypto";
@@ -10,7 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   activationSchema,
-  investmentRequestSchema,
+  investmentRequestSchemaForLimit,
   type ActionState,
 } from "@/lib/validation";
 
@@ -19,7 +21,8 @@ export async function requestInvestment(
   formData: FormData,
 ): Promise<ActionState> {
   const profile = await requireInvestor();
-  const parsed = investmentRequestSchema.safeParse({
+  const limitUgx = effectiveInvestmentLimit(profile.investment_limit_ugx);
+  const parsed = investmentRequestSchemaForLimit(limitUgx).safeParse({
     cycleId: formData.get("cycleId"),
     principalUgx: formData.get("principalUgx"),
     agreementAccepted: formData.get("agreementAccepted"),
@@ -27,8 +30,7 @@ export async function requestInvestment(
   if (!parsed.success)
     return {
       ok: false,
-      message:
-        "Enter UGX 125,000–50,000,000 with at most two decimals and accept the current agreement.",
+      message: `Enter an amount from UGX 125,000 to ${ugx(limitUgx)} with at most two decimals and accept the current agreement.`,
     };
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";

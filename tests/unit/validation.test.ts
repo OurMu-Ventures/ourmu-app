@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { applicationSchema, investmentRequestSchema } from "@/lib/validation";
+import {
+  applicationSchema,
+  investmentRequestSchema,
+  investmentRequestSchemaForLimit,
+} from "@/lib/validation";
 describe("server input validation", () => {
   it("normalizes applicant email", () => {
     const parsed = applicationSchema.parse({
@@ -38,6 +42,33 @@ describe("server input validation", () => {
     (principalUgx) => {
       expect(
         investmentRequestSchema.safeParse({
+          cycleId: "a1b2c3d4-e5f6-47a8-9123-abcdef123456",
+          principalUgx,
+          agreementAccepted: "yes",
+        }).success,
+      ).toBe(false);
+    },
+  );
+});
+
+describe("partner investment overrides", () => {
+  it.each(["60000000", "100000000"])(
+    "accepts %s with a 100m override",
+    (principalUgx) => {
+      expect(
+        investmentRequestSchemaForLimit(100_000_000).safeParse({
+          cycleId: "a1b2c3d4-e5f6-47a8-9123-abcdef123456",
+          principalUgx,
+          agreementAccepted: "yes",
+        }).success,
+      ).toBe(true);
+    },
+  );
+  it.each(["100000000.01", "100000000.001", "124999.99"])(
+    "rejects %s with a 100m override",
+    (principalUgx) => {
+      expect(
+        investmentRequestSchemaForLimit(100_000_000).safeParse({
           cycleId: "a1b2c3d4-e5f6-47a8-9123-abcdef123456",
           principalUgx,
           agreementAccepted: "yes",

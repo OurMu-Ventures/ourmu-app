@@ -1641,6 +1641,7 @@ export type Database = {
           email: string
           id: string
           import_batch_id: string | null
+          investment_limit_ugx: number | null
           is_test: boolean
           kyc_status: string
           kyc_verified_at: string | null
@@ -1660,6 +1661,7 @@ export type Database = {
           email: string
           id: string
           import_batch_id?: string | null
+          investment_limit_ugx?: number | null
           is_test?: boolean
           kyc_status?: string
           kyc_verified_at?: string | null
@@ -1679,6 +1681,7 @@ export type Database = {
           email?: string
           id?: string
           import_batch_id?: string | null
+          investment_limit_ugx?: number | null
           is_test?: boolean
           kyc_status?: string
           kyc_verified_at?: string | null
@@ -1703,6 +1706,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_partner_investment_limit: {
+        Args: {
+          p_admin_id: string
+          p_investor_id: string
+          p_limit_ugx: number | null
+          p_reason: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
       fan_out_maturity_email: { Args: { p_job_id: string; p_action_url: string }; Returns: number }
       update_maturity_email_settings: { Args: { p_admin_id: string; p_contacts: string[]; p_enabled: boolean; p_request_id: string; p_admin_aal2: boolean }; Returns: undefined }
       resolve_maturity_cc_review: { Args: { p_admin_id: string; p_job_id: string; p_admin_aal2: boolean; p_request_id: string }; Returns: undefined }
