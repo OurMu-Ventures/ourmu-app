@@ -15,6 +15,7 @@ import {
   maturityConfirmSchema,
   maturityFulfillmentSchema,
   maturityInstructionSchema,
+  maturityInstructionValidationMessage,
   maturityReopenSchema,
   standingTermsSchema,
   type ActionState,
@@ -51,7 +52,10 @@ export async function submitMaturityInstruction(
     agreementAccepted: formData.get("agreementAccepted") ?? "",
   });
   if (!parsed.success)
-    return { ok: false, message: "Choose one of the three maturity options." };
+    return {
+      ok: false,
+      message: maturityInstructionValidationMessage(parsed.error),
+    };
   const input = parsed.data;
   const admin = createAdminClient();
   const requestHeaders = await headers();

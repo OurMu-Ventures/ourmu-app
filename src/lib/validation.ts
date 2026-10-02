@@ -79,6 +79,32 @@ export const maturityInstructionSchema = z.object({
   agreementAccepted: z.union([z.literal("yes"), z.literal("")]).optional(),
 });
 
+export function maturityInstructionValidationMessage(
+  error: z.ZodError,
+): string {
+  const fields = new Set(error.issues.map((issue) => issue.path[0]));
+  if (fields.has("choice")) return "Choose one of the three maturity options.";
+
+  const payoutLabels = [
+    ["channel", "payment channel"],
+    ["providerLabel", "bank or network"],
+    ["accountName", "account name"],
+    ["accountReference", "account number or wallet"],
+    ["payoutDestinationId", "saved payout destination"],
+  ] as const;
+  const invalidPayoutFields = payoutLabels
+    .filter(([field]) => fields.has(field))
+    .map(([, label]) => label);
+  if (invalidPayoutFields.length)
+    return `Complete or correct these payout details: ${invalidPayoutFields.join(", ")}.`;
+
+  if (fields.has("targetCycleId") || fields.has("agreementAccepted"))
+    return "Select a valid destination cycle and accept its current agreement.";
+  if (fields.has("destinationConfirmed"))
+    return "Confirm the payout destination before submitting.";
+  return "Check the maturity form and try again.";
+}
+
 export const maturityFulfillmentSchema = z.object({
   instructionId: z.uuid(),
   actualRoiUgx: z
