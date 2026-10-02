@@ -344,6 +344,10 @@ p {
   background: #e7f6ec;
   border: 1px solid #a7d2b3;
 }
+.success[tabindex="-1"]:focus {
+  outline: 3px solid #176b5b;
+  outline-offset: 3px;
+}
 .error {
   background: #fff0ee;
   color: #79221b;

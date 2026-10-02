@@ -3,7 +3,7 @@
 import { DEFAULT_INVESTMENT_LIMIT_UGX } from "@/lib/investment-limits";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { CheckCircle2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -66,6 +66,26 @@ export function MaturityInstructionForm({
     submitMaturityInstruction,
     initialActionState,
   );
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    const element = form.current;
+    const preserveValues = (event: Event) => event.preventDefault();
+    element?.addEventListener("reset", preserveValues);
+    return () => element?.removeEventListener("reset", preserveValues);
+  }, []);
+  const confirmation = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state.ok && state.message) {
+      confirmation.current?.focus({ preventScroll: true });
+      confirmation.current?.scrollIntoView?.({
+        block: "center",
+        behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")
+          .matches
+          ? "auto"
+          : "smooth",
+      });
+    }
+  }, [state]);
   const [choice, setChoice] = useState<MaturityChoice | "">(
     existingChoice ?? "",
   );
@@ -99,7 +119,22 @@ export function MaturityInstructionForm({
   const selectedCycle = openCycles.find((cycle) => cycle.id === targetCycleId);
 
   return (
-    <form className="form" action={action}>
+    <form className="form" action={action} ref={form}>
+      {state.ok && state.message && (
+        <div
+          className="success"
+          role="region"
+          aria-label="Maturity choice saved"
+          tabIndex={-1}
+          ref={confirmation}
+        >
+          <h3>
+            <CheckCircle2 aria-hidden="true" size={22} /> Your maturity choice
+            is saved
+          </h3>
+          <p>{state.message}</p>
+        </div>
+      )}
       <input type="hidden" name="investmentId" value={investmentId} />
       <fieldset>
         <legend>Your maturity choice</legend>
@@ -304,7 +339,7 @@ export function MaturityInstructionForm({
       <ActionButton>
         {isRevision ? "Revise maturity choice" : "Record maturity choice"}
       </ActionButton>
-      <StateMessage state={state} />
+      {!state.ok && <StateMessage state={state} />}
     </form>
   );
 }

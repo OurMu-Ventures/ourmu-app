@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/actions/maturity", () => ({
   submitMaturityInstruction: vi.fn(),
@@ -9,8 +15,13 @@ vi.mock("@/actions/maturity", () => ({
   reopenMaturityInstruction: vi.fn(),
   revokeStandingTerms: vi.fn(),
 }));
+import { submitMaturityInstruction } from "@/actions/maturity";
 import { MaturityInstructionForm } from "@/components/maturity-forms";
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 const props = {
   investmentId: "f7213635-be92-5ebe-b501-b39276a45bf1",
   principalUgx: 4_569_760,
@@ -83,6 +94,113 @@ describe("Paka Paka withdrawal form", () => {
     });
     expect(screen.getByText(/investment total is unavailable/)).toBeVisible();
   });
+  it("focuses the saved confirmation and retains it when the form becomes a revision", async () => {
+    vi.mocked(submitMaturityInstruction).mockResolvedValueOnce({
+      ok: true,
+      message: "No further action is needed now.",
+    });
+    const view = render(<MaturityInstructionForm {...props} />);
+    fireEvent.click(screen.getByRole("radio", { name: /A. Bijjodolo/ }));
+    await act(async () => {
+      fireEvent.submit(view.container.querySelector("form")!);
+    });
+    const confirmation = await screen.findByRole("region", {
+      name: "Maturity choice saved",
+    });
+    expect(confirmation).toHaveTextContent("Your maturity choice is saved");
+    expect(confirmation).toHaveTextContent("No further action is needed now.");
+    expect(confirmation).toHaveFocus();
+    expect(screen.queryByRole("status")).toBeNull();
+    view.container.querySelector("form")!.reset();
+    expect(screen.getByRole("radio", { name: /A. Bijjodolo/ })).toBeChecked();
+    view.rerender(
+      <MaturityInstructionForm
+        {...props}
+        existingChoice="withdraw_all"
+        isRevision
+      />,
+    );
+    expect(screen.getByRole("region", { name: "Maturity choice saved" })).toBe(
+      confirmation,
+    );
+    expect(screen.getByRole("radio", { name: /A. Bijjodolo/ })).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Revise maturity choice" }),
+    ).toBeVisible();
+  });
+  it("shows failed saves as an alert without a saved confirmation", async () => {
+    vi.mocked(submitMaturityInstruction).mockResolvedValueOnce({
+      ok: false,
+      message: "The maturity choice could not be saved.",
+    });
+    const view = render(<MaturityInstructionForm {...props} />);
+    fireEvent.click(screen.getByRole("radio", { name: /A. Bijjodolo/ }));
+    await act(async () => {
+      fireEvent.submit(view.container.querySelector("form")!);
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "could not be saved",
+    );
+    expect(
+      screen.queryByRole("region", { name: "Maturity choice saved" }),
+    ).toBeNull();
+  });
+  it("clears a successful confirmation after a failed resubmission", async () => {
+    vi.mocked(submitMaturityInstruction)
+      .mockResolvedValueOnce({ ok: true, message: "Saved." })
+      .mockResolvedValueOnce({
+        ok: false,
+        message: "The maturity choice could not be saved.",
+      });
+    const view = render(<MaturityInstructionForm {...props} />);
+    fireEvent.click(screen.getByRole("radio", { name: /A. Bijjodolo/ }));
+    await act(async () => {
+      fireEvent.submit(view.container.querySelector("form")!);
+    });
+    expect(
+      await screen.findByRole("region", { name: "Maturity choice saved" }),
+    ).toBeVisible();
+    await act(async () => {
+      fireEvent.submit(view.container.querySelector("form")!);
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "could not be saved",
+    );
+    expect(
+      screen.queryByRole("region", { name: "Maturity choice saved" }),
+    ).toBeNull();
+  });
+  it.each([true, false])(
+    "honors reduced motion %s without an initial focus scroll",
+    async (reduced) => {
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn(() => ({ matches: reduced })),
+      );
+      const focus = vi.spyOn(HTMLElement.prototype, "focus");
+      const previous = HTMLElement.prototype.scrollIntoView;
+      const scroll = vi.fn();
+      HTMLElement.prototype.scrollIntoView = scroll;
+      try {
+        vi.mocked(submitMaturityInstruction).mockResolvedValueOnce({
+          ok: true,
+          message: "Saved.",
+        });
+        const view = render(<MaturityInstructionForm {...props} />);
+        fireEvent.click(screen.getByRole("radio", { name: /A. Bijjodolo/ }));
+        await act(async () => {
+          fireEvent.submit(view.container.querySelector("form")!);
+        });
+        expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+        expect(scroll).toHaveBeenCalledWith({
+          block: "center",
+          behavior: reduced ? "auto" : "smooth",
+        });
+      } finally {
+        HTMLElement.prototype.scrollIntoView = previous;
+      }
+    },
+  );
   it("explains legacy terms without silently converting them", () => {
     render(
       <MaturityInstructionForm

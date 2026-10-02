@@ -224,7 +224,28 @@ export default async function InvestmentPage({
             The amount actually paid follows the return recorded by the fund,
             which may differ from this projection.
           </p>
-          {!instruction && (
+          {instructionTerms && <p className="muted">{instructionTerms}</p>}
+          {instruction?.status === "requested" && (
+            <>
+              <div className="success">
+                <h3>Your recorded maturity choice</h3>
+                <p>
+                  <strong>{maturityChoiceLabel(instruction.choice)}</strong>{" "}
+                  (projected payout {ugx(instruction.projected_payout_ugx)} ·
+                  projected reinvestment{" "}
+                  {ugx(instruction.projected_reinvest_ugx)}
+                  ). You can revise it until our team begins processing.
+                </p>
+              </div>
+              {instruction.resolution_notes && (
+                <p className="notice">
+                  Our team asked for a revision:{" "}
+                  <strong>{instruction.resolution_notes}</strong>
+                </p>
+              )}
+            </>
+          )}
+          {(!instruction || instruction.status === "requested") && (
             <MaturityInstructionForm
               limitUgx={effectiveInvestmentLimit(profile.investment_limit_ugx)}
               investmentId={data.id}
@@ -232,39 +253,10 @@ export default async function InvestmentPage({
               projectedReturnUgx={Number(data.projected_return_ugx)}
               savedDestinations={(destinations ?? []) as SavedDestination[]}
               openCycles={cycleOptions}
-              isRevision={false}
+              existingChoice={instruction?.choice}
+              existingWithdrawalUgx={instruction?.requested_withdrawal_ugx}
+              isRevision={!!instruction}
             />
-          )}
-          {instructionTerms && <p className="muted">{instructionTerms}</p>}
-          {instruction?.status === "requested" && (
-            <>
-              <p className="notice">
-                Choice recorded:{" "}
-                <strong>{maturityChoiceLabel(instruction.choice)}</strong>{" "}
-                (projected payout {ugx(instruction.projected_payout_ugx)} ·
-                projected reinvestment {ugx(instruction.projected_reinvest_ugx)}
-                ). You can revise it until an admin begins processing.
-              </p>
-              {instruction.resolution_notes && (
-                <p className="notice">
-                  Our team asked for a revision:{" "}
-                  <strong>{instruction.resolution_notes}</strong>
-                </p>
-              )}
-              <MaturityInstructionForm
-                limitUgx={effectiveInvestmentLimit(
-                  profile.investment_limit_ugx,
-                )}
-                investmentId={data.id}
-                principalUgx={Number(data.principal_ugx)}
-                projectedReturnUgx={Number(data.projected_return_ugx)}
-                savedDestinations={(destinations ?? []) as SavedDestination[]}
-                openCycles={cycleOptions}
-                existingChoice={instruction.choice}
-                existingWithdrawalUgx={instruction.requested_withdrawal_ugx}
-                isRevision
-              />
-            </>
           )}
           {instruction?.status === "processing" && (
             <>
