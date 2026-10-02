@@ -86,7 +86,7 @@ export default async function AdminMaturitiesPage({
   // The filtered empty embed lets History include legacy reported-paid
   // instructions even when their instruction status was never fulfilled.
   let query = admin.from("maturity_instructions").select(
-    "*,profiles(legal_name,email),investments!maturity_instructions_investment_id_fkey!inner(principal_ugx,projected_return_ugx,maturity_date,payout_basis),paid_investment:investments!maturity_instructions_investment_id_fkey(),investment_cycles!maturity_instructions_target_cycle_id_fkey(name),payout_destinations!maturity_instructions_payout_destination_id_fkey(channel,provider_label,account_name,account_last_four,account_ref_ciphertext,account_ref_iv,account_ref_auth_tag,key_version)",
+    "*,profiles!maturity_instructions_investor_id_fkey(legal_name,email),investments!maturity_instructions_investment_id_fkey!inner(principal_ugx,projected_return_ugx,maturity_date,payout_basis),paid_investment:investments!maturity_instructions_investment_id_fkey(),investment_cycles!maturity_instructions_target_cycle_id_fkey(name),payout_destinations!maturity_instructions_payout_destination_id_fkey(channel,provider_label,account_name,account_last_four,account_ref_ciphertext,account_ref_iv,account_ref_auth_tag,key_version)",
     { count: "exact" },
   );
   if (tab === "history") {

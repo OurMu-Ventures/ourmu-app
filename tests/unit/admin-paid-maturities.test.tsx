@@ -25,7 +25,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => {
       const query = {
-        select: () => query,
+        select: (...args: unknown[]) => { state.calls.push(["select", ...args]); return query; },
         order: () => query,
         eq: (...args: unknown[]) => { state.calls.push(["eq", ...args]); return query; },
         neq: (...args: unknown[]) => { state.calls.push(["neq", ...args]); return query; },
@@ -85,6 +85,13 @@ describe("paid records in the admin maturity queue", () => {
 });
 
 describe("maturity views", () => {
+  it("joins the investor profile explicitly rather than the processing admin", async () => {
+    state.calls = [];
+    await AdminMaturitiesPage({});
+    const select = state.calls.find(([method]) => method === "select")?.[1];
+    expect(select).toContain("profiles!maturity_instructions_investor_id_fkey(legal_name,email)");
+    expect(select).not.toContain("profiles(legal_name,email)");
+  });
   it("defaults to pending withdrawals without search params", async () => {
     state.calls = [];
     const html = renderToStaticMarkup(await AdminMaturitiesPage({}));
