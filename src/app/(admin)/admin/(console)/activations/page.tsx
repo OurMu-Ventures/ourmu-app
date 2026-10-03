@@ -28,13 +28,14 @@ export default async function AdminActivationsPage({
   const { data, count, error } = await admin
     .from("investments")
     .select(
-      "id,principal_ugx,requested_at,reservation_expires_at,maturity_date,is_test,profiles(legal_name,email),investment_cycles(name)",
+      "id,status,principal_ugx,requested_at,reservation_expires_at,maturity_date,is_test,policy_version,profiles(legal_name,email),investment_cycles(name)",
       { count: "exact" },
     )
-    .eq("status", "reserved")
+    .in("status", ["reserved", "expired"])
+    .or("status.eq.reserved,policy_version.eq.auto_cycle_v1")
     .eq("record_origin", "portal")
     .eq("payout_basis", "projected")
-    .gt("reservation_expires_at", new Date().toISOString())
+    .not("reservation_expires_at", "is", null)
     .order("reservation_expires_at", { ascending: true })
     .order("id", { ascending: true })
     .range(from, from + PAGE_SIZE - 1);
@@ -47,9 +48,11 @@ export default async function AdminActivationsPage({
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Activations</h1>
       <p className="notice">
         Compare bank statements independently before activating a reservation.
-        Confirm the exact amount, a unique bank reference, and the received
-        date, then type ACTIVATE. Only unexpired reservations appear here, with
-        those expiring soonest first.
+        Confirm the exact amount, a unique bank reference, the verified payment
+        date and time (Africa/Kampala), and the received date, then type
+        ACTIVATE. Timely payments can be verified after expiry; payments after
+        the deadline are held for staff resolution, never revived from cancelled
+        reservations, and never moved to another cycle automatically.
       </p>
       <p className="muted" aria-live="polite">
         {items.length
@@ -77,16 +80,22 @@ export default async function AdminActivationsPage({
                 {date(item.maturity_date)}
               </p>
               <p>
-                Reservation expires{" "}
+                Payment deadline{" "}
                 <strong>
                   {item.reservation_expires_at
                     ? dateTime(item.reservation_expires_at)
                     : "Not set"}
-                </strong>
+                </strong>{" "}
+                (Africa/Kampala) · {item.status}
+                {item.policy_version ? ` · ${item.policy_version}` : ""}
               </p>
             </div>
             <span className="badge">
-              {item.is_test ? "Test reservation" : "Awaiting activation"}
+              {item.is_test
+                ? "Test reservation"
+                : item.status === "expired"
+                  ? "Expired — verify timely payment only"
+                  : "Awaiting activation"}
             </span>
           </div>
           <ActivationForm

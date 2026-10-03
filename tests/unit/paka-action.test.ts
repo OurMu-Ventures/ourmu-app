@@ -36,6 +36,7 @@ function form(amount: string, choice = "withdraw_roi_reinvest_principal") {
     destinationConfirmed: "yes",
     targetCycleId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
     agreementAccepted: "yes",
+    expectedAgreementVersionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   }))
     data.set(key, value);
   return data;
@@ -136,6 +137,10 @@ describe("custom maturity action", () => {
         expect.objectContaining({
           p_requested_withdrawal_ugx: null,
           p_custom_split: false,
+          p_expected_agreement_version_id:
+            choice === "withdraw_all"
+              ? null
+              : "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         }),
       );
     },

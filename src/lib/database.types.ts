@@ -380,6 +380,7 @@ export type Database = {
           investment_id: string
           received_amount_ugx: number
           received_date: string
+          received_at: string | null
           recorded_by: string
         }
         Insert: {
@@ -390,6 +391,7 @@ export type Database = {
           investment_id: string
           received_amount_ugx: number
           received_date: string
+          received_at?: string | null
           recorded_by: string
         }
         Update: {
@@ -400,6 +402,7 @@ export type Database = {
           investment_id?: string
           received_amount_ugx?: number
           received_date?: string
+          received_at?: string | null
           recorded_by?: string
         }
         Relationships: [
@@ -675,6 +678,7 @@ export type Database = {
           reported_return_ugx: number | null
           requested_at: string
           reservation_expires_at: string | null
+          policy_version: string | null
           source_key: string | null
           source_row: number | null
           source_sheet: string | null
@@ -704,6 +708,7 @@ export type Database = {
           reported_return_ugx?: number | null
           requested_at?: string
           reservation_expires_at?: string | null
+          policy_version?: string | null
           source_key?: string | null
           source_row?: number | null
           source_sheet?: string | null
@@ -733,6 +738,7 @@ export type Database = {
           reported_return_ugx?: number | null
           requested_at?: string
           reservation_expires_at?: string | null
+          policy_version?: string | null
           source_key?: string | null
           source_row?: number | null
           source_sheet?: string | null
@@ -1235,6 +1241,7 @@ export type Database = {
           status: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id: string | null
           target_cycle_id: string | null
+          policy_version: string | null
           updated_at: string
         }
         Insert: {
@@ -1274,6 +1281,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id?: string | null
           target_cycle_id?: string | null
+          policy_version?: string | null
           updated_at?: string
         }
         Update: {
@@ -1313,6 +1321,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id?: string | null
           target_cycle_id?: string | null
+          policy_version?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1749,6 +1758,7 @@ export type Database = {
           p_received_amount_ugx: number
           p_received_date: string
           p_request_id: string
+          p_received_at?: string
         }
         Returns: undefined
       }
@@ -1834,6 +1844,7 @@ export type Database = {
           p_principal_ugx: number
           p_request_id: string
           p_user_agent: string
+          p_expected_agreement_version_id?: string
         }
         Returns: string
       }
@@ -1878,6 +1889,7 @@ export type Database = {
           p_requested_withdrawal_ugx?: number
           p_target_cycle_id: string
           p_user_agent: string
+          p_expected_agreement_version_id?: string
         }
         Returns: string
       }

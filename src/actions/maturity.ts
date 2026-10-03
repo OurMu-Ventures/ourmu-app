@@ -53,6 +53,8 @@ export async function submitMaturityInstruction(
     accountReference: formData.get("accountReference") ?? undefined,
     destinationConfirmed: formData.get("destinationConfirmed") ?? "",
     targetCycleId: formData.get("targetCycleId") ?? "",
+    expectedAgreementVersionId:
+      formData.get("expectedAgreementVersionId") ?? "",
     agreementAccepted: formData.get("agreementAccepted") ?? "",
   });
   if (!parsed.success)
@@ -97,6 +99,12 @@ export async function submitMaturityInstruction(
     );
     if (message) return { ok: false, message };
   }
+  if (involvesReinvestment(input.choice) && !input.expectedAgreementVersionId)
+    return {
+      ok: false,
+      message:
+        "Reload this page to review and accept the current reinvestment agreement.",
+    };
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
 
@@ -193,16 +201,27 @@ export async function submitMaturityInstruction(
 
   let targetCycleId: string | null = null;
   if (involvesReinvestment(input.choice)) {
-    if (!input.targetCycleId || input.agreementAccepted !== "yes")
+    // The cycle is assigned automatically when the choice is recorded; the
+    // submitted identifiers are evidence of the displayed terms.
+    if (input.agreementAccepted !== "yes")
       return {
         ok: false,
-        message: "Select a destination cycle and accept its current agreement.",
+        message:
+          "Accept the displayed reinvestment agreement to record this choice.",
+      };
+    if (!input.targetCycleId)
+      return {
+        ok: false,
+        message:
+          "Reinvestment is unavailable; no eligible cycle is open. Full withdrawal remains available.",
       };
     targetCycleId = input.targetCycleId;
   }
 
   // The RPC accepts null for the uninvolved leg; the generated Args type
   // marks these uuid params as required strings, hence the narrow cast.
+  // The server resolves the reinvestment cycle open at submission time and
+  // treats the submitted identifiers as evidence of the displayed terms.
   const { error } = await admin.rpc("submit_maturity_instruction", {
     p_investor_id: profile.id,
     p_investment_id: input.investmentId,
@@ -219,6 +238,9 @@ export async function submitMaturityInstruction(
     p_request_id: requestId(),
     p_user_agent: requestHeaders.get("user-agent") ?? "unknown",
     p_ip_fingerprint: toBytea(fingerprintRequestValue("ip", ip)),
+    p_expected_agreement_version_id: (involvesReinvestment(input.choice)
+      ? input.expectedAgreementVersionId
+      : null) as unknown as string,
   });
   if (error)
     return {

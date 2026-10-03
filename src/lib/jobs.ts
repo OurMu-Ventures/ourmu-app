@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { buildAgreementPdf } from "@/lib/agreements/pdf";
 import { sendTransactionalEmail, type EmailTemplate } from "@/lib/email/send";
 import { getPublicEnv } from "@/lib/env";
-import { bpsToPercent, date, ugx } from "@/lib/format";
+import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
 import {
   safeFulfilledSplits,
   UNAVAILABLE_MATURITY_AMOUNTS,
@@ -502,6 +502,14 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
   }
   if (
     job.entity_type === "investment" &&
+    payload.template === "reservation_created"
+  ) {
+    const content = await reservationEmailContent(job.entity_id);
+    actionUrl = payload.actionUrl ?? content.actionUrl;
+    detail = content.detail;
+  }
+  if (
+    job.entity_type === "investment" &&
     payload.template === "investment_activated"
   ) {
     // When the job names a receipt, the email must carry its PDF: a missing
@@ -606,6 +614,39 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
   return messageId;
 }
 
+// Reservation emails quote the actual payment deadline (earlier of 48h or
+// cycle close), never a fixed window. Payment after the cutoff requires a new
+// reservation; timely transfers already made go to staff resolution.
+async function reservationEmailContent(
+  investmentId: string,
+): Promise<{ detail: string; actionUrl: string }> {
+  const admin = createAdminClient();
+  const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
+  const { data: investment } = await admin
+    .from("investments")
+    .select(
+      "principal_ugx,reservation_expires_at,investment_cycles(name)",
+    )
+    .eq("id", investmentId)
+    .single();
+  if (!investment) throw new Error("EMAIL_JOB_INVALID");
+  const cycle = Array.isArray(investment.investment_cycles)
+    ? investment.investment_cycles[0]
+    : investment.investment_cycles;
+  const deadline = investment.reservation_expires_at
+    ? dateTime(investment.reservation_expires_at)
+    : null;
+  const detail =
+    `Your OURMU investment reservation of ${ugx(Number(investment.principal_ugx))}` +
+    `${cycle?.name ? ` for ${cycle.name}` : ""} is recorded. ` +
+    (deadline
+      ? `Transfer the exact amount before ${deadline} (Africa/Kampala). `
+      : "Transfer the exact amount before the displayed payment deadline. ") +
+    "Payment after the deadline requires a new reservation. " +
+    "If you already transferred on time, our team will resolve it; do not pay again.";
+  return { detail, actionUrl };
+}
+
 // Maturity emails carry the figures that prompt the partner's decision:
 // principal, projected ROI, payout date, the three choices with their
 // splits, and a link to the investment — never just the subject line.
@@ -633,7 +674,7 @@ async function maturityEmailContent(
   const { data: instruction } = await admin
     .from("maturity_instructions")
     .select(
-      "choice,requested_withdrawal_ugx,status,projected_payout_ugx,projected_reinvest_ugx,actual_payout_ugx,actual_reinvest_ugx,actual_roi_ugx,proposed_actual_roi_ugx,resolution_notes",
+      "choice,requested_withdrawal_ugx,status,projected_payout_ugx,projected_reinvest_ugx,actual_payout_ugx,actual_reinvest_ugx,actual_roi_ugx,proposed_actual_roi_ugx,resolution_notes,target_cycle_id",
     )
     .eq("investment_id", investmentId)
     .maybeSingle();
@@ -662,12 +703,23 @@ async function maturityEmailContent(
       instruction.choice as MaturityChoice,
       instruction.requested_withdrawal_ugx,
     );
+    const { data: assigned } = instruction.target_cycle_id
+      ? await admin
+          .from("investment_cycles")
+          .select("name,maturity_date")
+          .eq("id", instruction.target_cycle_id)
+          .maybeSingle()
+      : { data: null };
+    const cycleSuffix =
+      assigned && Number(instruction.projected_reinvest_ugx) > 0
+        ? ` Assigned cycle ${assigned.name} (matures ${date(assigned.maturity_date)}). The cycle was assigned automatically when your choice was recorded.`
+        : "";
     return {
       actionUrl,
       detail:
         `Your maturity choice (${maturityChoiceLabel(instruction.choice)}) is recorded: projected payout ` +
         `${ugx(instruction.projected_payout_ugx)}, projected reinvestment ` +
-        `${ugx(instruction.projected_reinvest_ugx)}. ${instructionTerms ? `${instructionTerms} ` : ""}You can revise it until our team begins ` +
+        `${ugx(instruction.projected_reinvest_ugx)}.${cycleSuffix} ${instructionTerms ? `${instructionTerms} ` : ""}You can revise it until our team begins ` +
         `processing. Scheduled payout date: ${payoutDate}.`,
     };
   }

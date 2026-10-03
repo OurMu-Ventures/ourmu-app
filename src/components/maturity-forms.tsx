@@ -39,6 +39,15 @@ export type OpenCycleOption = {
   name: string;
   agreement_version_id: string;
   agreement_title: string;
+  maturity_date?: string;
+};
+
+export type AssignedCycleOption = {
+  id: string;
+  name: string;
+  maturity_date: string;
+  agreement_version_id: string;
+  agreement_title: string;
 };
 
 export function MaturityInstructionForm({
@@ -48,6 +57,7 @@ export function MaturityInstructionForm({
   projectedReturnUgx,
   savedDestinations,
   openCycles,
+  assignedCycle,
   existingChoice,
   existingWithdrawalUgx,
   isRevision,
@@ -57,7 +67,8 @@ export function MaturityInstructionForm({
   principalUgx: number;
   projectedReturnUgx: number;
   savedDestinations: SavedDestination[];
-  openCycles: OpenCycleOption[];
+  openCycles?: OpenCycleOption[];
+  assignedCycle?: AssignedCycleOption | null;
   existingChoice?: MaturityChoice;
   existingWithdrawalUgx?: number | null;
   isRevision: boolean;
@@ -111,12 +122,28 @@ export function MaturityInstructionForm({
         Number(withdrawal),
       );
   const [useSaved, setUseSaved] = useState(savedDestinations.length > 0);
-  const [targetCycleId, setTargetCycleId] = useState("");
+  const legacyCycles = openCycles ?? [];
+  const resolvedCycle: AssignedCycleOption | null =
+    assignedCycle ??
+    (legacyCycles.length === 1
+      ? {
+          id: legacyCycles[0].id,
+          name: legacyCycles[0].name,
+          maturity_date: legacyCycles[0].maturity_date ?? "",
+          agreement_version_id: legacyCycles[0].agreement_version_id,
+          agreement_title: legacyCycles[0].agreement_title,
+        }
+      : null);
+  const agreementAcceptance = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (agreementAcceptance.current)
+      agreementAcceptance.current.checked = false;
+  }, [resolvedCycle?.id, resolvedCycle?.agreement_version_id]);
+  const reinvestAvailable = Boolean(resolvedCycle);
   const needsPayout =
     choice === "withdraw_all" || choice === "withdraw_roi_reinvest_principal";
   const needsReinvest =
     choice === "withdraw_roi_reinvest_principal" || choice === "reinvest_all";
-  const selectedCycle = openCycles.find((cycle) => cycle.id === targetCycleId);
 
   return (
     <form className="form" action={action} ref={form}>
@@ -284,57 +311,69 @@ export function MaturityInstructionForm({
         </fieldset>
       )}
 
-      {needsReinvest && (
-        <fieldset>
-          <legend>Reinvestment destination</legend>
-          <label>
-            Destination cycle
-            <select
-              name="targetCycleId"
-              required
-              value={targetCycleId}
-              onChange={(event) => setTargetCycleId(event.target.value)}
-            >
-              <option value="">Select…</option>
-              {openCycles.map((cycle) => (
-                <option key={cycle.id} value={cycle.id}>
-                  {cycle.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="checkbox">
+      {needsReinvest &&
+        (reinvestAvailable && resolvedCycle ? (
+          <fieldset>
+            <legend>Reinvestment destination</legend>
             <input
-              name="agreementAccepted"
-              type="checkbox"
-              value="yes"
-              required
+              type="hidden"
+              name="targetCycleId"
+              value={resolvedCycle.id}
             />
-            <span>
-              I have read and accept the{" "}
-              {selectedCycle ? (
+            <input
+              type="hidden"
+              name="expectedAgreementVersionId"
+              value={resolvedCycle.agreement_version_id}
+            />
+            <p>
+              Your reinvestment cycle: <strong>{resolvedCycle.name}</strong>
+              {resolvedCycle.maturity_date
+                ? ` · matures ${resolvedCycle.maturity_date}`
+                : ""}
+            </p>
+            <p className="muted">
+              <small>
+                The cycle is assigned automatically when your choice is
+                recorded. Saving does not reserve capacity; capacity and your
+                cumulative limit are rechecked during processing. If checks
+                fail, your instruction is held for staff resolution and never
+                moved to another cycle.
+              </small>
+            </p>
+            <label className="checkbox">
+              <input
+                ref={agreementAcceptance}
+                name="agreementAccepted"
+                type="checkbox"
+                value="yes"
+                required
+              />
+              <span>
+                I have read and accept the{" "}
                 <Link
-                  aria-label={`${selectedCycle.agreement_title} (opens in a new tab)`}
+                  aria-label={`${resolvedCycle.agreement_title} (opens in a new tab)`}
                   className="agreement-acceptance-link"
-                  href={`/participation-agreements/${selectedCycle.agreement_version_id}`}
+                  href={`/participation-agreements/${resolvedCycle.agreement_version_id}`}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  <span>{selectedCycle.agreement_title}</span>
+                  <span>{resolvedCycle.agreement_title}</span>
                   <ExternalLink
                     aria-hidden="true"
                     size={15}
                     strokeWidth={2.5}
                   />
                 </Link>
-              ) : (
-                "destination cycle’s current agreement"
-              )}
-              . This records a legally significant acceptance receipt.
-            </span>
-          </label>
-        </fieldset>
-      )}
+                . This records a legally significant acceptance receipt.
+              </span>
+            </label>
+          </fieldset>
+        ) : (
+          <p className="notice">
+            Reinvestment is unavailable; no eligible cycle is open. Full
+            withdrawal remains available.
+          </p>
+        ))}
 
       <ActionButton>
         {isRevision ? "Revise maturity choice" : "Record maturity choice"}

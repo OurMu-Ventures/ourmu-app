@@ -31,6 +31,7 @@ export const nextOfKinSchema = z.object({
 export const investmentRequestSchemaForLimit = (limitUgx: number) =>
   z.object({
     cycleId: z.uuid(),
+    agreementVersionId: z.union([z.uuid(), z.literal("")]).optional(),
     principalUgx: z
       .string()
       .trim()
@@ -56,6 +57,15 @@ export const activationSchema = z.object({
     .regex(/^\d+(?:\.\d{1,8})?$/)
     .refine((value) => Number(value) > 0),
   receivedDate: z.iso.date(),
+  // Verified bank payment timestamp in Africa/Kampala (datetime-local input).
+  // Optional for legacy callers; required for auto_cycle_v1 reservations.
+  receivedAt: z
+    .string()
+    .trim()
+    .min(10)
+    .max(40)
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/)
+    .optional(),
   confirmation: z.literal("ACTIVATE"),
 });
 
@@ -86,9 +96,14 @@ export const maturityInstructionSchema = z
     payoutDestinationId: z.union([z.uuid(), z.literal("")]).optional(),
     ...payoutDestinationSchema.partial().shape,
     destinationConfirmed: z.union([z.literal("yes"), z.literal("")]).optional(),
-    // Present when the choice involves reinvestment: the destination cycle
-    // plus acceptance of that cycle's current agreement.
+    // Present when the choice involves reinvestment: evidence of the displayed
+    // destination cycle plus acceptance of its displayed agreement. The server
+    // assigns the cycle open at submission time; stale previews must be
+    // reviewed and re-accepted.
     targetCycleId: z.union([z.uuid(), z.literal("")]).optional(),
+    expectedAgreementVersionId: z
+      .union([z.uuid(), z.literal("")])
+      .optional(),
     agreementAccepted: z.union([z.literal("yes"), z.literal("")]).optional(),
   })
   .superRefine((input, ctx) => {
@@ -128,7 +143,7 @@ export function maturityInstructionValidationMessage(
     return `Complete or correct these payout details: ${invalidPayoutFields.join(", ")}.`;
 
   if (fields.has("targetCycleId") || fields.has("agreementAccepted"))
-    return "Select a valid destination cycle and accept its current agreement.";
+    return "Accept the displayed reinvestment agreement to record this choice.";
   if (fields.has("destinationConfirmed"))
     return "Confirm the payout destination before submitting.";
   return "Check the maturity form and try again.";
