@@ -395,8 +395,7 @@ export async function resolveMaturityCcReview(
     p_admin_aal2: aal?.currentLevel === "aal2",
     p_request_id: requestId(),
   });
-  if (error)
-    return { ok: false, message: "CC review could not be cleared." };
+  if (error) return { ok: false, message: "CC review could not be cleared." };
   revalidatePath("/admin/jobs");
   return { ok: true, message: "CC review marked complete." };
 }
@@ -419,7 +418,9 @@ export async function retryJob(formData: FormData) {
       last_error_code: null,
     })
     .eq("id", jobId)
-    .in("status", ["failed", "dead"]);
+    .or(
+      "status.in.(failed,dead),and(status.eq.pending,last_error_code.in.(EMAIL_DAILY_QUOTA_EXCEEDED,EMAIL_MONTHLY_QUOTA_EXCEEDED))",
+    );
   if (error) throw new Error("Job retry failed");
   // Retrying a receipt generation reuses the same receipt number: reset the
   // row to generating so the worker rebuilds the same document.
