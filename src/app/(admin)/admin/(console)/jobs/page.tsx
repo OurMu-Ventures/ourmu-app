@@ -1,15 +1,14 @@
-import {
-  reconcileJobDelivery,
-  retryJob,
-} from "@/actions/admin";
+import { reconcileJobDelivery, retryJob } from "@/actions/admin";
 import { ResolveMaturityCcReviewForm } from "@/components/ResolveMaturityCcReviewForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
+import { EMAIL_QUOTA_CODES } from "@/lib/email/quota";
 import { dateTime } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 export default async function JobsPage() {
   await requireAdmin();
   const admin = createAdminClient();
+  const now = new Date().toISOString();
   const { data } = await admin
     .from("jobs")
     .select("*")
@@ -20,6 +19,14 @@ export default async function JobsPage() {
     .select("*")
     .eq("cc_review_required", true)
     .order("created_at", { ascending: false });
+  const { count: quotaBlocked, error: quotaError } = await admin
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("kind", "send_email")
+    .in("status", ["pending", "failed"])
+    .in("last_error_code", [...EMAIL_QUOTA_CODES])
+    .gt("available_at", now);
+  if (quotaError) throw new Error("Unable to load email quota status");
   const flaggedJobs = flaggedJobsData ?? [];
   const visibleJobs = [
     ...flaggedJobs,
@@ -31,6 +38,15 @@ export default async function JobsPage() {
     <>
       <p className="eyebrow">Durable side effects</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Jobs</h1>
+      {(quotaBlocked ?? 0) > 0 && (
+        <p className="notice" role="status">
+          Email sending is paused after a Resend quota refusal. {quotaBlocked}{" "}
+          jobs are deferred without consuming retry attempts. Daily limits
+          resume at 00:01 UTC (03:01 Kampala); monthly limits are checked once a
+          day. Other email jobs remain queued. PDF jobs continue. After a plan
+          upgrade, Retry on each quota-deferred job allows an earlier check.
+        </p>
+      )}
       {flaggedJobs.length > 0 && (
         <div className="notice" role="alert">
           {flaggedJobs.length} maturity email team{" "}
@@ -49,6 +65,7 @@ export default async function JobsPage() {
               <th>Status</th>
               <th>Attempts</th>
               <th>Error code</th>
+              <th>Next check</th>
               <th>CC review</th>
               <th>Provider message</th>
               <th>Action</th>
@@ -67,6 +84,15 @@ export default async function JobsPage() {
                   {item.attempts}/{item.max_attempts}
                 </td>
                 <td>{item.last_error_code ?? "—"}</td>
+                <td>
+                  {EMAIL_QUOTA_CODES.some(
+                    (code) => code === item.last_error_code,
+                  )
+                    ? item.available_at > now
+                      ? dateTime(item.available_at)
+                      : "Ready — awaiting worker"
+                    : "—"}
+                </td>
                 <td>
                   {item.cc_review_required
                     ? "Team copy missed; review recipient"
@@ -106,7 +132,11 @@ export default async function JobsPage() {
                       </form>
                     </>
                   ) : (
-                    ["failed", "dead"].includes(item.status) && (
+                    (["failed", "dead"].includes(item.status) ||
+                      (item.status === "pending" &&
+                        EMAIL_QUOTA_CODES.some(
+                          (code) => code === item.last_error_code,
+                        ))) && (
                       <form action={retryJob}>
                         <input type="hidden" name="jobId" value={item.id} />
                         <SubmitButton pendingLabel="Retrying…">

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Resend } from "resend";
+import { EmailQuotaError } from "@/lib/email/quota";
 
 import {
   renderTransactionalEmail,
@@ -51,7 +52,13 @@ export async function sendTransactionalEmail(input: {
       template: input.template,
       provider: "resend",
       code: error.name ?? "unknown",
+      statusCode:
+        typeof error.statusCode === "number" ? error.statusCode : null,
     });
+    if (error.name === "daily_quota_exceeded")
+      throw new EmailQuotaError("EMAIL_DAILY_QUOTA_EXCEEDED");
+    if (error.name === "monthly_quota_exceeded")
+      throw new EmailQuotaError("EMAIL_MONTHLY_QUOTA_EXCEEDED");
     throw new Error("EMAIL_DELIVERY_FAILED");
   }
   return data?.id ?? null;

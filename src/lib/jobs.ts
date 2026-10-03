@@ -1,6 +1,11 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import {
+  EMAIL_QUOTA_CODES,
+  EmailQuotaError,
+  quotaRetryAt,
+} from "@/lib/email/quota";
 
 import { buildAgreementPdf } from "@/lib/agreements/pdf";
 import { sendTransactionalEmail, type EmailTemplate } from "@/lib/email/send";
@@ -82,19 +87,33 @@ export function needsReconciliation(input: {
 
 export async function processDueJobs(limit = 10, campaignId?: string) {
   const admin = createAdminClient();
+  const { data: quotaHold, error: quotaHoldError } = await admin
+    .from("jobs")
+    .select("available_at")
+    .eq("kind", "send_email")
+    .in("status", ["pending", "failed"])
+    .in("last_error_code", [...EMAIL_QUOTA_CODES])
+    .gt("available_at", new Date().toISOString())
+    .order("available_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (quotaHoldError) throw new Error("EMAIL_QUOTA_HOLD_FETCH_FAILED");
+  let emailPaused = Boolean(quotaHold);
   let query = admin
     .from("jobs")
     .select("*")
     .in("status", ["pending", "failed"])
     .lte("available_at", new Date().toISOString());
+  if (emailPaused) query = query.neq("kind", "send_email");
   if (campaignId)
     query = query
       .eq("entity_type", "email_campaign")
       .eq("entity_id", campaignId);
   const { data: jobs, error } = await query.order("created_at").limit(limit);
   if (error) throw new Error("JOB_FETCH_FAILED");
-  const result = { processed: 0, succeeded: 0, failed: 0 };
+  const result = { processed: 0, succeeded: 0, failed: 0, deferred: 0 };
   for (const raw of (jobs ?? []) as JobRow[]) {
+    if (emailPaused && raw.kind === "send_email") continue;
     result.processed += 1;
     // Conditional claim: only the worker whose UPDATE matches a
     // pending/failed row owns the job. Concurrent workers whose UPDATE
@@ -135,6 +154,26 @@ export async function processDueJobs(limit = 10, campaignId?: string) {
         .eq("id", raw.id);
       result.succeeded += 1;
     } catch (jobError) {
+      if (jobError instanceof EmailQuotaError && raw.kind === "send_email") {
+        // The provider explicitly rejected this request. Restore prior tracking;
+        // any earlier ambiguous send must retain its reconciliation protection.
+        const { error: deferError } = await admin
+          .from("jobs")
+          .update({
+            status: "pending",
+            attempts: raw.attempts,
+            locked_at: null,
+            last_error_code: jobError.code,
+            available_at: quotaRetryAt(jobError.code),
+            first_send_attempt_at: raw.first_send_attempt_at ?? null,
+            send_attempts: raw.send_attempts ?? 0,
+          })
+          .eq("id", raw.id);
+        if (deferError) throw new Error("EMAIL_QUOTA_DEFER_FAILED");
+        emailPaused = true;
+        result.deferred += 1;
+        continue;
+      }
       const terminal =
         raw.attempts + 1 >= raw.max_attempts ||
         (jobError instanceof Error &&
