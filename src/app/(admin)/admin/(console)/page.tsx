@@ -15,6 +15,7 @@ export default async function AdminPage() {
     { data: closures },
     { data: cycle },
     { data: reserved },
+    { data: oldestPending, error: oldestPendingError },
   ] = await Promise.all([
     admin
       .from("investor_applications")
@@ -48,7 +49,34 @@ export default async function AdminPage() {
       .select("cycle_id,units,principal_ugx")
       .eq("is_test", false)
       .in("status", ["reserved", "active"]),
+    admin
+      .from("investments")
+      .select("requested_at")
+      .eq("status", "reserved")
+      .eq("is_test", false)
+      .order("requested_at", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
   ]);
+  if (oldestPendingError)
+    throw new Error("Unable to load the oldest pending reservation");
+  // eslint-disable-next-line react-hooks/purity -- server-rendered queue age at request time
+  const now = Date.now();
+  const oldestPendingHours = oldestPending
+    ? Math.max(
+        0,
+        Math.floor(
+          (now - new Date(oldestPending.requested_at).getTime()) /
+            3_600_000,
+        ),
+      )
+    : null;
+  const oldestPendingAge =
+    oldestPendingHours === null
+      ? "None"
+      : oldestPendingHours >= 24
+        ? `${Math.floor(oldestPendingHours / 24)} days`
+        : `${oldestPendingHours} hours`;
   const openCycleInvestments = cycle
     ? (reserved ?? []).filter((item) => item.cycle_id === cycle.id)
     : [];
@@ -68,6 +96,19 @@ export default async function AdminPage() {
         <article className="card">
           <p className="muted">Awaiting activation</p>
           <p className="stat">{awaitingActivation ?? 0}</p>
+          <p>
+            Oldest pending: <strong>{oldestPendingAge}</strong>
+          </p>
+          <p
+            className={
+              oldestPendingHours !== null && oldestPendingHours >= 72
+                ? "notice"
+                : "muted"
+            }
+          >
+            Review pending reservations daily; follow up after 3 days. Verify
+            bank receipts before expiring.
+          </p>
         </article>
         <article className="card">
           <p className="muted">Active investments</p>

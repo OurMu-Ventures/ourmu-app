@@ -28,7 +28,7 @@ export default async function AdminActivationsPage({
   const { data, count, error } = await admin
     .from("investments")
     .select(
-      "id,status,principal_ugx,requested_at,reservation_expires_at,maturity_date,is_test,policy_version,profiles(legal_name,email),investment_cycles(name)",
+      "id,status,principal_ugx,requested_at,maturity_date,is_test,policy_version,profiles(legal_name,email),investment_cycles(name)",
       { count: "exact" },
     )
     .eq("status", "reserved")

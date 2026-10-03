@@ -123,6 +123,9 @@ select lives_ok($$select public.expire_investment(
  (select id from public.investments where status='reserved'), 'EXPIRE',true,gen_random_uuid())$$,
  'administrator manually expires reservation');
 select is((select count(*) from public.audit_events where action='investment.expired'),1::bigint,'manual expiry is audited');
+select is((select metadata->>'cycle_id' from public.audit_events where action='investment.expired'), 'd4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4', 'expiry audit records released cycle');
+select is((select (metadata->>'principal_ugx')::numeric from public.audit_events where action='investment.expired'), 125000::numeric, 'expiry audit records released principal');
+select matches(col_description('public.investments'::regclass, (select attnum from pg_attribute where attrelid='public.investments'::regclass and attname='reservation_expires_at')), 'pending reservations never expire automatically', 'expiry column meaning is documented');
 select throws_ok($$select public.activate_investment(
  'a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1',
  (select id from public.investments where status='expired'),

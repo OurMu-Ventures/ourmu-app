@@ -622,7 +622,7 @@ async function reservationEmailContent(
   const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
   const { data: investment } = await admin
     .from("investments")
-    .select("principal_ugx,reservation_expires_at,investment_cycles(name)")
+    .select("principal_ugx,investment_cycles(name)")
     .eq("id", investmentId)
     .single();
   if (!investment) throw new Error("EMAIL_JOB_INVALID");
