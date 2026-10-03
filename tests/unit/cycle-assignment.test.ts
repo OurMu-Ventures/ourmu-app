@@ -1,30 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  kampalaLocalToIso,
-  reservationDeadlineIso,
-} from "@/lib/cycle-assignment";
+import { kampalaLocalToIso } from "@/lib/cycle-assignment";
 import { activationSchema } from "@/lib/validation";
 
 describe("automatic cycle assignment helpers", () => {
-  it("caps the payment deadline at the cycle closing time", () => {
-    expect(
-      reservationDeadlineIso(
-        "2026-10-01T00:00:00.000Z",
-        "2026-10-31T20:59:59.999Z",
-      ),
-    ).toBe("2026-10-03T00:00:00.000Z");
-  });
-
-  it("shortens the deadline when the cycle closes within 48 hours", () => {
-    expect(
-      reservationDeadlineIso(
-        "2026-10-30T12:00:00.000Z",
-        "2026-10-31T20:59:59.999Z",
-      ),
-    ).toBe("2026-10-31T20:59:59.999Z");
-  });
-
   it("converts a Kampala wall-clock timestamp to UTC", () => {
     // 14:30 in Kampala (UTC+3) is 11:30 UTC.
     expect(kampalaLocalToIso("2026-10-03T14:30")).toBe(

@@ -13,7 +13,9 @@ export default async function InvestmentsPage() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("investments")
-    .select("*,investment_cycles(name,opens_at),maturity_instructions!maturity_instructions_investment_id_fkey(status)")
+    .select(
+      "*,investment_cycles(name,opens_at),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
+    )
     .eq("investor_id", profile.id)
     .order("requested_at", { ascending: false });
   return (
@@ -35,13 +37,7 @@ export default async function InvestmentsPage() {
             item.payout_basis === "reported_paid"
               ? (item.reported_payout_ugx ?? item.projected_value_ugx)
               : item.projected_value_ugx;
-          // Reservation window is time-sensitive; check at render and re-check server-side on submit.
-          // eslint-disable-next-line react-hooks/purity
-          const now = Date.now();
-          const isCancellable =
-            item.status === "reserved" &&
-            item.reservation_expires_at &&
-            new Date(item.reservation_expires_at).getTime() > now;
+          const isCancellable = item.status === "reserved";
           const cycleName = Array.isArray(item.investment_cycles)
             ? (item.investment_cycles[0]?.name ?? "OURMU placement")
             : (item.investment_cycles?.name ?? "OURMU placement");

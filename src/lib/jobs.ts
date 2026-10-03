@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { buildAgreementPdf } from "@/lib/agreements/pdf";
 import { sendTransactionalEmail, type EmailTemplate } from "@/lib/email/send";
 import { getPublicEnv } from "@/lib/env";
-import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
+import { bpsToPercent, date, ugx } from "@/lib/format";
 import {
   safeFulfilledSplits,
   UNAVAILABLE_MATURITY_AMOUNTS,
@@ -614,9 +614,7 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
   return messageId;
 }
 
-// Reservation emails quote the actual payment deadline (earlier of 48h or
-// cycle close), never a fixed window. Payment after the cutoff requires a new
-// reservation; timely transfers already made go to staff resolution.
+// Reservation emails explain the manual expiry policy.
 async function reservationEmailContent(
   investmentId: string,
 ): Promise<{ detail: string; actionUrl: string }> {
@@ -624,26 +622,20 @@ async function reservationEmailContent(
   const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
   const { data: investment } = await admin
     .from("investments")
-    .select(
-      "principal_ugx,reservation_expires_at,investment_cycles(name)",
-    )
+    .select("principal_ugx,reservation_expires_at,investment_cycles(name)")
     .eq("id", investmentId)
     .single();
   if (!investment) throw new Error("EMAIL_JOB_INVALID");
   const cycle = Array.isArray(investment.investment_cycles)
     ? investment.investment_cycles[0]
     : investment.investment_cycles;
-  const deadline = investment.reservation_expires_at
-    ? dateTime(investment.reservation_expires_at)
-    : null;
   const detail =
     `Your OURMU investment reservation of ${ugx(Number(investment.principal_ugx))}` +
     `${cycle?.name ? ` for ${cycle.name}` : ""} is recorded. ` +
-    (deadline
-      ? `Transfer the exact amount before ${deadline} (Africa/Kampala). `
-      : "Transfer the exact amount before the displayed payment deadline. ") +
-    "Payment after the deadline requires a new reservation. " +
-    "If you already transferred on time, our team will resolve it; do not pay again.";
+    "Transfer the exact amount shown. Your reservation does not expire automatically; " +
+    "it stays pending until an administrator activates or expires it, or you cancel it. " +
+    "Payments must match the reserved cycle. Contact our team if the cycle closes before you transfer. " +
+    "If you already transferred, do not pay again.";
   return { detail, actionUrl };
 }
 

@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/purity -- server page computes a request-time 24-hour cutoff */
 import { resolveClosure } from "@/actions/admin";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
@@ -8,10 +7,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export default async function AdminPage() {
   await requireAdmin();
   const admin = createAdminClient();
-  const expiryCutoff = new Date(Date.now() + 24 * 3_600_000).toISOString();
   const [
     { count: pending },
-    { count: expiring },
+    { count: awaitingActivation },
     { count: active },
     { count: failed },
     { data: closures },
@@ -26,8 +24,7 @@ export default async function AdminPage() {
       .from("investments")
       .select("id", { count: "exact", head: true })
       .eq("status", "reserved")
-      .eq("is_test", false)
-      .lte("reservation_expires_at", expiryCutoff),
+      .eq("is_test", false),
     admin
       .from("investments")
       .select("id", { count: "exact", head: true })
@@ -69,8 +66,8 @@ export default async function AdminPage() {
           <p className="stat">{pending ?? 0}</p>
         </article>
         <article className="card">
-          <p className="muted">Expiring in 24h</p>
-          <p className="stat">{expiring ?? 0}</p>
+          <p className="muted">Awaiting activation</p>
+          <p className="stat">{awaitingActivation ?? 0}</p>
         </article>
         <article className="card">
           <p className="muted">Active investments</p>

@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
-import { dateTime, ugx } from "@/lib/format";
+import { ugx } from "@/lib/format";
 import { requireAdmin, requireInvestor } from "@/lib/auth";
 import { kampalaLocalToIso } from "@/lib/cycle-assignment";
 import { publicError, requestId, toBytea } from "@/lib/db";
@@ -44,7 +44,7 @@ export async function requestInvestment(
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
   const admin = createAdminClient();
   const requestUuid = requestId();
-  const { data, error } = await admin.rpc("request_investment", {
+  const { error } = await admin.rpc("request_investment", {
     p_investor_id: profile.id,
     p_cycle_id: parsed.data.cycleId,
     p_principal_ugx: Number(parsed.data.principalUgx),
@@ -60,24 +60,10 @@ export async function requestInvestment(
     };
   revalidatePath("/dashboard");
   revalidatePath("/investments");
-  const investmentId = typeof data === "string" ? data : null;
-  if (investmentId) {
-    const { data: reservation } = await admin
-      .from("investments")
-      .select("reservation_expires_at")
-      .eq("id", investmentId)
-      .maybeSingle();
-    if (reservation?.reservation_expires_at) {
-      return {
-        ok: true,
-        message: `Investment reserved. Transfer the exact amount before ${dateTime(reservation.reservation_expires_at)} (Africa/Kampala). Payment after the deadline requires a new reservation.`,
-      };
-    }
-  }
   return {
     ok: true,
     message:
-      "Investment reserved. Transfer the exact amount before the displayed payment deadline; payment after the deadline requires a new reservation.",
+      "Investment reserved. Transfer the exact amount shown. Your reservation stays pending until an administrator activates or expires it, or you cancel it.",
   };
 }
 
@@ -95,12 +81,12 @@ export async function cancelInvestment(
   });
   if (error) {
     const message = publicError(error, "Cancellation failed.");
-    // Race after expiry: row still reads `reserved` until hourly maintenance flips it to `expired`.
+    // The administrator may have resolved the reservation since it was displayed.
     if (message.toLowerCase().includes("cannot be cancelled"))
       return {
         ok: false,
         message:
-          "This reservation has expired and can no longer be cancelled. Refresh to see its updated status.",
+          "This reservation is no longer pending and cannot be cancelled. Refresh to see its updated status.",
       };
     return { ok: false, message };
   }
@@ -167,6 +153,45 @@ export async function activateInvestment(
     message:
       "Investment activated atomically; agreement and email jobs are queued.",
   };
+}
+
+export async function expireInvestment(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireAdmin();
+  const investmentId = String(formData.get("investmentId") ?? "");
+  if (formData.get("confirmation") !== "EXPIRE")
+    return {
+      ok: false,
+      message: "Type EXPIRE exactly to expire this reservation.",
+    };
+  const supabase = await createClient();
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("expire_investment", {
+    p_admin_id: profile.id,
+    p_investment_id: investmentId,
+    p_confirmation: "EXPIRE",
+    p_admin_aal2: aal?.currentLevel === "aal2",
+    p_request_id: requestId(),
+  });
+  if (error)
+    return {
+      ok: false,
+      message: publicError(error, "The reservation could not be expired."),
+    };
+  for (const path of [
+    "/admin/activations",
+    "/admin/investments",
+    "/admin",
+    "/investments",
+    `/investments/${investmentId}`,
+    "/dashboard",
+  ])
+    revalidatePath(path);
+  return { ok: true, message: "Reservation expired." };
 }
 
 export async function getAgreementDownloadUrl(agreementId: string) {

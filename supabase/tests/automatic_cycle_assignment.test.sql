@@ -85,10 +85,10 @@ select ok(
   'new reservations carry the auto policy version');
 
 select ok(
-  (select reservation_expires_at <= (select closes_at from public.investment_cycles where id = 'd4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4')
+  (select reservation_expires_at is null
    from public.investments
    where investor_id = 'b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2' order by requested_at desc limit 1),
-  'reservation expiry never passes the cycle close');
+  'reservation has no automatic expiry');
 
 -- Stale evidence is rejected for review, never silently reassigned.
 select throws_ok(
@@ -114,7 +114,7 @@ $fn$;
 update public.investment_cycles set closes_at = now() + interval '1 hour' where id='d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4';
 set local role service_role;
 select lives_ok($$select public.request_investment('b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2', 'd4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4',125000,gen_random_uuid(),'test','\x00','c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3')$$,'new app can reserve as service_role');
-select is((select min(reservation_expires_at) from public.investments where investor_id='b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2' and requested_at=now() and policy_version='auto_cycle_v1'), now()+interval '1 hour','new deadline is capped at close');
+select is((select min(reservation_expires_at) from public.investments where investor_id='b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2' and requested_at=now() and policy_version='auto_cycle_v1'), null::timestamptz,'new reservations have no automatic expiry');
 select throws_ok($$select public.request_investment('b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2','d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4',125000,gen_random_uuid(),'test','\x00','11111111-1111-1111-1111-111111111111')$$,'23514',null,'stale cash agreement rejected');
 select lives_ok($$select public.request_investment('b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2','d4d4d4d4-d4d4-d4d4-d4d4d4d4d4d4d4d4',125000,gen_random_uuid(),'test','\x00')$$,'previous app reservation arguments remain valid');
 select is((select count(*) from public.investments where investor_id='b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2' and policy_version is null),1::bigint,'old app reservations keep legacy activation policy');
@@ -124,32 +124,36 @@ reset role;
 insert into public.investments(id,investor_id,cycle_id,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,unit_price_ugx,maturity_date,reservation_expires_at,requested_at,status,policy_version)
 select id,'b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2','d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4',125000,3000,37500,162500,125000,
  (date_trunc('month',now()+interval '6 months')+interval '1 month - 1 day')::date,now()-interval '1 hour',now()-interval '20 hours',status::public.investment_status,'auto_cycle_v1'
-from (values ('01010101-0101-0101-0101-010101010101'::uuid,'expired'),('02020202-0202-0202-0202-020202020202'::uuid,'expired'),('03030303-0303-0303-0303-030303030303'::uuid,'cancelled'),('04040404-0404-0404-0404-040404040404'::uuid,'expired'),('05050505-0505-0505-0505-050505050505'::uuid,'expired')) fixtures(id,status);
+from (values ('01010101-0101-0101-0101-010101010101'::uuid,'reserved'),('02020202-0202-0202-0202-020202020202'::uuid,'reserved'),('03030303-0303-0303-0303-030303030303'::uuid,'cancelled'),('04040404-0404-0404-0404-040404040404'::uuid,'reserved'),('05050505-0505-0505-0505-050505050505'::uuid,'reserved')) fixtures(id,status);
 set local role service_role;
 select lives_ok($$select pg_temp.auto_activate('01010101-0101-0101-0101-010101010101',now()-interval '2 hours')$$,'timely payment can activate after expiry');
 select is((select received_at from public.bank_receipts where investment_id='01010101-0101-0101-0101-010101010101'),now()-interval '2 hours','verified timestamp is stored exactly');
 select lives_ok($$select pg_temp.auto_activate('01010101-0101-0101-0101-010101010101',now()-interval '2 hours')$$,'activation retry is idempotent');
 select is((select count(*) from public.investment_receipts where investment_id='01010101-0101-0101-0101-010101010101'),1::bigint,'retry does not duplicate receipt');
 select is((select metadata->>'receipt_id' from public.audit_events where entity_id='01010101-0101-0101-0101-010101010101' and action='investment.activated'),(select id::text from public.investment_receipts where investment_id='01010101-0101-0101-0101-010101010101'),'audit refers to the issued investment receipt');
-select throws_ok($$select pg_temp.auto_activate('02020202-0202-0202-0202-020202020202',now()-interval '30 minutes')$$,'23514',null,'late payment is not activated');
+select lives_ok($$select pg_temp.auto_activate('02020202-0202-0202-0202-020202020202',now()-interval '30 minutes','AUTO-LATE')$$,'pending reservation accepts payment after former deadline');
 select throws_ok($$select pg_temp.auto_activate('03030303-0303-0303-0303-030303030303',now()-interval '2 hours')$$,'23514',null,'cancelled reservation is never revived');
-select throws_ok($$select pg_temp.auto_activate('02020202-0202-0202-0202-020202020202',now()+interval '1 minute')$$,'22023',null,'future payment timestamp is rejected');
-select throws_ok($$select pg_temp.auto_activate('02020202-0202-0202-0202-020202020202',now()-interval '2 days')$$,'23514',null,'payment preceding reservation is rejected');
+select throws_ok($$select pg_temp.auto_activate('04040404-0404-0404-0404-040404040404',now()+interval '1 minute')$$,'22023',null,'future payment timestamp is rejected');
+select throws_ok($$select pg_temp.auto_activate('04040404-0404-0404-0404-040404040404',now()-interval '2 days')$$,'23514',null,'payment preceding reservation is rejected');
 reset role;
 update public.investment_cycles set capacity_ugx=125000 where id='d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4';
 set local role service_role;
 select throws_ok($$select pg_temp.auto_activate('04040404-0404-0404-0404-040404040404',now()-interval '2 hours','AUTO-CAP')$$,'23514',null,'late verification rechecks capacity');
 reset role;
 update public.investment_cycles set capacity_ugx=200000000 where id='d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4';
+update public.profiles set investment_limit_ugx=100000000 where id='b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2';
 insert into public.investments(id,investor_id,cycle_id,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,unit_price_ugx,maturity_date,reservation_expires_at,status)
-values('09090909-0909-0909-0909-090909090909','b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2','d4d4d4d4-d4d4-d4d4-d4d4d4d4d4d4d4d4',49500000,3000,14850000,64350000,125000,(date_trunc('month',now()+interval '6 months')+interval '1 month - 1 day')::date,now()+interval '1 day','active');
+values('09090909-0909-0909-0909-090909090909','b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2','d4d4d4d4-d4d4-d4d4-d4d4d4d4d4d4d4d4',49750000,3000,14925000,64675000,125000,(date_trunc('month',now()+interval '6 months')+interval '1 month - 1 day')::date,now()+interval '1 day','active');
+update public.profiles set investment_limit_ugx=null where id='b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2';
 set local role service_role;
 select throws_ok($$select pg_temp.auto_activate('04040404-0404-0404-0404-040404040404',now()-interval '2 hours','AUTO-LIMIT')$$,'23514',null,'late verification rechecks cumulative limit');
 reset role;
 delete from public.investments where id='09090909-0909-0909-0909-090909090909';
+update public.profiles set investment_limit_ugx=null where id='b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2';
 
 -- Interactive reinvestments are assigned at submission and can fulfill after
 -- closing, but cannot enter already-matured or unapproved cycles.
+update public.profiles set investment_limit_ugx=100000000 where id='b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2';
 insert into public.investments(id,investor_id,cycle_id,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,unit_price_ugx,maturity_date,reservation_expires_at,status)
 select id,'b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2','e5e5e5e5-e5e5-e5e5-e5e5-e5e5e5e5e5e5',125000,3000,37500,162500,125000,
  (date_trunc('month',now()-interval '3 months')+interval '1 month - 1 day')::date,now()-interval '2 months','matured'

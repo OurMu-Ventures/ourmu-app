@@ -1,17 +1,5 @@
 export const AUTO_CYCLE_POLICY_VERSION = "auto_cycle_v1";
 
-// Payment deadline for a new reservation: earlier of 48h after reservation
-// (or now, for the pre-reservation preview) or the cycle's closing time.
-export function reservationDeadlineIso(
-  baseIso: string,
-  closesAtIso: string,
-): string {
-  const base = new Date(baseIso).getTime();
-  const closes = new Date(closesAtIso).getTime();
-  const deadline = Math.min(base + 48 * 60 * 60 * 1000, closes);
-  return new Date(deadline).toISOString();
-}
-
 // Convert a Kampala wall-clock datetime-local value (YYYY-MM-DDTHH:mm[:ss])
 // to an ISO timestamptz. Kampala is UTC+3 year-round (no DST).
 export function kampalaLocalToIso(value: string): string | null {

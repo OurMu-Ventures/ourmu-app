@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ActivationForm } from "@/components/forms";
+import { ActivationForm, ExpireReservationForm } from "@/components/forms";
 import { requireAdmin } from "@/lib/auth";
 import { date, dateTime, ugx } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -31,12 +31,10 @@ export default async function AdminActivationsPage({
       "id,status,principal_ugx,requested_at,reservation_expires_at,maturity_date,is_test,policy_version,profiles(legal_name,email),investment_cycles(name)",
       { count: "exact" },
     )
-    .in("status", ["reserved", "expired"])
-    .or("status.eq.reserved,policy_version.eq.auto_cycle_v1")
+    .eq("status", "reserved")
     .eq("record_origin", "portal")
     .eq("payout_basis", "projected")
-    .not("reservation_expires_at", "is", null)
-    .order("reservation_expires_at", { ascending: true })
+    .order("requested_at", { ascending: true })
     .order("id", { ascending: true })
     .range(from, from + PAGE_SIZE - 1);
   if (error) throw new Error("Unable to load investments awaiting activation");
@@ -50,9 +48,9 @@ export default async function AdminActivationsPage({
         Compare bank statements independently before activating a reservation.
         Confirm the exact amount, a unique bank reference, the verified payment
         date and time (Africa/Kampala), and the received date, then type
-        ACTIVATE. Timely payments can be verified after expiry; payments after
-        the deadline are held for staff resolution, never revived from cancelled
-        reservations, and never moved to another cycle automatically.
+        ACTIVATE. Reservations stay pending until activated, manually expired,
+        or cancelled. Payments must match the reserved cycle. Check for received
+        funds before expiring a reservation.
       </p>
       <p className="muted" aria-live="polite">
         {items.length
@@ -79,29 +77,17 @@ export default async function AdminActivationsPage({
                 Requested {dateTime(item.requested_at)} · Matures{" "}
                 {date(item.maturity_date)}
               </p>
-              <p>
-                Payment deadline{" "}
-                <strong>
-                  {item.reservation_expires_at
-                    ? dateTime(item.reservation_expires_at)
-                    : "Not set"}
-                </strong>{" "}
-                (Africa/Kampala) · {item.status}
-                {item.policy_version ? ` · ${item.policy_version}` : ""}
-              </p>
+              <p>No automatic expiry · {item.status}</p>
             </div>
             <span className="badge">
-              {item.is_test
-                ? "Test reservation"
-                : item.status === "expired"
-                  ? "Expired — verify timely payment only"
-                  : "Awaiting activation"}
+              {item.is_test ? "Test reservation" : "Awaiting activation"}
             </span>
           </div>
           <ActivationForm
             investmentId={item.id}
             expectedAmount={Number(item.principal_ugx)}
           />
+          <ExpireReservationForm investmentId={item.id} />
         </article>
       ))}
       {(page > 1 || page * PAGE_SIZE < total) && (
