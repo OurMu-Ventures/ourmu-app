@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/purity -- server page computes a request-time 24-hour cutoff */
 import { resolveClosure } from "@/actions/admin";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
@@ -8,15 +7,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export default async function AdminPage() {
   await requireAdmin();
   const admin = createAdminClient();
-  const expiryCutoff = new Date(Date.now() + 24 * 3_600_000).toISOString();
   const [
     { count: pending },
-    { count: expiring },
+    { count: awaitingActivation },
     { count: active },
     { count: failed },
     { data: closures },
     { data: cycle },
     { data: reserved },
+    { data: oldestPending, error: oldestPendingError },
   ] = await Promise.all([
     admin
       .from("investor_applications")
@@ -26,8 +25,7 @@ export default async function AdminPage() {
       .from("investments")
       .select("id", { count: "exact", head: true })
       .eq("status", "reserved")
-      .eq("is_test", false)
-      .lte("reservation_expires_at", expiryCutoff),
+      .eq("is_test", false),
     admin
       .from("investments")
       .select("id", { count: "exact", head: true })
@@ -51,7 +49,34 @@ export default async function AdminPage() {
       .select("cycle_id,units,principal_ugx")
       .eq("is_test", false)
       .in("status", ["reserved", "active"]),
+    admin
+      .from("investments")
+      .select("requested_at")
+      .eq("status", "reserved")
+      .eq("is_test", false)
+      .order("requested_at", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
   ]);
+  if (oldestPendingError)
+    throw new Error("Unable to load the oldest pending reservation");
+  // eslint-disable-next-line react-hooks/purity -- server-rendered queue age at request time
+  const now = Date.now();
+  const oldestPendingHours = oldestPending
+    ? Math.max(
+        0,
+        Math.floor(
+          (now - new Date(oldestPending.requested_at).getTime()) /
+            3_600_000,
+        ),
+      )
+    : null;
+  const oldestPendingAge =
+    oldestPendingHours === null
+      ? "None"
+      : oldestPendingHours >= 24
+        ? `${Math.floor(oldestPendingHours / 24)} days`
+        : `${oldestPendingHours} hours`;
   const openCycleInvestments = cycle
     ? (reserved ?? []).filter((item) => item.cycle_id === cycle.id)
     : [];
@@ -69,8 +94,21 @@ export default async function AdminPage() {
           <p className="stat">{pending ?? 0}</p>
         </article>
         <article className="card">
-          <p className="muted">Expiring in 24h</p>
-          <p className="stat">{expiring ?? 0}</p>
+          <p className="muted">Awaiting activation</p>
+          <p className="stat">{awaitingActivation ?? 0}</p>
+          <p>
+            Oldest pending: <strong>{oldestPendingAge}</strong>
+          </p>
+          <p
+            className={
+              oldestPendingHours !== null && oldestPendingHours >= 72
+                ? "notice"
+                : "muted"
+            }
+          >
+            Review pending reservations daily; follow up after 3 days. Verify
+            bank receipts before expiring.
+          </p>
         </article>
         <article className="card">
           <p className="muted">Active investments</p>

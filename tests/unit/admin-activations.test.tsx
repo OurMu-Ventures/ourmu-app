@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({ requireAdmin: state.requireAdmin }));
 vi.mock("@/components/forms", () => ({
+  ExpireReservationForm: () => <button>Expire reservation</button>,
   ActivationForm: ({
     investmentId,
     expectedAmount,
@@ -38,14 +39,6 @@ vi.mock("@/lib/supabase/admin", () => ({
         eq: (field: string, value: unknown) => {
           filters.push((row) => row[field] === value);
           return record("eq", field, value);
-        },
-        or: (expression: string) => {
-          filters.push(
-            (row) =>
-              row.status === "reserved" ||
-              row.policy_version === "auto_cycle_v1",
-          );
-          return record("or", expression);
         },
         in: (field: string, values: unknown[]) => {
           filters.push((row) => values.includes(row[field]));
@@ -119,7 +112,7 @@ beforeEach(() => {
 });
 
 describe("admin activation queue", () => {
-  it("shows reserved and expired portal reservations, including timely payments verifiable after expiry", async () => {
+  it("shows pending reservations without an expiry and excludes terminal records", async () => {
     state.rows = [
       reservation("later"),
       reservation("sooner", { reservation_expires_at: "2099-10-03T12:00:00Z" }),
@@ -128,12 +121,7 @@ describe("admin activation queue", () => {
       }),
       reservation("marked-expired", {
         status: "expired",
-        policy_version: "auto_cycle_v1",
         reservation_expires_at: "2000-01-02T12:00:00Z",
-      }),
-      reservation("legacy-expired", {
-        status: "expired",
-        policy_version: null,
       }),
       reservation("active", { status: "active" }),
       reservation("matured", { status: "matured" }),
@@ -148,14 +136,11 @@ describe("admin activation queue", () => {
     expect(state.requireAdmin).toHaveBeenCalledOnce();
     expect(html).toContain('data-investment="sooner"');
     expect(html).toContain('value="250000"');
-    // Expired rows sort first (earliest deadline) and remain verifiable.
-    expect(html.indexOf('data-investment="past-due-reserved"')).toBeLessThan(
-      html.indexOf('data-investment="sooner"'),
-    );
-    expect(html).toContain("Expired — verify timely payment only");
+    expect(html).toContain("No automatic expiry");
+    expect(html).toContain("Expire reservation");
+    expect(html).not.toContain('data-investment="marked-expired"');
     expect(html).not.toContain('data-investment="cancelled"');
-    expect(html).not.toContain('data-investment="legacy-expired"');
-    expect(html).not.toContain('data-investment="no-expiry"');
+    expect(html).toContain('data-investment="no-expiry"');
     expect(html.match(/data-investment=/g)).toHaveLength(4);
     expect(html).toContain("of 4 reservations awaiting activation");
   });

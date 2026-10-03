@@ -1780,6 +1780,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      expire_investment: {
+        Args: {
+          p_admin_id: string
+          p_investment_id: string
+          p_confirmation: string
+          p_admin_aal2: boolean
+          p_request_id: string
+        }
+        Returns: undefined
+      }
       cancel_investment: {
         Args: {
           p_investment_id: string

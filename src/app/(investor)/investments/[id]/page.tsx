@@ -11,7 +11,7 @@ import {
 import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
-import { bpsToPercent, date, dateTime, ugx } from "@/lib/format";
+import { bpsToPercent, date, ugx } from "@/lib/format";
 import {
   safeFulfilledSplits,
   UNAVAILABLE_MATURITY_AMOUNTS,
@@ -48,40 +48,42 @@ export default async function InvestmentPage({
     { id: string; receipt_number: string; pdf_status: string } | undefined;
   const isMatured = canChooseMaturity(data);
   const nowIso = new Date().toISOString();
-  const [{ data: instruction }, { data: destinations }, { data: assignedCycleRow }] =
-    isMatured
-      ? await Promise.all([
-          supabase
-            .from("maturity_instructions")
-            .select("*")
-            .eq("investment_id", id)
-            .maybeSingle(),
-          supabase
-            .from("payout_destinations")
-            .select("id,channel,provider_label,account_name,account_last_four")
-            .eq("investor_id", profile.id)
-            .eq("is_active", true)
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("investment_cycles")
-            .select(
-              "id,name,maturity_date,agreement_version_id,agreement_versions(title)",
-            )
-            .eq("status", "open")
-            .eq("record_origin", "portal")
-            .lte("opens_at", nowIso)
-            .gt("closes_at", nowIso)
-            .maybeSingle(),
-        ])
-      : [{ data: null }, { data: null }, { data: null }];
-  const { data: recordedCycle } =
-    instruction?.target_cycle_id
-      ? await supabase
+  const [
+    { data: instruction },
+    { data: destinations },
+    { data: assignedCycleRow },
+  ] = isMatured
+    ? await Promise.all([
+        supabase
+          .from("maturity_instructions")
+          .select("*")
+          .eq("investment_id", id)
+          .maybeSingle(),
+        supabase
+          .from("payout_destinations")
+          .select("id,channel,provider_label,account_name,account_last_four")
+          .eq("investor_id", profile.id)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false }),
+        supabase
           .from("investment_cycles")
-          .select("id,name,maturity_date")
-          .eq("id", instruction.target_cycle_id)
-          .maybeSingle()
-      : { data: null };
+          .select(
+            "id,name,maturity_date,agreement_version_id,agreement_versions(title)",
+          )
+          .eq("status", "open")
+          .eq("record_origin", "portal")
+          .lte("opens_at", nowIso)
+          .gt("closes_at", nowIso)
+          .maybeSingle(),
+      ])
+    : [{ data: null }, { data: null }, { data: null }];
+  const { data: recordedCycle } = instruction?.target_cycle_id
+    ? await supabase
+        .from("investment_cycles")
+        .select("id,name,maturity_date")
+        .eq("id", instruction.target_cycle_id)
+        .maybeSingle()
+    : { data: null };
   const instructionTerms = instruction
     ? maturityInstructionTerms(
         instruction.choice,
@@ -99,20 +101,11 @@ export default async function InvestmentPage({
         name: assignedCycleRow.name,
         maturity_date: assignedCycleRow.maturity_date,
         agreement_version_id: assignedCycleRow.agreement_version_id ?? "",
-        agreement_title:
-          assignedVersion?.title ?? "Participation agreement",
+        agreement_title: assignedVersion?.title ?? "Participation agreement",
       }
     : null;
-  // eslint-disable-next-line react-hooks/purity
-  const now = Date.now();
-  const isCancellable =
-    data.status === "reserved" &&
-    data.reservation_expires_at &&
-    new Date(data.reservation_expires_at).getTime() > now;
-  const isExpired =
-    data.status === "reserved" &&
-    data.reservation_expires_at &&
-    new Date(data.reservation_expires_at).getTime() <= now;
+  const isCancellable = data.status === "reserved";
+  const isExpired = data.status === "expired";
   const period = investmentPeriod(
     Array.isArray(data.investment_cycles)
       ? data.investment_cycles[0]?.opens_at
@@ -165,19 +158,11 @@ export default async function InvestmentPage({
         <p>
           Maturity: <strong>{date(data.maturity_date)}</strong>
         </p>
-        {(data.status === "reserved" || data.status === "expired") &&
-          data.reservation_expires_at && (
-            <p>
-              Payment deadline:{" "}
-              <strong>{dateTime(data.reservation_expires_at)}</strong>{" "}
-              (Africa/Kampala)
-            </p>
-          )}
-        {data.status === "reserved" && data.reservation_expires_at && (
+        {data.status === "reserved" && (
           <p className="muted">
-            Transfer the exact amount before the deadline above. Payment after
-            the deadline requires a new reservation. If you already transferred
-            on time, our team will resolve it; do not pay again.
+            No automatic expiry. This reservation stays pending until an
+            administrator activates or expires it, or you cancel it. Transfer
+            the exact amount shown. Payments must match the reserved cycle.
           </p>
         )}
         <p>
@@ -220,7 +205,7 @@ export default async function InvestmentPage({
         {isCancellable && (
           <div style={{ marginTop: "1rem" }}>
             <p className="muted" style={{ marginBottom: "0.5rem" }}>
-              Reserved — transfer the exact amount before expiry or cancel this
+              Reserved — transfer the exact amount shown or cancel this
               reservation.
             </p>
             <CancelInvestmentButton
@@ -232,8 +217,8 @@ export default async function InvestmentPage({
         )}
         {isExpired && (
           <p className="muted" style={{ marginTop: "1rem" }}>
-            This reservation has expired. It will be marked expired on the next
-            maintenance run.
+            This reservation has expired and cannot be activated. Contact our
+            team if you already transferred funds; do not pay again.
           </p>
         )}
       </div>
@@ -283,7 +268,9 @@ export default async function InvestmentPage({
                 </p>
               )}
               <MaturityInstructionForm
-                limitUgx={effectiveInvestmentLimit(profile.investment_limit_ugx)}
+                limitUgx={effectiveInvestmentLimit(
+                  profile.investment_limit_ugx,
+                )}
                 investmentId={data.id}
                 principalUgx={Number(data.principal_ugx)}
                 projectedReturnUgx={Number(data.projected_return_ugx)}

@@ -20,7 +20,11 @@ import {
   submitApplication,
 } from "@/actions/applications";
 import { requestMagicLink, signInTestAccount } from "@/actions/auth";
-import { activateInvestment, requestInvestment } from "@/actions/investments";
+import {
+  activateInvestment,
+  expireInvestment,
+  requestInvestment,
+} from "@/actions/investments";
 import {
   addAccountEmail,
   confirmPrimaryEmailChange,
@@ -363,7 +367,9 @@ export function AccountEmailsPanel({
         </table>
       </div>
       <StateMessage state={resendState.message ? resendState : removeState} />
-      <StateMessage state={promoteState.message ? promoteState : initialActionState} />
+      <StateMessage
+        state={promoteState.message ? promoteState : initialActionState}
+      />
       {pendingChange ? (
         <p className="notice" style={{ marginTop: "1rem" }}>
           A change to <strong>{pendingChange.newEmail}</strong> is pending.
@@ -427,8 +433,8 @@ export function ConfirmPrimaryEmailForm({
       <input type="hidden" name="token" value={token} />
       <p>
         Make <strong>{newEmail}</strong> your primary email, replacing{" "}
-        <strong>{currentEmail}</strong>? Sign-in links and account
-        notifications will arrive at the new address.
+        <strong>{currentEmail}</strong>? Sign-in links and account notifications
+        will arrive at the new address.
       </p>
       <ActionButton>Confirm change</ActionButton>
       <StateMessage state={state} />
@@ -441,14 +447,10 @@ export function InvestmentRequestForm({
   cycleId,
   agreementId,
   agreementTitle,
-  paymentDeadlineIso,
-  cycleClosesAtIso,
 }: {
   cycleId: string;
   agreementId: string;
   agreementTitle: string;
-  paymentDeadlineIso?: string;
-  cycleClosesAtIso?: string;
   limitUgx?: number;
 }) {
   const [state, action] = useActionState(requestInvestment, initialActionState);
@@ -477,18 +479,11 @@ export function InvestmentRequestForm({
           units are calculated automatically.
         </small>
       </label>
-      {paymentDeadlineIso && cycleClosesAtIso && (
-        <p className="muted">
-          <small>
-            This reservation is for the current cycle shown above. Pay before{" "}
-            <strong>{dateTime(paymentDeadlineIso)}</strong> (Africa/Kampala) —
-            the earlier of 48 hours after reservation or the cycle closing at{" "}
-            {dateTime(cycleClosesAtIso)}. Payment after the deadline requires a
-            new reservation. If you already transferred on time, our team will
-            resolve it; do not pay again.
-          </small>
-        </p>
-      )}
+      <p className="muted">
+        Your reservation stays pending until an administrator activates or
+        expires it, or you cancel it. Transfer the exact amount shown on your
+        reservation.
+      </p>
       <label className="checkbox">
         <input
           ref={agreementAcceptance}
@@ -550,9 +545,9 @@ export function ActivationForm({
         Verified bank payment date and time (Africa/Kampala)
         <input name="receivedAt" type="datetime-local" step="1" required />
         <small className="muted">
-          Enter the timestamp verified on the bank statement. Timely payments
-          can be verified after expiry; late payments are held for staff
-          resolution and never moved to another cycle automatically.
+          Enter the timestamp verified on the bank statement. Payments must
+          match the reserved cycle and are never moved to another cycle
+          automatically.
         </small>
       </label>
       <label>
@@ -568,6 +563,29 @@ export function ActivationForm({
         <input name="confirmation" autoComplete="off" required />
       </label>
       <ActionButton>Activate investment</ActionButton>
+      <StateMessage state={state} />
+    </form>
+  );
+}
+
+export function ExpireReservationForm({
+  investmentId,
+}: {
+  investmentId: string;
+}) {
+  const [state, action] = useActionState(expireInvestment, initialActionState);
+  return (
+    <form className="form" action={action}>
+      <input type="hidden" name="investmentId" value={investmentId} />
+      <p className="muted">
+        Expiring this reservation releases its reserved capacity and prevents
+        activation.
+      </p>
+      <label>
+        Type EXPIRE
+        <input name="confirmation" autoComplete="off" required />
+      </label>
+      <ActionButton>Expire reservation</ActionButton>
       <StateMessage state={state} />
     </form>
   );

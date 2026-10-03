@@ -1,7 +1,6 @@
 import { InvestmentRequestForm } from "@/components/forms";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import { requireInvestor } from "@/lib/auth";
-import { reservationDeadlineIso } from "@/lib/cycle-assignment";
 import { date, dateTime, ugx } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,9 +31,7 @@ export default async function NewInvestmentPage() {
     return (
       <>
         <h1 style={{ fontSize: "3rem" }}>No cycle is open.</h1>
-        <p>
-          OURMU will email approved partners when a new cycle is available.
-        </p>
+        <p>OURMU will email approved partners when a new cycle is available.</p>
       </>
     );
   if (!kin)
@@ -57,7 +54,6 @@ export default async function NewInvestmentPage() {
   const agreement = Array.isArray(cycle.agreement_versions)
     ? cycle.agreement_versions[0]
     : cycle.agreement_versions;
-  const paymentPreview = reservationDeadlineIso(now, cycle.closes_at);
   return (
     <>
       <p className="eyebrow">New investment</p>
@@ -85,16 +81,15 @@ export default async function NewInvestmentPage() {
           automatically from your verified payment timestamp.
         </p>
         <p className="muted">
-          Current cycle closes {dateTime(cycle.closes_at)}. Reserve now and pay
-          before <strong>{dateTime(paymentPreview)}</strong> (Africa/Kampala).
+          Current cycle closes {dateTime(cycle.closes_at)}. Reservations do not
+          expire automatically. Payments must still match the reserved cycle;
+          contact our team if the cycle closes before you transfer.
         </p>
         <InvestmentRequestForm
           limitUgx={effectiveInvestmentLimit(profile.investment_limit_ugx)}
           cycleId={cycle.id}
           agreementId={agreement.id}
           agreementTitle={agreement?.title ?? "Current agreement"}
-          paymentDeadlineIso={paymentPreview}
-          cycleClosesAtIso={cycle.closes_at}
         />
       </section>
       {bank && (
