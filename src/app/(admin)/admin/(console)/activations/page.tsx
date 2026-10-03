@@ -32,6 +32,7 @@ export default async function AdminActivationsPage({
       { count: "exact" },
     )
     .in("status", ["reserved", "expired"])
+    .or("status.eq.reserved,policy_version.eq.auto_cycle_v1")
     .eq("record_origin", "portal")
     .eq("payout_basis", "projected")
     .not("reservation_expires_at", "is", null)

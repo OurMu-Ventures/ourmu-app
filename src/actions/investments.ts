@@ -23,6 +23,12 @@ export async function requestInvestment(
 ): Promise<ActionState> {
   const profile = await requireInvestor();
   const limitUgx = effectiveInvestmentLimit(profile.investment_limit_ugx);
+  if (!formData.get("agreementVersionId"))
+    return {
+      ok: false,
+      message:
+        "Reload the investment page to review and accept the current agreement.",
+    };
   const parsed = investmentRequestSchemaForLimit(limitUgx).safeParse({
     cycleId: formData.get("cycleId"),
     agreementVersionId: formData.get("agreementVersionId") ?? "",
@@ -45,8 +51,7 @@ export async function requestInvestment(
     p_request_id: requestUuid,
     p_user_agent: requestHeaders.get("user-agent") ?? "unknown",
     p_ip_fingerprint: toBytea(fingerprintRequestValue("ip", ip)),
-    p_expected_agreement_version_id:
-      (parsed.data.agreementVersionId || "") as unknown as string,
+    p_expected_agreement_version_id: parsed.data.agreementVersionId as string,
   });
   if (error)
     return {

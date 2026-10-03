@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -452,6 +452,11 @@ export function InvestmentRequestForm({
   limitUgx?: number;
 }) {
   const [state, action] = useActionState(requestInvestment, initialActionState);
+  const agreementAcceptance = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (agreementAcceptance.current)
+      agreementAcceptance.current.checked = false;
+  }, [cycleId, agreementId]);
   return (
     <form className="form" action={action}>
       <input type="hidden" name="cycleId" value={cycleId} />
@@ -485,7 +490,13 @@ export function InvestmentRequestForm({
         </p>
       )}
       <label className="checkbox">
-        <input name="agreementAccepted" type="checkbox" value="yes" required />
+        <input
+          ref={agreementAcceptance}
+          name="agreementAccepted"
+          type="checkbox"
+          value="yes"
+          required
+        />
         <span>
           I have read and accept the{" "}
           <Link
@@ -537,7 +548,7 @@ export function ActivationForm({
       </label>
       <label>
         Verified bank payment date and time (Africa/Kampala)
-        <input name="receivedAt" type="datetime-local" required />
+        <input name="receivedAt" type="datetime-local" step="1" required />
         <small className="muted">
           Enter the timestamp verified on the bank statement. Timely payments
           can be verified after expiry; late payments are held for staff

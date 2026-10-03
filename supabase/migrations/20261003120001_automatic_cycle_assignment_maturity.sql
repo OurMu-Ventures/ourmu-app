@@ -15,6 +15,7 @@ declare
   v_profile public.profiles%rowtype;
   v_target public.investment_cycles%rowtype;
   v_existing public.maturity_instructions%rowtype;
+  v_agreement public.agreement_versions%rowtype;
   v_resolved_id uuid;
   v_payout numeric(28,8);
   v_reinvest numeric(28,8);
@@ -83,7 +84,7 @@ begin
     ) then
       raise exception using errcode = '42501', message = 'payout destination is not owned by this partner';
     end if;
-    if not p_destination_confirmed then
+    if p_destination_confirmed is distinct from true then
       raise exception using errcode = '23514', message = 'confirm the payout destination before submitting';
     end if;
   end if;
@@ -92,7 +93,7 @@ begin
     -- Automatic assignment: the cycle open at submission time. Submitted
     -- identifiers are evidence of what the partner saw, never authority.
     v_resolved_id := private.resolve_portal_cycle(now());
-    select * into v_target from public.investment_cycles where id = v_resolved_id;
+    select * into v_target from public.investment_cycles where id = v_resolved_id for share;
     if not found or v_target.record_origin <> 'portal' or v_target.agreement_version_id is null
       or v_target.status <> 'open' or v_target.capacity_ugx is null then
       raise exception using errcode = '23514', message = 'reinvestment is unavailable; no eligible cycle is open. Full withdrawal remains available.';
@@ -104,7 +105,11 @@ begin
       and p_expected_agreement_version_id is distinct from v_target.agreement_version_id then
       raise exception using errcode = '23514', message = 'the agreement changed; review the refreshed terms and accept again';
     end if;
-    if not p_agreement_accepted then
+    select * into v_agreement from public.agreement_versions where id = v_target.agreement_version_id for share;
+    if not found or not v_agreement.is_legally_approved or v_agreement.published_at is null then
+      raise exception using errcode = '23514', message = 'approved agreement is required';
+    end if;
+    if p_agreement_accepted is distinct from true then
       raise exception using errcode = '23514', message = 'accept the destination cycle agreement before submitting';
     end if;
     if p_ip_fingerprint is null then
@@ -176,7 +181,7 @@ begin
     jsonb_build_object('template', 'maturity_choice_confirmed'));
   return v_existing.id;
 end;
-$function$;;
+$function$;
 
 CREATE OR REPLACE FUNCTION public.fulfill_maturity_instruction(p_admin_id uuid, p_instruction_id uuid, p_actual_roi_ugx numeric, p_payout_reference text, p_confirmation text, p_admin_aal2 boolean, p_request_id uuid, p_destination_verified boolean)
  RETURNS jsonb
@@ -210,10 +215,10 @@ declare
   v_company_name text := 'OurMu Ventures Limited';
   v_company_address text := 'Katabbi Town Council, Entebbe, Wakiso';
 begin
-  if not private.is_admin(p_admin_id) or not p_admin_aal2 then
+  if not private.is_admin(p_admin_id) or p_admin_aal2 is distinct from true then
     raise exception using errcode = '42501', message = 'active administrator AAL2 required';
   end if;
-  if p_confirmation <> 'FULFILL' then
+  if p_confirmation is distinct from 'FULFILL' then
     raise exception using errcode = '22023', message = 'typed confirmation is invalid';
   end if;
   if p_actual_roi_ugx is null or p_actual_roi_ugx::text in ('NaN', 'Infinity', '-Infinity') or p_actual_roi_ugx < 0 then
@@ -392,7 +397,7 @@ begin
         return jsonb_build_object('instruction_id', p_instruction_id, 'held', true,
           'reason', 'submission fell outside the destination enrollment window');
       end if;
-      if v_target.maturity_date < current_date then
+      if v_target.maturity_date <= (now() at time zone 'Africa/Kampala')::date then
         update public.maturity_instructions
         set needs_resolution = true where id = p_instruction_id;
         insert into public.audit_events (actor_id, action, entity_type, entity_id, request_id, metadata)
@@ -489,7 +494,7 @@ begin
       v_new_investment_id, v_instruction.investor_id, v_target.id, v_target.unit_price_ugx,
       v_actual_reinvest, v_target.projected_return_bps, v_return,
       v_actual_reinvest + v_return, v_target.maturity_date, now(),
-      'active', now(), now(), 'portal', coalesce(v_profile.is_test, false), 'auto_cycle_v1'
+      'active', now(), now(), 'portal', coalesce(v_profile.is_test, false), v_instruction.policy_version
     );
     insert into public.investment_agreements (
       investment_id, investor_id, agreement_version_id, accepted_content_hash,
@@ -549,7 +554,7 @@ begin
     'actual_payout_ugx', v_actual_payout, 'actual_reinvest_ugx', v_actual_reinvest,
     'reinvestment_id', case when v_actual_reinvest > 0 then v_new_investment_id else null end);
 end;
-$function$;;
+$function$;
 
 create or replace function public.run_maintenance(p_request_id uuid) returns jsonb
 language plpgsql security invoker set search_path = '' as $$
@@ -676,7 +681,11 @@ begin
     'maturity_emails', v_maturity_emails, 'auto_reinvested', v_auto_reinvested,
     'pending_followup', v_pending_followup);
 end;
-$$;;
+$$;
+
+-- Restrict the new signature before committing its creation.
+revoke all on function public.submit_maturity_instruction(uuid,uuid,public.maturity_choice,uuid,uuid,boolean,boolean,uuid,text,bytea,numeric,boolean,uuid) from public, anon, authenticated;
+grant execute on function public.submit_maturity_instruction(uuid,uuid,public.maturity_choice,uuid,uuid,boolean,boolean,uuid,text,bytea,numeric,boolean,uuid) to service_role;
 
 notify pgrst, 'reload schema';
 commit;

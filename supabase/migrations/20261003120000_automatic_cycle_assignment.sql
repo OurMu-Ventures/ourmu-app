@@ -36,7 +36,7 @@ language plpgsql security invoker set search_path = '' as $$
 declare
   v_ids uuid[];
 begin
-  if p_at is null then
+  if p_at is null or not isfinite(p_at) then
     raise exception using errcode = '22023', message = 'assignment timestamp is required';
   end if;
   select array_agg(id order by opens_at, id) into v_ids
@@ -54,6 +54,7 @@ begin
 end;
 $$;
 revoke all on function private.resolve_portal_cycle(timestamptz) from public, anon, authenticated;
+grant execute on function private.resolve_portal_cycle(timestamptz) to service_role;
 
 -- request_investment: resolve current cycle, treat p_cycle_id as evidence.
 drop function public.request_investment(uuid, uuid, numeric, uuid, text, bytea);
@@ -92,7 +93,10 @@ begin
   end if;
   -- Database-owned assignment: the cycle open now. The submitted cycle id is
   -- evidence of what the partner saw, never authority to select.
-  v_resolved_id := private.resolve_portal_cycle(now());
+  -- Older app callers omit agreement evidence: keep their reservations on
+  -- the legacy activation contract during the migration-first rollout.
+  v_resolved_id := case when p_expected_agreement_version_id is null then p_cycle_id
+    else private.resolve_portal_cycle(now()) end;
   if p_cycle_id is distinct from v_resolved_id then
     raise exception using errcode = '23514', message = 'the displayed cycle changed; review the refreshed terms and accept again';
   end if;
@@ -126,13 +130,14 @@ begin
   end if;
   v_return := round((p_principal_ugx * v_cycle.projected_return_bps::numeric) / 10000::numeric, 8);
   -- Payment deadline: earlier of 48 hours after reservation or cycle closing.
-  v_expiry := least(now() + interval '48 hours', v_cycle.closes_at);
+  v_expiry := case when p_expected_agreement_version_id is null then now() + interval '48 hours'
+    else least(now() + interval '48 hours', v_cycle.closes_at) end;
   insert into public.investments (id, investor_id, cycle_id, unit_price_ugx, principal_ugx,
     projected_return_bps, projected_return_ugx, projected_value_ugx, maturity_date,
     reservation_expires_at, record_origin, is_test, policy_version)
   values (v_investment_id, p_investor_id, v_resolved_id, v_cycle.unit_price_ugx, p_principal_ugx,
     v_cycle.projected_return_bps, v_return, p_principal_ugx + v_return, v_cycle.maturity_date,
-    v_expiry, 'portal', v_profile.is_test, 'auto_cycle_v1');
+    v_expiry, 'portal', v_profile.is_test, case when p_expected_agreement_version_id is not null then 'auto_cycle_v1' end);
   insert into public.investment_agreements (investment_id, investor_id, agreement_version_id,
     accepted_content_hash, accepted_at, acceptance_request_id, accepted_user_agent, accepted_ip_fingerprint)
   values (v_investment_id, p_investor_id, v_agreement.id, v_agreement.content_hash, now(), p_request_id,
@@ -140,7 +145,7 @@ begin
   insert into public.audit_events (actor_id, action, entity_type, entity_id, request_id, metadata)
   values (p_investor_id, 'investment.requested', 'investment', v_investment_id, p_request_id,
     jsonb_build_object('cycle_id', v_resolved_id, 'principal_ugx', p_principal_ugx, 'is_test', v_profile.is_test,
-      'assignment_basis', 'reservation_time', 'applicable_timestamp', now(), 'policy_version', 'auto_cycle_v1',
+      'assignment_basis', 'reservation_time', 'applicable_timestamp', now(), 'policy_version', case when p_expected_agreement_version_id is not null then 'auto_cycle_v1' else 'legacy' end,
       'reservation_expires_at', v_expiry, 'expected_cycle_id', p_cycle_id));
   insert into public.jobs (kind, entity_type, entity_id, payload)
   values ('send_email', 'investment', v_investment_id, jsonb_build_object('template', 'reservation_created'));
@@ -181,10 +186,10 @@ declare
   v_kampala_date date;
   v_is_auto boolean := false;
 begin
-  if not private.is_admin(p_admin_id) or not p_admin_aal2 then
+  if not private.is_admin(p_admin_id) or p_admin_aal2 is distinct from true then
     raise exception using errcode = '42501', message = 'active administrator AAL2 required';
   end if;
-  if p_confirmation <> 'ACTIVATE' then raise exception using errcode = '22023', message = 'typed confirmation is invalid'; end if;
+  if p_confirmation is distinct from 'ACTIVATE' then raise exception using errcode = '22023', message = 'typed confirmation is invalid'; end if;
   if nullif(trim(p_bank_reference), '') is null then raise exception using errcode = '22023', message = 'bank reference is required'; end if;
   if p_received_date > (now() at time zone 'Africa/Kampala')::date then raise exception using errcode = '22023', message = 'received date cannot be in the future'; end if;
   select * into v_investment from public.investments where id = p_investment_id for update;
@@ -204,7 +209,7 @@ begin
     if p_received_at is null then
       raise exception using errcode = '22023', message = 'verified bank payment date and time (Africa/Kampala) is required';
     end if;
-    if p_received_at > now() + interval '5 minutes' then
+    if not isfinite(p_received_at) or p_received_at > now() then
       raise exception using errcode = '22023', message = 'payment timestamp cannot be in the future';
     end if;
     v_kampala_date := (p_received_at at time zone 'Africa/Kampala')::date;
@@ -230,11 +235,12 @@ begin
     end if;
     -- Recheck capacity and cumulative partner limit atomically (never revive
     -- cancelled rows; the current row is excluded from the sums).
+    select * into v_profile from public.profiles where id = v_investment.investor_id for update;
     select * into v_cycle from public.investment_cycles where id = v_investment.cycle_id for update;
-    if not found or v_cycle.capacity_ugx is null then
+    if not found or v_cycle.capacity_ugx is null or v_cycle.status not in ('open', 'closed')
+      or v_cycle.maturity_date <= (now() at time zone 'Africa/Kampala')::date then
       raise exception using errcode = '23514', message = 'destination cycle is not valid; held for staff resolution';
     end if;
-    select * into v_profile from public.profiles where id = v_investment.investor_id for update;
     select coalesce(sum(principal_ugx), 0)::numeric(28,8) into v_used_principal
       from public.investments
       where cycle_id = v_investment.cycle_id and status in ('reserved', 'active') and not is_test and id <> v_investment.id;
@@ -293,11 +299,11 @@ begin
       jsonb_build_object('received_amount_ugx', p_received_amount_ugx, 'received_date', p_received_date,
         'received_at', p_received_at, 'assignment_basis', 'payment_timestamp',
         'applicable_timestamp', p_received_at, 'cycle_id', v_investment.cycle_id,
-        'policy_version', 'auto_cycle_v1', 'receipt_id', v_bank_receipt_id,
+        'policy_version', 'auto_cycle_v1', 'receipt_id', v_receipt_id, 'bank_receipt_id', v_bank_receipt_id,
         'receipt_number', v_receipt_number)
     else
       jsonb_build_object('received_amount_ugx', p_received_amount_ugx, 'received_date', p_received_date,
-        'receipt_id', v_bank_receipt_id, 'receipt_number', v_receipt_number)
+        'receipt_id', v_receipt_id, 'bank_receipt_id', v_bank_receipt_id, 'receipt_number', v_receipt_number)
     end);
   insert into public.jobs (kind, entity_type, entity_id, payload) values
     ('generate_agreement_pdf', 'investment', p_investment_id, '{}'::jsonb);

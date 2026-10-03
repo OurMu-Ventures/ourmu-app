@@ -33,6 +33,7 @@ beforeEach(() => {
 function form(amount: string) {
   const data = new FormData();
   data.set("cycleId", "a1b2c3d4-e5f6-47a8-9123-abcdef123456");
+  data.set("agreementVersionId", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
   data.set("principalUgx", amount);
   data.set("agreementAccepted", "yes");
   data.set("investmentLimitUgx", "999999999");

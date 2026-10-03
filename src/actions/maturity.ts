@@ -99,6 +99,12 @@ export async function submitMaturityInstruction(
     );
     if (message) return { ok: false, message };
   }
+  if (involvesReinvestment(input.choice) && !input.expectedAgreementVersionId)
+    return {
+      ok: false,
+      message:
+        "Reload this page to review and accept the current reinvestment agreement.",
+    };
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
 
@@ -232,8 +238,9 @@ export async function submitMaturityInstruction(
     p_request_id: requestId(),
     p_user_agent: requestHeaders.get("user-agent") ?? "unknown",
     p_ip_fingerprint: toBytea(fingerprintRequestValue("ip", ip)),
-    p_expected_agreement_version_id:
-      (input.expectedAgreementVersionId || "") as unknown as string,
+    p_expected_agreement_version_id: (involvesReinvestment(input.choice)
+      ? input.expectedAgreementVersionId
+      : null) as unknown as string,
   });
   if (error)
     return {

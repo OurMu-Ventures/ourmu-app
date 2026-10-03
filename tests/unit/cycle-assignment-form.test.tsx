@@ -41,9 +41,9 @@ describe("automatic reinvestment cycle assignment", () => {
     );
     fireEvent.click(screen.getByRole("radio", { name: /C. Dobolo/ }));
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(
-      screen.getByText(/Your reinvestment cycle:/),
-    ).toHaveTextContent("October 2026");
+    expect(screen.getByText(/Your reinvestment cycle:/)).toHaveTextContent(
+      "October 2026",
+    );
     expect(
       document.querySelector('input[name="targetCycleId"]'),
     ).toHaveAttribute("value", "cccccccc-cccc-4ccc-8ccc-cccccccccccc");
@@ -52,12 +52,36 @@ describe("automatic reinvestment cycle assignment", () => {
     ).toHaveAttribute("value", "dddddddd-dddd-4ddd-8ddd-dddddddddddd");
   });
 
+  it("requires fresh acceptance when the displayed cycle or agreement changes", () => {
+    const cycle = {
+      id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      name: "October 2026",
+      maturity_date: "2027-03-31",
+      agreement_version_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      agreement_title: "Agreement v3",
+    };
+    const view = render(
+      <MaturityInstructionForm {...base} assignedCycle={cycle} />,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: /C. Dobolo/ }));
+    const acceptance = screen.getByRole("checkbox", { name: /I have read/ });
+    fireEvent.click(acceptance);
+    expect(acceptance).toBeChecked();
+    view.rerender(
+      <MaturityInstructionForm
+        {...base}
+        assignedCycle={{
+          ...cycle,
+          agreement_version_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        }}
+      />,
+    );
+    expect(acceptance).not.toBeChecked();
+  });
   it("explains unavailability while keeping full withdrawal", () => {
     render(<MaturityInstructionForm {...base} assignedCycle={null} />);
     fireEvent.click(screen.getByRole("radio", { name: /C. Dobolo/ }));
-    expect(
-      screen.getByText(/Reinvestment is unavailable/),
-    ).toBeVisible();
+    expect(screen.getByText(/Reinvestment is unavailable/)).toBeVisible();
     fireEvent.click(screen.getByRole("radio", { name: /A. Bijjodolo/ }));
     expect(screen.queryByText(/Reinvestment is unavailable/)).toBeNull();
   });

@@ -39,6 +39,14 @@ vi.mock("@/lib/supabase/admin", () => ({
           filters.push((row) => row[field] === value);
           return record("eq", field, value);
         },
+        or: (expression: string) => {
+          filters.push(
+            (row) =>
+              row.status === "reserved" ||
+              row.policy_version === "auto_cycle_v1",
+          );
+          return record("or", expression);
+        },
         in: (field: string, values: unknown[]) => {
           filters.push((row) => values.includes(row[field]));
           return record("in", field, values);
@@ -120,7 +128,12 @@ describe("admin activation queue", () => {
       }),
       reservation("marked-expired", {
         status: "expired",
+        policy_version: "auto_cycle_v1",
         reservation_expires_at: "2000-01-02T12:00:00Z",
+      }),
+      reservation("legacy-expired", {
+        status: "expired",
+        policy_version: null,
       }),
       reservation("active", { status: "active" }),
       reservation("matured", { status: "matured" }),
@@ -141,6 +154,7 @@ describe("admin activation queue", () => {
     );
     expect(html).toContain("Expired — verify timely payment only");
     expect(html).not.toContain('data-investment="cancelled"');
+    expect(html).not.toContain('data-investment="legacy-expired"');
     expect(html).not.toContain('data-investment="no-expiry"');
     expect(html.match(/data-investment=/g)).toHaveLength(4);
     expect(html).toContain("of 4 reservations awaiting activation");

@@ -134,6 +134,11 @@ export function MaturityInstructionForm({
           agreement_title: legacyCycles[0].agreement_title,
         }
       : null);
+  const agreementAcceptance = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (agreementAcceptance.current)
+      agreementAcceptance.current.checked = false;
+  }, [resolvedCycle?.id, resolvedCycle?.agreement_version_id]);
   const reinvestAvailable = Boolean(resolvedCycle);
   const needsPayout =
     choice === "withdraw_all" || choice === "withdraw_roi_reinvest_principal";
@@ -310,15 +315,18 @@ export function MaturityInstructionForm({
         (reinvestAvailable && resolvedCycle ? (
           <fieldset>
             <legend>Reinvestment destination</legend>
-            <input type="hidden" name="targetCycleId" value={resolvedCycle.id} />
+            <input
+              type="hidden"
+              name="targetCycleId"
+              value={resolvedCycle.id}
+            />
             <input
               type="hidden"
               name="expectedAgreementVersionId"
               value={resolvedCycle.agreement_version_id}
             />
             <p>
-              Your reinvestment cycle:{" "}
-              <strong>{resolvedCycle.name}</strong>
+              Your reinvestment cycle: <strong>{resolvedCycle.name}</strong>
               {resolvedCycle.maturity_date
                 ? ` · matures ${resolvedCycle.maturity_date}`
                 : ""}
@@ -334,6 +342,7 @@ export function MaturityInstructionForm({
             </p>
             <label className="checkbox">
               <input
+                ref={agreementAcceptance}
                 name="agreementAccepted"
                 type="checkbox"
                 value="yes"
