@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export default async function JobsPage() {
   await requireAdmin();
   const admin = createAdminClient();
+  const now = new Date().toISOString();
   const { data } = await admin
     .from("jobs")
     .select("*")
@@ -23,7 +24,8 @@ export default async function JobsPage() {
     .select("id", { count: "exact", head: true })
     .eq("kind", "send_email")
     .in("status", ["pending", "failed"])
-    .in("last_error_code", [...EMAIL_QUOTA_CODES]);
+    .in("last_error_code", [...EMAIL_QUOTA_CODES])
+    .gt("available_at", now);
   if (quotaError) throw new Error("Unable to load email quota status");
   const flaggedJobs = flaggedJobsData ?? [];
   const visibleJobs = [
@@ -40,9 +42,9 @@ export default async function JobsPage() {
         <p className="notice" role="status">
           Email sending is paused after a Resend quota refusal. {quotaBlocked}{" "}
           jobs are deferred without consuming retry attempts. Daily limits
-          resume at 00:01 UTC (03:01 Kampala); monthly limits are checked
-          once a day. Other email jobs remain queued. PDF jobs continue. After a
-          plan upgrade, Retry on each quota-deferred job allows an earlier check.
+          resume at 00:01 UTC (03:01 Kampala); monthly limits are checked once a
+          day. Other email jobs remain queued. PDF jobs continue. After a plan
+          upgrade, Retry on each quota-deferred job allows an earlier check.
         </p>
       )}
       {flaggedJobs.length > 0 && (
@@ -86,7 +88,9 @@ export default async function JobsPage() {
                   {EMAIL_QUOTA_CODES.some(
                     (code) => code === item.last_error_code,
                   )
-                    ? dateTime(item.available_at)
+                    ? item.available_at > now
+                      ? dateTime(item.available_at)
+                      : "Ready — awaiting worker"
                     : "—"}
                 </td>
                 <td>

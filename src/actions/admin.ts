@@ -10,6 +10,7 @@ import { audit, requestId } from "@/lib/db";
 import { isMonthEndMaturity } from "@/lib/maturity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { EMAIL_QUOTA_CODES } from "@/lib/email/quota";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { getPublicEnv } from "@/lib/env";
 import { emailSchema, type ActionState } from "@/lib/validation";
@@ -404,12 +405,7 @@ export async function retryJob(formData: FormData) {
   const adminProfile = await requireAdmin();
   const jobId = z.uuid().parse(formData.get("jobId"));
   const admin = createAdminClient();
-  const { data: job } = await admin
-    .from("jobs")
-    .select("id,kind,entity_id,status")
-    .eq("id", jobId)
-    .maybeSingle();
-  const { error } = await admin
+  const { data: job, error } = await admin
     .from("jobs")
     .update({
       status: "pending",
@@ -419,9 +415,12 @@ export async function retryJob(formData: FormData) {
     })
     .eq("id", jobId)
     .or(
-      "status.in.(failed,dead),and(status.eq.pending,last_error_code.in.(EMAIL_DAILY_QUOTA_EXCEEDED,EMAIL_MONTHLY_QUOTA_EXCEEDED))",
-    );
+      `status.in.(failed,dead),and(status.eq.pending,last_error_code.in.(${EMAIL_QUOTA_CODES.join(",")}))`,
+    )
+    .select("id,kind,entity_id")
+    .maybeSingle();
   if (error) throw new Error("Job retry failed");
+  if (!job) throw new Error("Job is no longer eligible for retry");
   // Retrying a receipt generation reuses the same receipt number: reset the
   // row to generating so the worker rebuilds the same document.
   if (job?.kind === "generate_receipt_pdf" && job.entity_id) {

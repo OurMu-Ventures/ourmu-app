@@ -24,7 +24,7 @@ describe("provider error classification", () => {
     async (name, code) => {
       const log = vi.spyOn(console, "error").mockImplementation(() => {});
       send.mockResolvedValue({
-        error: { name, message: "private recipient detail" },
+        error: { name, statusCode: 429, message: "private recipient detail" },
         data: null,
       });
       await expect(
@@ -33,6 +33,10 @@ describe("provider error classification", () => {
           template: "magic_link",
         }),
       ).rejects.toMatchObject({ message: code, name: "EmailQuotaError" });
+      expect(log).toHaveBeenCalledWith(
+        "email.transactional.delivery_failed",
+        expect.objectContaining({ code: name, statusCode: 429 }),
+      );
       expect(JSON.stringify(log.mock.calls)).not.toContain(
         "private recipient detail",
       );

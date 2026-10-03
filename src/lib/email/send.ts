@@ -52,6 +52,8 @@ export async function sendTransactionalEmail(input: {
       template: input.template,
       provider: "resend",
       code: error.name ?? "unknown",
+      statusCode:
+        typeof error.statusCode === "number" ? error.statusCode : null,
     });
     if (error.name === "daily_quota_exceeded")
       throw new EmailQuotaError("EMAIL_DAILY_QUOTA_EXCEEDED");
