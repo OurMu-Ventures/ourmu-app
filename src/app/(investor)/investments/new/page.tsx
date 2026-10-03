@@ -1,7 +1,8 @@
 import { InvestmentRequestForm } from "@/components/forms";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import { requireInvestor } from "@/lib/auth";
-import { date, ugx } from "@/lib/format";
+import { reservationDeadlineIso } from "@/lib/cycle-assignment";
+import { date, dateTime, ugx } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function NewInvestmentPage() {
@@ -56,6 +57,7 @@ export default async function NewInvestmentPage() {
   const agreement = Array.isArray(cycle.agreement_versions)
     ? cycle.agreement_versions[0]
     : cycle.agreement_versions;
+  const paymentPreview = reservationDeadlineIso(now, cycle.closes_at);
   return (
     <>
       <p className="eyebrow">New investment</p>
@@ -79,13 +81,20 @@ export default async function NewInvestmentPage() {
         <p className="muted">
           Each request creates a separate investment placement. You may make
           multiple placements in this monthly cycle, subject to your cumulative
-          cycle limit and the remaining cycle capacity.
+          cycle limit and the remaining cycle capacity. The cycle is assigned
+          automatically from your verified payment timestamp.
+        </p>
+        <p className="muted">
+          Current cycle closes {dateTime(cycle.closes_at)}. Reserve now and pay
+          before <strong>{dateTime(paymentPreview)}</strong> (Africa/Kampala).
         </p>
         <InvestmentRequestForm
           limitUgx={effectiveInvestmentLimit(profile.investment_limit_ugx)}
           cycleId={cycle.id}
           agreementId={agreement.id}
           agreementTitle={agreement?.title ?? "Current agreement"}
+          paymentDeadlineIso={paymentPreview}
+          cycleClosesAtIso={cycle.closes_at}
         />
       </section>
       {bank && (

@@ -441,16 +441,21 @@ export function InvestmentRequestForm({
   cycleId,
   agreementId,
   agreementTitle,
+  paymentDeadlineIso,
+  cycleClosesAtIso,
 }: {
   cycleId: string;
   agreementId: string;
   agreementTitle: string;
+  paymentDeadlineIso?: string;
+  cycleClosesAtIso?: string;
   limitUgx?: number;
 }) {
   const [state, action] = useActionState(requestInvestment, initialActionState);
   return (
     <form className="form" action={action}>
       <input type="hidden" name="cycleId" value={cycleId} />
+      <input type="hidden" name="agreementVersionId" value={agreementId} />
       <label>
         Investment amount (UGX)
         <input
@@ -467,6 +472,18 @@ export function InvestmentRequestForm({
           units are calculated automatically.
         </small>
       </label>
+      {paymentDeadlineIso && cycleClosesAtIso && (
+        <p className="muted">
+          <small>
+            This reservation is for the current cycle shown above. Pay before{" "}
+            <strong>{dateTime(paymentDeadlineIso)}</strong> (Africa/Kampala) —
+            the earlier of 48 hours after reservation or the cycle closing at{" "}
+            {dateTime(cycleClosesAtIso)}. Payment after the deadline requires a
+            new reservation. If you already transferred on time, our team will
+            resolve it; do not pay again.
+          </small>
+        </p>
+      )}
       <label className="checkbox">
         <input name="agreementAccepted" type="checkbox" value="yes" required />
         <span>
@@ -484,7 +501,7 @@ export function InvestmentRequestForm({
           . This records a legally significant acceptance receipt.
         </span>
       </label>
-      <ActionButton>Reserve investment for 48 hours</ActionButton>
+      <ActionButton>Reserve investment</ActionButton>
       <StateMessage state={state} />
     </form>
   );
@@ -519,8 +536,21 @@ export function ActivationForm({
         />
       </label>
       <label>
+        Verified bank payment date and time (Africa/Kampala)
+        <input name="receivedAt" type="datetime-local" required />
+        <small className="muted">
+          Enter the timestamp verified on the bank statement. Timely payments
+          can be verified after expiry; late payments are held for staff
+          resolution and never moved to another cycle automatically.
+        </small>
+      </label>
+      <label>
         Received date
         <input name="receivedDate" type="date" required />
+        <small className="muted">
+          Kept for historical receipts and reporting; must match the Kampala
+          date of the verified timestamp above.
+        </small>
       </label>
       <label>
         Type ACTIVATE

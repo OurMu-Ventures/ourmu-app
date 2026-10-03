@@ -6,7 +6,6 @@ import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
 import {
   MaturityConfirmAmountsForm,
   MaturityInstructionForm,
-  type OpenCycleOption,
   type SavedDestination,
 } from "@/components/maturity-forms";
 import { requireInvestor } from "@/lib/auth";
@@ -48,7 +47,8 @@ export default async function InvestmentPage({
   const receipt = (Array.isArray(receiptRaw) ? receiptRaw[0] : receiptRaw) as
     { id: string; receipt_number: string; pdf_status: string } | undefined;
   const isMatured = canChooseMaturity(data);
-  const [{ data: instruction }, { data: destinations }, { data: openCycles }] =
+  const nowIso = new Date().toISOString();
+  const [{ data: instruction }, { data: destinations }, { data: assignedCycleRow }] =
     isMatured
       ? await Promise.all([
           supabase
@@ -64,28 +64,45 @@ export default async function InvestmentPage({
             .order("created_at", { ascending: false }),
           supabase
             .from("investment_cycles")
-            .select("id,name,agreement_version_id,agreement_versions(title)")
+            .select(
+              "id,name,maturity_date,agreement_version_id,agreement_versions(title)",
+            )
             .eq("status", "open")
-            .eq("record_origin", "portal"),
+            .eq("record_origin", "portal")
+            .lte("opens_at", nowIso)
+            .gt("closes_at", nowIso)
+            .maybeSingle(),
         ])
       : [{ data: null }, { data: null }, { data: null }];
+  const { data: recordedCycle } =
+    instruction?.target_cycle_id
+      ? await supabase
+          .from("investment_cycles")
+          .select("id,name,maturity_date")
+          .eq("id", instruction.target_cycle_id)
+          .maybeSingle()
+      : { data: null };
   const instructionTerms = instruction
     ? maturityInstructionTerms(
         instruction.choice,
         instruction.requested_withdrawal_ugx,
       )
     : null;
-  const cycleOptions: OpenCycleOption[] = (openCycles ?? []).map((cycle) => {
-    const version = Array.isArray(cycle.agreement_versions)
-      ? cycle.agreement_versions[0]
-      : cycle.agreement_versions;
-    return {
-      id: cycle.id,
-      name: cycle.name,
-      agreement_version_id: cycle.agreement_version_id ?? "",
-      agreement_title: version?.title ?? "Participation agreement",
-    };
-  });
+  const assignedVersion = assignedCycleRow
+    ? Array.isArray(assignedCycleRow.agreement_versions)
+      ? assignedCycleRow.agreement_versions[0]
+      : assignedCycleRow.agreement_versions
+    : null;
+  const assignedCycle = assignedCycleRow
+    ? {
+        id: assignedCycleRow.id,
+        name: assignedCycleRow.name,
+        maturity_date: assignedCycleRow.maturity_date,
+        agreement_version_id: assignedCycleRow.agreement_version_id ?? "",
+        agreement_title:
+          assignedVersion?.title ?? "Participation agreement",
+      }
+    : null;
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const isCancellable =
@@ -148,10 +165,19 @@ export default async function InvestmentPage({
         <p>
           Maturity: <strong>{date(data.maturity_date)}</strong>
         </p>
+        {(data.status === "reserved" || data.status === "expired") &&
+          data.reservation_expires_at && (
+            <p>
+              Payment deadline:{" "}
+              <strong>{dateTime(data.reservation_expires_at)}</strong>{" "}
+              (Africa/Kampala)
+            </p>
+          )}
         {data.status === "reserved" && data.reservation_expires_at && (
-          <p>
-            Reservation expires:{" "}
-            <strong>{dateTime(data.reservation_expires_at)}</strong>
+          <p className="muted">
+            Transfer the exact amount before the deadline above. Payment after
+            the deadline requires a new reservation. If you already transferred
+            on time, our team will resolve it; do not pay again.
           </p>
         )}
         <p>
@@ -234,6 +260,9 @@ export default async function InvestmentPage({
                   (projected payout {ugx(instruction.projected_payout_ugx)} ·
                   projected reinvestment{" "}
                   {ugx(instruction.projected_reinvest_ugx)}
+                  {recordedCycle
+                    ? ` · assigned cycle ${recordedCycle.name} (matures ${date(recordedCycle.maturity_date)})`
+                    : ""}
                   ). You can revise it until our team begins processing.
                 </p>
               </div>
@@ -246,17 +275,25 @@ export default async function InvestmentPage({
             </>
           )}
           {(!instruction || instruction.status === "requested") && (
-            <MaturityInstructionForm
-              limitUgx={effectiveInvestmentLimit(profile.investment_limit_ugx)}
-              investmentId={data.id}
-              principalUgx={Number(data.principal_ugx)}
-              projectedReturnUgx={Number(data.projected_return_ugx)}
-              savedDestinations={(destinations ?? []) as SavedDestination[]}
-              openCycles={cycleOptions}
-              existingChoice={instruction?.choice}
-              existingWithdrawalUgx={instruction?.requested_withdrawal_ugx}
-              isRevision={!!instruction}
-            />
+            <>
+              {!assignedCycle && (
+                <p className="notice">
+                  Reinvestment is currently unavailable; no eligible cycle is
+                  open. Full withdrawal remains available.
+                </p>
+              )}
+              <MaturityInstructionForm
+                limitUgx={effectiveInvestmentLimit(profile.investment_limit_ugx)}
+                investmentId={data.id}
+                principalUgx={Number(data.principal_ugx)}
+                projectedReturnUgx={Number(data.projected_return_ugx)}
+                savedDestinations={(destinations ?? []) as SavedDestination[]}
+                assignedCycle={assignedCycle}
+                existingChoice={instruction?.choice}
+                existingWithdrawalUgx={instruction?.requested_withdrawal_ugx}
+                isRevision={!!instruction}
+              />
+            </>
           )}
           {instruction?.status === "processing" && (
             <>

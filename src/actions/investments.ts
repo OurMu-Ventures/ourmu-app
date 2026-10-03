@@ -4,8 +4,9 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
-import { ugx } from "@/lib/format";
+import { dateTime, ugx } from "@/lib/format";
 import { requireAdmin, requireInvestor } from "@/lib/auth";
+import { kampalaLocalToIso } from "@/lib/cycle-assignment";
 import { publicError, requestId, toBytea } from "@/lib/db";
 import { fingerprintRequestValue } from "@/lib/security/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -24,6 +25,7 @@ export async function requestInvestment(
   const limitUgx = effectiveInvestmentLimit(profile.investment_limit_ugx);
   const parsed = investmentRequestSchemaForLimit(limitUgx).safeParse({
     cycleId: formData.get("cycleId"),
+    agreementVersionId: formData.get("agreementVersionId") ?? "",
     principalUgx: formData.get("principalUgx"),
     agreementAccepted: formData.get("agreementAccepted"),
   });
@@ -35,13 +37,16 @@ export async function requestInvestment(
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
   const admin = createAdminClient();
-  const { error } = await admin.rpc("request_investment", {
+  const requestUuid = requestId();
+  const { data, error } = await admin.rpc("request_investment", {
     p_investor_id: profile.id,
     p_cycle_id: parsed.data.cycleId,
     p_principal_ugx: Number(parsed.data.principalUgx),
-    p_request_id: requestId(),
+    p_request_id: requestUuid,
     p_user_agent: requestHeaders.get("user-agent") ?? "unknown",
     p_ip_fingerprint: toBytea(fingerprintRequestValue("ip", ip)),
+    p_expected_agreement_version_id:
+      (parsed.data.agreementVersionId || "") as unknown as string,
   });
   if (error)
     return {
@@ -50,10 +55,24 @@ export async function requestInvestment(
     };
   revalidatePath("/dashboard");
   revalidatePath("/investments");
+  const investmentId = typeof data === "string" ? data : null;
+  if (investmentId) {
+    const { data: reservation } = await admin
+      .from("investments")
+      .select("reservation_expires_at")
+      .eq("id", investmentId)
+      .maybeSingle();
+    if (reservation?.reservation_expires_at) {
+      return {
+        ok: true,
+        message: `Investment reserved. Transfer the exact amount before ${dateTime(reservation.reservation_expires_at)} (Africa/Kampala). Payment after the deadline requires a new reservation.`,
+      };
+    }
+  }
   return {
     ok: true,
     message:
-      "Investment reserved for 48 hours. Use the displayed bank instructions to transfer the exact amount.",
+      "Investment reserved. Transfer the exact amount before the displayed payment deadline; payment after the deadline requires a new reservation.",
   };
 }
 
@@ -95,12 +114,22 @@ export async function activateInvestment(
     bankReference: formData.get("bankReference"),
     receivedAmountUgx: formData.get("receivedAmountUgx"),
     receivedDate: formData.get("receivedDate"),
+    receivedAt: formData.get("receivedAt") ?? undefined,
     confirmation: formData.get("confirmation"),
   });
   if (!parsed.success)
     return {
       ok: false,
-      message: "Check the bank receipt details and type ACTIVATE exactly.",
+      message:
+        "Check the bank receipt details, including the verified payment date and time (Africa/Kampala), and type ACTIVATE exactly.",
+    };
+  const receivedAtIso = parsed.data.receivedAt
+    ? kampalaLocalToIso(parsed.data.receivedAt)
+    : null;
+  if (parsed.data.receivedAt && !receivedAtIso)
+    return {
+      ok: false,
+      message: "Enter a valid verified payment date and time.",
     };
   const supabase = await createClient();
   const { data: aal } =
@@ -115,6 +144,7 @@ export async function activateInvestment(
     p_confirmation: parsed.data.confirmation,
     p_admin_aal2: aal?.currentLevel === "aal2",
     p_request_id: requestId(),
+    p_received_at: receivedAtIso as unknown as string,
   });
   if (error)
     return {

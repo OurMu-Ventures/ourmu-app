@@ -39,6 +39,15 @@ vi.mock("@/lib/supabase/admin", () => ({
           filters.push((row) => row[field] === value);
           return record("eq", field, value);
         },
+        in: (field: string, values: unknown[]) => {
+          filters.push((row) => values.includes(row[field]));
+          return record("in", field, values);
+        },
+        not: (field: string, operator: string, value: unknown) => {
+          if (operator === "is" && value === null)
+            filters.push((row) => row[field] !== null);
+          return record("not", field, operator, value);
+        },
         gt: (field: string, value: string) => {
           filters.push(
             (row) =>
@@ -102,12 +111,16 @@ beforeEach(() => {
 });
 
 describe("admin activation queue", () => {
-  it("shows only unpaid, unexpired portal reservations and prioritizes expiry", async () => {
+  it("shows reserved and expired portal reservations, including timely payments verifiable after expiry", async () => {
     state.rows = [
       reservation("later"),
       reservation("sooner", { reservation_expires_at: "2099-10-03T12:00:00Z" }),
-      reservation("expired", {
+      reservation("past-due-reserved", {
         reservation_expires_at: "2000-01-01T12:00:00Z",
+      }),
+      reservation("marked-expired", {
+        status: "expired",
+        reservation_expires_at: "2000-01-02T12:00:00Z",
       }),
       reservation("active", { status: "active" }),
       reservation("matured", { status: "matured" }),
@@ -122,11 +135,15 @@ describe("admin activation queue", () => {
     expect(state.requireAdmin).toHaveBeenCalledOnce();
     expect(html).toContain('data-investment="sooner"');
     expect(html).toContain('value="250000"');
-    expect(html.indexOf('data-investment="sooner"')).toBeLessThan(
-      html.indexOf('data-investment="later"'),
+    // Expired rows sort first (earliest deadline) and remain verifiable.
+    expect(html.indexOf('data-investment="past-due-reserved"')).toBeLessThan(
+      html.indexOf('data-investment="sooner"'),
     );
-    expect(html.match(/data-investment=/g)).toHaveLength(2);
-    expect(html).toContain("of 2 reservations awaiting activation");
+    expect(html).toContain("Expired — verify timely payment only");
+    expect(html).not.toContain('data-investment="cancelled"');
+    expect(html).not.toContain('data-investment="no-expiry"');
+    expect(html.match(/data-investment=/g)).toHaveLength(4);
+    expect(html).toContain("of 4 reservations awaiting activation");
   });
 
   it("paginates the pending queue without silently truncating it", async () => {

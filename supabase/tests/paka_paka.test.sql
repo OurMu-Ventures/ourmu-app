@@ -147,11 +147,13 @@ select is((select proposed_actual_roi_ugx from public.maturity_instructions wher
 select lives_ok($$select pg_temp.submit_paka(15000000, true, '44444444-4444-4444-4444-444444444444')$$, 'maximum remainder accepted');
 select pg_temp.process_paka('44444444-4444-4444-4444-444444444444');
 update public.investment_cycles set status = 'closed' where id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
-select is(pg_temp.fulfill_paka(15000000, '44444444-4444-4444-4444-444444444444')->>'reason', 'destination cycle is not open', 'unavailable cycle remains held');
+select is(pg_temp.fulfill_paka(15000000, '44444444-4444-4444-4444-444444444444')->>'reason', 'investor cycle limit exceeded', 'timely submission into a closed cycle still enforces the partner cap');
+update public.investment_cycles set status = 'matured' where id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+select is(pg_temp.fulfill_paka(15000000, '44444444-4444-4444-4444-444444444444')->>'reason', 'destination cycle is not open', 'matured destination remains held');
 update public.investment_cycles set status = 'open' where id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 select is(pg_temp.fulfill_paka(15000000, '44444444-4444-4444-4444-444444444444')->>'reason', 'investor cycle limit exceeded', 'per-partner cycle cap remains enforced');
-select ok(not has_function_privilege('anon', 'public.submit_maturity_instruction(uuid,uuid,public.maturity_choice,uuid,uuid,boolean,boolean,uuid,text,bytea,numeric,boolean)', 'EXECUTE'), 'anon cannot invoke submission');
-select ok(not has_function_privilege('authenticated', 'public.submit_maturity_instruction(uuid,uuid,public.maturity_choice,uuid,uuid,boolean,boolean,uuid,text,bytea,numeric,boolean)', 'EXECUTE'), 'authenticated role cannot invoke service RPC directly');
+select ok(not has_function_privilege('anon', 'public.submit_maturity_instruction(uuid,uuid,public.maturity_choice,uuid,uuid,boolean,boolean,uuid,text,bytea,numeric,boolean,uuid)', 'EXECUTE'), 'anon cannot invoke submission');
+select ok(not has_function_privilege('authenticated', 'public.submit_maturity_instruction(uuid,uuid,public.maturity_choice,uuid,uuid,boolean,boolean,uuid,text,bytea,numeric,boolean,uuid)', 'EXECUTE'), 'authenticated role cannot invoke service RPC directly');
 
 select throws_ok($$select pg_temp.submit_paka(150000, true, '66666666-6666-6666-6666-666666666666')$$, '23514', null, 'paid investment cannot submit again');
 select throws_ok($$select pg_temp.process_paka('66666666-6666-6666-6666-666666666666')$$, '23514', null, 'paid investment with a stale instruction cannot begin processing');
