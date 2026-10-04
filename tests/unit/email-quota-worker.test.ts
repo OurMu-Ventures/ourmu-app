@@ -246,6 +246,21 @@ describe("quota-aware email worker", () => {
       last_error_code: "EMAIL_DELIVERY_FAILED",
     });
   });
+  it("marks a missing reservation investment dead on its first attempt", async () => {
+    state.rows = [
+      job("missing-reservation", {
+        entity_type: "investment",
+        payload: { template: "reservation_created" },
+      }),
+    ];
+    await processDueJobs();
+    expect(state.rows[0]).toMatchObject({
+      status: "dead",
+      attempts: 1,
+      last_error_code: "RESERVATION_NOT_FOUND",
+    });
+    expect(state.send).not.toHaveBeenCalled();
+  });
   it("surfaces a failed defer write rather than claiming a successful pause", async () => {
     state.deferError = true;
     state.send.mockRejectedValue(

@@ -13,6 +13,9 @@ const state = vi.hoisted(() => ({
   recipientSingle: { id: "e1" } as unknown,
   recipientList: [{ id: "e1", email: "a@example.com" }] as unknown,
   investorId: "u1",
+  investmentStatus: "reserved",
+  investmentMissing: false,
+  investmentError: null as null | { message: string },
   receipt: null as null | Record<string, unknown>,
   receiptError: null as null | { message: string },
   trackingError: null as null | { message: string },
@@ -33,7 +36,12 @@ function handle(table: string, ops: Op[]): { data: unknown; error: unknown } {
     return { data: state.receipt ? [state.receipt] : [], error: null };
   }
   if (table === "investments")
-    return { data: { investor_id: state.investorId }, error: null };
+    return {
+      data: state.investmentMissing
+        ? null
+        : { investor_id: state.investorId, status: state.investmentStatus },
+      error: state.investmentError,
+    };
   if (table === "jobs") {
     if (ops.some((op) => op.m === "update")) {
       state.updates.push(ops.find((op) => op.m === "update")?.args[0]);
@@ -277,5 +285,49 @@ describe("receipt fan-out guard", () => {
     const attachments = sent.attachments as Array<{ filename: string }>;
     expect(attachments).toHaveLength(1);
     expect(attachments[0].filename).toBe("OURMU-2026-000007.pdf");
+  });
+});
+
+describe("stale reservation safety", () => {
+  it.each(["active", "cancelled", "expired"])(
+    "rejects %s reservation notices before fanout",
+    async (status) => {
+      state.investmentStatus = status;
+      try {
+        await expect(
+          deliverJobEmail(sendEmailJob({ template: "reservation_created" })),
+        ).rejects.toThrow("STALE_RESERVATION");
+        expect(state.send).not.toHaveBeenCalled();
+        expect(state.upserts).toHaveLength(0);
+      } finally {
+        state.investmentStatus = "reserved";
+      }
+    },
+  );
+});
+
+describe("reservation lookup outcomes", () => {
+  it("rejects a missing investment without creating or sending emails", async () => {
+    state.investmentMissing = true;
+    try {
+      await expect(
+        deliverJobEmail(sendEmailJob({ template: "reservation_created" })),
+      ).rejects.toThrow("RESERVATION_NOT_FOUND");
+      expect(state.send).not.toHaveBeenCalled();
+      expect(state.upserts).toHaveLength(0);
+    } finally {
+      state.investmentMissing = false;
+    }
+  });
+  it("preserves transient lookup errors for retry", async () => {
+    state.investmentError = { message: "temporary database failure" };
+    try {
+      await expect(
+        deliverJobEmail(sendEmailJob({ template: "reservation_created" })),
+      ).rejects.toThrow("RESERVATION_LOOKUP_FAILED");
+      expect(state.send).not.toHaveBeenCalled();
+    } finally {
+      state.investmentError = null;
+    }
   });
 });
