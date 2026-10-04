@@ -177,7 +177,9 @@ export async function processDueJobs(limit = 10, campaignId?: string) {
       const terminal =
         raw.attempts + 1 >= raw.max_attempts ||
         (jobError instanceof Error &&
-          jobError.message === "NEEDS_RECONCILIATION");
+          ["NEEDS_RECONCILIATION", "STALE_RESERVATION"].includes(
+            jobError.message,
+          ));
       const code =
         jobError instanceof Error
           ? jobError.message.slice(0, 80)
@@ -484,6 +486,18 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
   const admin = createAdminClient();
   const payload = job.payload as SendEmailPayload;
   const to = payload.to;
+  if (
+    job.entity_type === "investment" &&
+    payload.template === "reservation_created"
+  ) {
+    const { data: investment, error } = await admin
+      .from("investments")
+      .select("status")
+      .eq("id", job.entity_id)
+      .single();
+    if (error || !investment) throw new Error("RESERVATION_LOOKUP_FAILED");
+    if (investment.status !== "reserved") throw new Error("STALE_RESERVATION");
+  }
   if (to && payload.accountEmailId) {
     const { data: activeRecipient } = await admin
       .from("account_emails")

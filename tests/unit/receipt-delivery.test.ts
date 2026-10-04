@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   recipientSingle: { id: "e1" } as unknown,
   recipientList: [{ id: "e1", email: "a@example.com" }] as unknown,
   investorId: "u1",
+  investmentStatus: "reserved",
   receipt: null as null | Record<string, unknown>,
   receiptError: null as null | { message: string },
   trackingError: null as null | { message: string },
@@ -33,7 +34,10 @@ function handle(table: string, ops: Op[]): { data: unknown; error: unknown } {
     return { data: state.receipt ? [state.receipt] : [], error: null };
   }
   if (table === "investments")
-    return { data: { investor_id: state.investorId }, error: null };
+    return {
+      data: { investor_id: state.investorId, status: state.investmentStatus },
+      error: null,
+    };
   if (table === "jobs") {
     if (ops.some((op) => op.m === "update")) {
       state.updates.push(ops.find((op) => op.m === "update")?.args[0]);
@@ -278,4 +282,22 @@ describe("receipt fan-out guard", () => {
     expect(attachments).toHaveLength(1);
     expect(attachments[0].filename).toBe("OURMU-2026-000007.pdf");
   });
+});
+
+describe("stale reservation safety", () => {
+  it.each(["active", "cancelled", "expired"])(
+    "rejects %s reservation notices before fanout",
+    async (status) => {
+      state.investmentStatus = status;
+      try {
+        await expect(
+          deliverJobEmail(sendEmailJob({ template: "reservation_created" })),
+        ).rejects.toThrow("STALE_RESERVATION");
+        expect(state.send).not.toHaveBeenCalled();
+        expect(state.upserts).toHaveLength(0);
+      } finally {
+        state.investmentStatus = "reserved";
+      }
+    },
+  );
 });
