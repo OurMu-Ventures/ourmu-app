@@ -177,9 +177,11 @@ export async function processDueJobs(limit = 10, campaignId?: string) {
       const terminal =
         raw.attempts + 1 >= raw.max_attempts ||
         (jobError instanceof Error &&
-          ["NEEDS_RECONCILIATION", "STALE_RESERVATION"].includes(
-            jobError.message,
-          ));
+          [
+            "NEEDS_RECONCILIATION",
+            "STALE_RESERVATION",
+            "RESERVATION_NOT_FOUND",
+          ].includes(jobError.message));
       const code =
         jobError instanceof Error
           ? jobError.message.slice(0, 80)
@@ -494,8 +496,9 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
       .from("investments")
       .select("status")
       .eq("id", job.entity_id)
-      .single();
-    if (error || !investment) throw new Error("RESERVATION_LOOKUP_FAILED");
+      .maybeSingle();
+    if (error) throw new Error("RESERVATION_LOOKUP_FAILED");
+    if (!investment) throw new Error("RESERVATION_NOT_FOUND");
     if (investment.status !== "reserved") throw new Error("STALE_RESERVATION");
   }
   if (to && payload.accountEmailId) {
