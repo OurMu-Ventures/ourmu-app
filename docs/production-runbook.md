@@ -56,3 +56,19 @@ creating its replacement, updating only its assigned consumer, verifying a
 delivery, and then revoking the old key.
 
 The canonical pilot URL is `https://partners.ourmu.org`. Keep the legacy `https://ourmu-app.vercel.app/auth/confirm` callback temporarily as a rollback route until acceptance is signed off.
+
+### Application identity RPC rollout
+
+Apply `20261005110403_fix_application_identity_api.sql` before deploying the
+application actions that call `submit_partner_application` and
+`review_partner_application`. Both RPCs run with the caller's privileges and
+are executable only by `service_role`; keep `private` out of the Data API's
+exposed schemas. Submission commits the application, encrypted identity and
+invitation consumption together. Approval/rejection commits the identity
+change and application decision together.
+
+After rollout, submit a controlled test invitation and verify that the
+application is visible to administrators, the invitation is consumed once,
+and approval links the identity to the partner (or rejection erases the
+ciphertext). Invitations from failed submissions remain reusable until their
+original expiration, provided they have not been revoked.
