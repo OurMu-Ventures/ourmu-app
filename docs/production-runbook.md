@@ -72,3 +72,11 @@ application is visible to administrators, the invitation is consumed once,
 and approval links the identity to the partner (or rejection erases the
 ciphertext). Invitations from failed submissions remain reusable until their
 original expiration, provided they have not been revoked.
+
+## Admin payout destination setup
+
+Apply migration `20261005134923_admin_maturity_payout_destination.sql` before deploying the admin form. The runtime must have the existing payout encryption master key and Supabase service-role configuration.
+
+For a requested maturity instruction with a withdrawal amount and no saved destination, open Admin → Maturities and expand **Set up a verified payout destination**. Enter the provider and account holder, select the partner’s phone on file for mobile money or enter the verified account reference, choose the offline verification method, and confirm verification. An active administrator with two-factor authentication can save the encrypted destination without partner login.
+
+The action links an immutable destination and records the authenticated administrator in the audit log. It clears only a documented missing-destination setup hold; unrelated or unexplained holds remain for review. It does not change amounts, transfer money, fulfill the instruction, or activate a reinvestment. Follow the normal processing and fulfillment workflow on the scheduled payout date.

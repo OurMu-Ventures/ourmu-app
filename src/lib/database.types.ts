@@ -1715,6 +1715,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      save_admin_maturity_payout_destination: {
+        Args: {
+          p_admin_id: string
+          p_admin_aal2: boolean
+          p_instruction_id: string
+          p_request_id: string
+          p_verification_method: string
+          p_reference_source: string
+          p_expected_profile_updated_at: string | null
+          p_destination: Json
+        }
+        Returns: Json
+      }
+
       submit_partner_application: {
         Args: { p_token_hash: string; p_application: Json; p_identity: Json };
         Returns: undefined;
