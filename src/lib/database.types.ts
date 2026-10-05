@@ -1715,6 +1715,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      submit_partner_application: {
+        Args: { p_token_hash: string; p_application: Json; p_identity: Json };
+        Returns: undefined;
+      };
+      review_partner_application: {
+        Args: {
+          p_application_id: string;
+          p_admin_id: string;
+          p_decision: string;
+          p_user_id: string | null;
+          p_reference: string;
+          p_notes: string | null;
+        };
+        Returns: undefined;
+      };
       set_partner_investment_limit: {
         Args: {
           p_admin_id: string
