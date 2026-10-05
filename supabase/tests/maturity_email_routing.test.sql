@@ -82,6 +82,11 @@ declare v_admin uuid; v_investment uuid; v_primary text; v_job uuid; begin
  perform public.update_maturity_email_settings(
    v_admin,array[v_primary,'other@example.test'],true,gen_random_uuid(),true);
  execute 'reset role';
+ -- A confirmation requires a live instruction, as in production.
+ insert into public.maturity_instructions(investment_id,investor_id,choice,
+   projected_payout_ugx,projected_reinvest_ugx,request_id)
+ select v_investment,investor_id,'withdraw_all',1300000,0,gen_random_uuid()
+ from maturity_test_ids;
  insert into public.jobs(kind,entity_type,entity_id,payload)
  values('send_email','investment',v_investment,'{"template":"maturity_choice_confirmed"}'::jsonb)
  returning id into v_job;
