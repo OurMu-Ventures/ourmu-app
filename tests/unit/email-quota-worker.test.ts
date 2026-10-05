@@ -71,11 +71,27 @@ vi.mock("@/lib/supabase/admin", () => ({
           return q;
         },
         gt: (field: string, value: string) => {
-          filters.push((row) => String(row[field]) > value);
+          filters.push(
+            (row) => row[field] != null && String(row[field]) > value,
+          );
+          return q;
+        },
+        lt: (field: string, value: string) => {
+          filters.push(
+            (row) => row[field] != null && String(row[field]) < value,
+          );
+          return q;
+        },
+        gte: (field: string, value: string) => {
+          filters.push(
+            (row) => row[field] != null && String(row[field]) >= value,
+          );
           return q;
         },
         lte: (field: string, value: string) => {
-          filters.push((row) => String(row[field]) <= value);
+          filters.push(
+            (row) => row[field] != null && String(row[field]) <= value,
+          );
           return q;
         },
         order: (field: string, options: { ascending?: boolean } = {}) => {
@@ -140,11 +156,12 @@ describe("quota-aware email worker", () => {
     state.send.mockRejectedValue(
       new EmailQuotaError("EMAIL_DAILY_QUOTA_EXCEEDED"),
     );
-    expect(await processDueJobs()).toEqual({
+    expect(await processDueJobs()).toMatchObject({
       processed: 1,
       succeeded: 0,
       failed: 0,
       deferred: 1,
+      claimed: 1,
     });
     expect(state.rows[0]).toMatchObject({
       status: "pending",

@@ -8,6 +8,8 @@ The admin Jobs page shows quota-held jobs and their next check time. After upgra
 
 Only explicit quota refusals restore send tracking. An earlier timeout or unknown provider outcome retains its original first-send timestamp. If that ambiguous attempt ages beyond Resend's 24-hour idempotency window, normal manual delivery reconciliation is still required. Other provider errors keep the existing failure/backoff policy.
 
+Rate-limit (`429` / `rate_limit_exceeded`) refusals defer the same way, honouring `Retry-After` (bounded between 5 seconds and 15 minutes) instead of the quota reset schedule. A conservative local budget (80 recipient deliveries/day, 2,400/month) additionally defers first sends when the shared free-tier allowance is nearly reserved; retries of an already-attempted row never reserve twice. See `docs/queue-worker.md` for scheduling, monitoring thresholds, and rollout.
+
 This change does not revive existing dead jobs with generic `EMAIL_DELIVERY_FAILED` codes: their historical provider outcome must be reviewed before retrying. It also does not manage Supabase Auth's SMTP sending, which uses Resend outside the application job runner. It adds no new database schema and does not upgrade the Resend plan or send emails during verification.
 
 Provider references: https://resend.com/docs/api-reference/errors and https://resend.com/docs/knowledge-base/account-quotas-and-limits.

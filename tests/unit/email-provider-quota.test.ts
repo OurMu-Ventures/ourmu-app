@@ -13,7 +13,7 @@ vi.mock("@/lib/env", () => ({
   }),
 }));
 import { sendTransactionalEmail } from "@/lib/email/send";
-import { EmailQuotaError } from "@/lib/email/quota";
+import { EmailQuotaError, EmailRateLimitError } from "@/lib/email/quota";
 afterEach(() => vi.restoreAllMocks());
 describe("provider error classification", () => {
   it.each([
@@ -42,10 +42,14 @@ describe("provider error classification", () => {
       );
     },
   );
-  it("does not classify ordinary rate limiting as quota exhaustion", async () => {
+  it("defers ordinary rate limiting with Retry-After instead of failing it", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     send.mockResolvedValue({
-      error: { name: "rate_limit_exceeded" },
+      error: {
+        name: "rate_limit_exceeded",
+        statusCode: 429,
+        headers: { "retry-after": "120" },
+      },
       data: null,
     });
     const error = await sendTransactionalEmail({
@@ -53,6 +57,8 @@ describe("provider error classification", () => {
       template: "magic_link",
     }).catch((e) => e);
     expect(error).not.toBeInstanceOf(EmailQuotaError);
-    expect(error.message).toBe("EMAIL_DELIVERY_FAILED");
+    expect(error).toBeInstanceOf(EmailRateLimitError);
+    expect(error.code).toBe("EMAIL_RATE_LIMITED");
+    expect(error.retryAfterSec).toBe(120);
   });
 });

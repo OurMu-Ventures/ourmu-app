@@ -1,10 +1,15 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
-  EMAIL_QUOTA_CODES,
-  EmailQuotaError,
-  quotaRetryAt,
+  deferralCode,
+  deferRetryAt,
+  EMAIL_DEFERRAL_CODES,
+  EmailBudgetDeferredError,
+  EmailRateLimitError,
+  isEmailDeferralError,
+  QUEUED_EMAIL_DAILY_BUDGET,
+  QUEUED_EMAIL_MONTHLY_BUDGET,
 } from "@/lib/email/quota";
 
 import { buildAgreementPdf } from "@/lib/agreements/pdf";
@@ -45,11 +50,64 @@ export type JobRow = {
   provider_message_id?: string | null;
   first_send_attempt_at?: string | null;
   send_attempts?: number;
+  claim_token?: string | null;
+  lease_expires_at?: string | null;
+  available_at?: string | null;
+  last_error_code?: string | null;
+};
+
+// Queue-draining budgets for the hourly free-tier worker. Each invocation
+// processes successive small batches so newly created receipt and email jobs
+// can run immediately, stopping when the queue is empty, the job budget is
+// reached, or the time budget elapses. No new job starts after the deadline.
+export const JOB_BATCH_SIZE = 10;
+export const MAX_JOBS_PER_RUN = 50;
+export const WORKER_TIME_BUDGET_MS = 40_000;
+export const JOB_LEASE_MS = 5 * 60 * 1000;
+export const PROVIDER_PACING_MS = 1000;
+export const JOB_OPERATION_TIMEOUT_MS = 25_000;
+
+export type StopReason = "queue_empty" | "job_budget" | "time_budget" | "single_batch";
+
+export type ProcessDueJobsOptions = {
+  /** Fetch successive batches until the queue is empty or a budget hits. */
+  drainQueue?: boolean;
+  batchSize?: number;
+  maxJobs?: number;
+  timeBudgetMs?: number;
+  /** Milliseconds between provider send attempts (default 1000). */
+  pacingMs?: number;
+  /** Per-job operation timeout in ms (default 25000). */
+  jobTimeoutMs?: number;
+};
+
+export type ProcessDueJobsResult = {
+  processed: number;
+  succeeded: number;
+  failed: number;
+  deferred: number;
+  /** Jobs claimed with a lease token this run. */
+  claimed: number;
+  /** Skipped: lost claims, stale completions, suppressed deliveries. */
+  skipped: number;
+  /** Provider-accepted sends (Resend id returned), distinct from delivery. */
+  providerAccepted: number;
+  documentsGenerated: number;
+  recipientJobsCreated: number;
+  recoveredLeases: number;
+  needsReconciliation: number;
+  /** Database state-transition failures (completion/record writes). */
+  stateErrors: number;
+  remainingDue: number;
+  oldestDueAgeSec: number | null;
+  stopReason: StopReason;
 };
 
 export type SendEmailPayload = {
   template?: EmailTemplate;
   to?: string;
+  cc?: string[];
+  bcc?: string[];
   actionUrl?: string;
   // Queued notices (e.g. primary-email change confirmations) carry their own
   // body; investment templates still compute theirs at send time.
@@ -85,120 +143,461 @@ export function needsReconciliation(input: {
   );
 }
 
-export async function processDueJobs(limit = 10, campaignId?: string) {
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withJobTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("JOB_OPERATION_TIMEOUT")),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// Recover workers that died mid-job: running rows whose five-minute lease
+// expired return to pending with their attempts intact. Document jobs retry
+// safely; ambiguous email sends retry with their original idempotency key
+// inside its validity window (see needsReconciliation) and quarantine after.
+async function recoverExpiredLeases(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<number> {
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from("jobs")
+    .update({
+      status: "pending",
+      locked_at: null,
+      claim_token: null,
+      lease_expires_at: null,
+      available_at: now,
+    })
+    .eq("status", "running")
+    .lt("lease_expires_at", now)
+    .select("id");
+  if (error) throw new Error("JOB_LEASE_RECOVERY_FAILED");
+  return ((data ?? []) as unknown[]).length;
+}
+
+type BudgetUsage = { dailyRecipients: number; monthlyRecipients: number };
+
+export function recipientsForPayload(payload: SendEmailPayload): number {
+  const cc = payload.routing?.cc?.length ?? payload.cc?.length ?? 0;
+  const bcc = payload.bcc?.length ?? 0;
+  return 1 + cc + bcc;
+}
+
+// Local recipient budget: count provider send attempts (including ambiguous
+// ones, conservatively) in the current UTC day/month. One table row equals
+// one delivery, so deduplicated retries never reserve twice; retries of a row
+// that already attempted skip reservation. Reconciled against provider quota
+// responses — never a complete account guarantee.
+async function emailBudgetUsage(
+  admin: ReturnType<typeof createAdminClient>,
+  nowMs: number,
+): Promise<BudgetUsage> {
+  const now = new Date(nowMs);
+  const dayStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  ).toISOString();
+  const monthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  ).toISOString();
+  const { data, error } = await admin
+    .from("jobs")
+    .select("payload,first_send_attempt_at")
+    .eq("kind", "send_email")
+    .gte("first_send_attempt_at", monthStart)
+    .limit(3000);
+  if (error) throw new Error("EMAIL_BUDGET_USAGE_FAILED");
+  let dailyRecipients = 0;
+  let monthlyRecipients = 0;
+  for (const row of (data ?? []) as Array<{
+    payload: Record<string, unknown>;
+    first_send_attempt_at: string | null;
+  }>) {
+    if (!row.first_send_attempt_at) continue;
+    const recipients = recipientsForPayload(
+      row.payload as SendEmailPayload,
+    );
+    monthlyRecipients += recipients;
+    if (row.first_send_attempt_at >= dayStart) dailyRecipients += recipients;
+  }
+  return { dailyRecipients, monthlyRecipients };
+}
+
+async function queueStatus(
+  admin: ReturnType<typeof createAdminClient>,
+  campaignId: string | undefined,
+  nowMs: number,
+): Promise<{ remainingDue: number; oldestDueAgeSec: number | null }> {
+  let countQuery = admin
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["pending", "failed"])
+    .lte("available_at", new Date(nowMs).toISOString());
+  let oldestQuery = admin
+    .from("jobs")
+    .select("created_at")
+    .in("status", ["pending", "failed"])
+    .lte("available_at", new Date(nowMs).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (campaignId) {
+    countQuery = countQuery
+      .eq("entity_type", "email_campaign")
+      .eq("entity_id", campaignId);
+    oldestQuery = oldestQuery
+      .eq("entity_type", "email_campaign")
+      .eq("entity_id", campaignId);
+  }
+  const [{ count, error: countError }, { data: oldest, error: oldestError }] =
+    await Promise.all([countQuery, oldestQuery]);
+  if (countError || oldestError) throw new Error("JOB_QUEUE_STATUS_FAILED");
+  const rows = (oldest ?? []) as Array<{ created_at: string }>;
+  return {
+    remainingDue: count ?? 0,
+    oldestDueAgeSec: rows.length
+      ? Math.max(
+          0,
+          Math.floor((nowMs - new Date(rows[0].created_at).getTime()) / 1000),
+        )
+      : null,
+  };
+}
+
+// Campaign worker compatibility: processDueJobs(limit, campaignId?) keeps its
+// historical single-batch behaviour unless options.drainQueue is set. The cron
+// endpoint enables draining so successive batches (including newly created
+// receipt and email jobs) run in the same invocation.
+export async function processDueJobs(
+  limit = 10,
+  campaignId?: string,
+  options: ProcessDueJobsOptions = {},
+): Promise<ProcessDueJobsResult> {
   const admin = createAdminClient();
+  const batchSize = Math.max(1, Math.min(limit, options.batchSize ?? JOB_BATCH_SIZE));
+  const maxJobs = options.maxJobs ?? MAX_JOBS_PER_RUN;
+  const timeBudgetMs = options.timeBudgetMs ?? WORKER_TIME_BUDGET_MS;
+  const pacingMs = options.pacingMs ?? PROVIDER_PACING_MS;
+  const jobTimeoutMs = options.jobTimeoutMs ?? JOB_OPERATION_TIMEOUT_MS;
+  const drainQueue = options.drainQueue ?? false;
+
+  const result: ProcessDueJobsResult = {
+    processed: 0,
+    succeeded: 0,
+    failed: 0,
+    deferred: 0,
+    claimed: 0,
+    skipped: 0,
+    providerAccepted: 0,
+    documentsGenerated: 0,
+    recipientJobsCreated: 0,
+    recoveredLeases: 0,
+    needsReconciliation: 0,
+    stateErrors: 0,
+    remainingDue: 0,
+    oldestDueAgeSec: null,
+    stopReason: drainQueue ? "queue_empty" : "single_batch",
+  };
+
+  const startedAt = Date.now();
+  const deadline = startedAt + timeBudgetMs;
+
+  result.recoveredLeases = await recoverExpiredLeases(admin);
+
   const { data: quotaHold, error: quotaHoldError } = await admin
     .from("jobs")
     .select("available_at")
     .eq("kind", "send_email")
     .in("status", ["pending", "failed"])
-    .in("last_error_code", [...EMAIL_QUOTA_CODES])
+    .in("last_error_code", [...EMAIL_DEFERRAL_CODES])
     .gt("available_at", new Date().toISOString())
     .order("available_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (quotaHoldError) throw new Error("EMAIL_QUOTA_HOLD_FETCH_FAILED");
   let emailPaused = Boolean(quotaHold);
-  let query = admin
-    .from("jobs")
-    .select("*")
-    .in("status", ["pending", "failed"])
-    .lte("available_at", new Date().toISOString());
-  if (emailPaused) query = query.neq("kind", "send_email");
-  if (campaignId)
-    query = query
-      .eq("entity_type", "email_campaign")
-      .eq("entity_id", campaignId);
-  const { data: jobs, error } = await query.order("created_at").limit(limit);
-  if (error) throw new Error("JOB_FETCH_FAILED");
-  const result = { processed: 0, succeeded: 0, failed: 0, deferred: 0 };
-  for (const raw of (jobs ?? []) as JobRow[]) {
-    if (emailPaused && raw.kind === "send_email") continue;
-    result.processed += 1;
-    // Conditional claim: only the worker whose UPDATE matches a
-    // pending/failed row owns the job. Concurrent workers whose UPDATE
-    // matches zero rows must skip processing.
-    const { data: claimed } = await admin
+
+  let budget: BudgetUsage | null = null;
+  let reservedRecipients = 0;
+  const ensureBudget = async (): Promise<BudgetUsage> => {
+    if (!budget) budget = await emailBudgetUsage(admin, Date.now());
+    return budget;
+  };
+
+  let lastProviderSendAt = 0;
+
+  const maxBatches = drainQueue
+    ? Math.ceil(maxJobs / batchSize) + 1
+    : 1;
+  for (let batch = 0; batch < maxBatches; batch += 1) {
+    if (Date.now() >= deadline) {
+      result.stopReason = "time_budget";
+      break;
+    }
+    let query = admin
       .from("jobs")
-      .update({
-        status: "running",
-        locked_at: new Date().toISOString(),
-        attempts: raw.attempts + 1,
-      })
-      .eq("id", raw.id)
+      .select("*")
       .in("status", ["pending", "failed"])
-      .select("id");
-    if (!claimed || (claimed as unknown[]).length === 0) continue;
-    let providerMessageId: string | null = null;
-    try {
-      if (raw.kind === "generate_agreement_pdf")
-        await generateAgreement(raw.entity_id);
-      else if (raw.kind === "generate_receipt_pdf")
-        await generateReceipt(raw.entity_id);
-      else if (raw.kind === "send_email")
-        providerMessageId = await deliverJobEmail({
-          ...raw,
-          attempts: raw.attempts + 1,
-        });
-      else throw new Error("JOB_KIND_UNKNOWN");
-      await admin
+      .lte("available_at", new Date().toISOString());
+    if (emailPaused) query = query.neq("kind", "send_email");
+    if (campaignId)
+      query = query
+        .eq("entity_type", "email_campaign")
+        .eq("entity_id", campaignId);
+    const { data: jobs, error } = await query
+      .order("created_at")
+      .limit(batchSize);
+    if (error) throw new Error("JOB_FETCH_FAILED");
+    const due = (jobs ?? []) as JobRow[];
+    if (due.length === 0) {
+      // No fetchable work: the queue is empty or only holds deferred emails
+      // waiting for quota. Deferred emails stay queued; the final queueStatus
+      // probe (unfiltered) still reports them in remainingDue.
+      result.stopReason = "queue_empty";
+      break;
+    }
+    for (const raw of due) {
+      if (result.claimed >= maxJobs) {
+        result.stopReason = "job_budget";
+        break;
+      }
+      if (Date.now() >= deadline) {
+        result.stopReason = "time_budget";
+        break;
+      }
+      if (emailPaused && raw.kind === "send_email") continue;
+      result.processed += 1;
+      // Atomic claim with a unique token and five-minute lease. A concurrent
+      // worker whose UPDATE matches zero rows must skip processing, and all
+      // later completion/failure writes match the token so an expired worker
+      // cannot overwrite a newer attempt.
+      const claimToken = randomUUID();
+      const claimNow = new Date().toISOString();
+      const { data: claimed, error: claimError } = await admin
         .from("jobs")
         .update({
-          status: "succeeded",
-          completed_at: new Date().toISOString(),
-          last_error_code: null,
-          ...(providerMessageId
-            ? { provider_message_id: providerMessageId }
-            : {}),
+          status: "running",
+          locked_at: claimNow,
+          lease_expires_at: new Date(Date.now() + JOB_LEASE_MS).toISOString(),
+          claim_token: claimToken,
+          attempts: raw.attempts + 1,
         })
-        .eq("id", raw.id);
-      result.succeeded += 1;
-    } catch (jobError) {
-      if (jobError instanceof EmailQuotaError && raw.kind === "send_email") {
-        // The provider explicitly rejected this request. Restore prior tracking;
-        // any earlier ambiguous send must retain its reconciliation protection.
-        const { error: deferError } = await admin
-          .from("jobs")
-          .update({
-            status: "pending",
-            attempts: raw.attempts,
-            locked_at: null,
-            last_error_code: jobError.code,
-            available_at: quotaRetryAt(jobError.code),
-            first_send_attempt_at: raw.first_send_attempt_at ?? null,
-            send_attempts: raw.send_attempts ?? 0,
-          })
-          .eq("id", raw.id);
-        if (deferError) throw new Error("EMAIL_QUOTA_DEFER_FAILED");
-        emailPaused = true;
-        result.deferred += 1;
+        .eq("id", raw.id)
+        .in("status", ["pending", "failed"])
+        .select("id");
+      if (claimError) throw new Error("JOB_CLAIM_FAILED");
+      if (!claimed || (claimed as unknown[]).length === 0) {
+        result.skipped += 1;
         continue;
       }
-      const terminal =
-        raw.attempts + 1 >= raw.max_attempts ||
-        (jobError instanceof Error &&
-          [
-            "NEEDS_RECONCILIATION",
-            "STALE_RESERVATION",
-            "RESERVATION_NOT_FOUND",
-          ].includes(jobError.message));
-      const code =
-        jobError instanceof Error
-          ? jobError.message.slice(0, 80)
-          : "JOB_FAILED";
-      await admin
-        .from("jobs")
-        .update({
-          status: terminal ? "dead" : "failed",
-          last_error_code: code,
-          available_at: new Date(
-            Date.now() + Math.min(3600, 2 ** raw.attempts * 60) * 1000,
-          ).toISOString(),
-        })
-        .eq("id", raw.id);
-      result.failed += 1;
+      result.claimed += 1;
+
+      // Pace provider sends to one request per second within this run.
+      const claimedJob: JobRow = { ...raw, attempts: raw.attempts + 1 };
+      const willSend =
+        raw.kind === "send_email" &&
+        (claimedJob.payload as SendEmailPayload).to;
+      if (willSend && pacingMs > 0) {
+        const wait = pacingMs - (Date.now() - lastProviderSendAt);
+        if (wait > 0 && lastProviderSendAt > 0) await sleep(wait);
+      }
+
+      let providerMessageId: string | null = null;
+      let outcome: EmailOutcome = { messageId: null, fanOutCount: 0, suppressed: false };
+      const remainingMs = Math.max(0, deadline - Date.now());
+      try {
+        if (raw.kind === "generate_agreement_pdf") {
+          await withJobTimeout(
+            generateAgreement(raw.entity_id),
+            Math.min(jobTimeoutMs, Math.max(1000, remainingMs)),
+          );
+          result.documentsGenerated += 1;
+        } else if (raw.kind === "generate_receipt_pdf") {
+          await withJobTimeout(
+            generateReceipt(raw.entity_id),
+            Math.min(jobTimeoutMs, Math.max(1000, remainingMs)),
+          );
+          result.documentsGenerated += 1;
+          // Receipt generation queues its activation email for this run to pick up.
+          result.recipientJobsCreated += 1;
+        } else if (raw.kind === "send_email") {
+          // Conservative local budget: first sends reserve recipient capacity
+          // (To + CC + BCC). Retries of an already-attempted row never reserve
+          // twice, and document/recipient preparation continues while deferred.
+          if (!raw.first_send_attempt_at) {
+            const usage = await ensureBudget();
+            const recipients = recipientsForPayload(
+              raw.payload as SendEmailPayload,
+            );
+            if (
+              (claimedJob.payload as SendEmailPayload).to &&
+              usage.dailyRecipients + reservedRecipients + recipients >
+                QUEUED_EMAIL_DAILY_BUDGET
+            )
+              throw new EmailBudgetDeferredError("daily");
+            if (
+              (claimedJob.payload as SendEmailPayload).to &&
+              usage.monthlyRecipients + reservedRecipients + recipients >
+                QUEUED_EMAIL_MONTHLY_BUDGET
+            )
+              throw new EmailBudgetDeferredError("monthly");
+            reservedRecipients +=
+              (claimedJob.payload as SendEmailPayload).to ? recipients : 0;
+          }
+          outcome = await withJobTimeout(
+            deliverJobEmailWithOutcome(claimedJob),
+            Math.min(jobTimeoutMs, Math.max(1000, remainingMs)),
+          );
+          providerMessageId = outcome.messageId;
+          if (providerMessageId) {
+            result.providerAccepted += 1;
+            lastProviderSendAt = Date.now();
+          }
+          if (outcome.fanOutCount > 0)
+            result.recipientJobsCreated += outcome.fanOutCount;
+          if (outcome.suppressed) result.skipped += 1;
+        } else {
+          throw new Error("JOB_KIND_UNKNOWN");
+        }
+        const { data: completed, error: completionError } = await admin
+          .from("jobs")
+          .update({
+            status: "succeeded",
+            completed_at: new Date().toISOString(),
+            locked_at: null,
+            claim_token: null,
+            lease_expires_at: null,
+            last_error_code: null,
+            ...(providerMessageId
+              ? { provider_message_id: providerMessageId }
+              : {}),
+          })
+          .eq("id", raw.id)
+          .eq("claim_token", claimToken)
+          .select("id");
+        if (completionError) throw new Error("JOB_COMPLETION_FAILED");
+        if (!completed || (completed as unknown[]).length === 0) {
+          // Stale completion: the lease expired and a newer worker reclaimed
+          // the job. Never overwrite the newer attempt.
+          result.skipped += 1;
+          result.stateErrors += 1;
+          continue;
+        }
+        result.succeeded += 1;
+      } catch (jobError) {
+        if (
+          raw.kind === "send_email" &&
+          isEmailDeferralError(jobError)
+        ) {
+          // The provider or local budget explicitly deferred this request:
+          // restore prior tracking so an earlier ambiguous send keeps its
+          // reconciliation protection, and never exhaust the retry budget.
+          const code = deferralCode(jobError);
+          const retryAfterSec =
+            jobError instanceof EmailRateLimitError
+              ? jobError.retryAfterSec
+              : undefined;
+          const retryAt = deferRetryAt(code, Date.now(), retryAfterSec);
+          const { data: deferred, error: deferError } = await admin
+            .from("jobs")
+            .update({
+              status: "pending",
+              attempts: raw.attempts,
+              locked_at: null,
+              claim_token: null,
+              lease_expires_at: null,
+              last_error_code: code,
+              available_at: retryAt,
+              first_send_attempt_at: raw.first_send_attempt_at ?? null,
+              send_attempts: raw.send_attempts ?? 0,
+            })
+            .eq("id", raw.id)
+            .eq("claim_token", claimToken)
+            .select("id");
+          if (deferError) throw new Error("EMAIL_QUOTA_DEFER_FAILED");
+          if (!deferred || (deferred as unknown[]).length === 0) {
+            result.skipped += 1;
+            result.stateErrors += 1;
+            continue;
+          }
+          emailPaused = true;
+          result.deferred += 1;
+          continue;
+        }
+        if (
+          jobError instanceof Error &&
+          jobError.message === "NEEDS_RECONCILIATION"
+        )
+          result.needsReconciliation += 1;
+        const terminal =
+          raw.attempts + 1 >= raw.max_attempts ||
+          (jobError instanceof Error &&
+            [
+              "NEEDS_RECONCILIATION",
+              "STALE_MATURITY_CONFIRMATION",
+              "STALE_RESERVATION",
+              "RESERVATION_NOT_FOUND",
+            ].includes(jobError.message));
+        const code =
+          jobError instanceof Error
+            ? jobError.message.slice(0, 80)
+            : "JOB_FAILED";
+        const { data: recorded, error: failureError } = await admin
+          .from("jobs")
+          .update({
+            status: terminal ? "dead" : "failed",
+            locked_at: terminal ? null : claimNow,
+            claim_token: terminal ? null : claimToken,
+            lease_expires_at: terminal
+              ? null
+              : new Date(Date.now() + JOB_LEASE_MS).toISOString(),
+            last_error_code: code,
+            available_at: new Date(
+              Date.now() + Math.min(3600, 2 ** raw.attempts * 60) * 1000,
+            ).toISOString(),
+            ...(providerMessageId
+              ? { provider_message_id: providerMessageId }
+              : {}),
+          })
+          .eq("id", raw.id)
+          .eq("claim_token", claimToken)
+          .select("id");
+        if (failureError) throw new Error("JOB_FAILURE_RECORD_FAILED");
+        if (!recorded || (recorded as unknown[]).length === 0) {
+          // Provider acceptance is still reported separately even when the
+          // state write loses its lease race; the newer attempt owns the row.
+          result.skipped += 1;
+          result.stateErrors += 1;
+          continue;
+        }
+        result.failed += 1;
+      }
     }
+    if (
+      result.stopReason === "job_budget" ||
+      result.stopReason === "time_budget"
+    )
+      break;
+    if (!drainQueue) break;
   }
+
+  const status = await queueStatus(admin, campaignId, Date.now());
+  result.remainingDue = status.remainingDue;
+  result.oldestDueAgeSec = status.oldestDueAgeSec;
   return result;
 }
 
@@ -267,12 +666,13 @@ async function generateAgreement(investmentId: string) {
     })
     .eq("id", acceptance.id);
   if (updateError) throw new Error("PDF_RECORD_FAILED");
-  await admin.from("jobs").insert({
+  const { error: queueError } = await admin.from("jobs").insert({
     kind: "send_email",
     entity_type: "investment",
     entity_id: investment.id,
     payload: { template: "agreement_ready" },
   });
+  if (queueError) throw new Error("EMAIL_QUEUE_FAILED");
 }
 
 type ReceiptRow = {
@@ -482,9 +882,24 @@ async function receiptForInvestment(
   return data?.[0] ?? null;
 }
 
+export type EmailOutcome = {
+  messageId: string | null;
+  /** Recipient delivery jobs ensured by fan-out (0 for direct sends). */
+  fanOutCount: number;
+  /** True when delivery was suppressed (removed alias) without sending. */
+  suppressed: boolean;
+};
+
 // Exported for worker-level regression tests (the production caller is
 // processDueJobs above).
 export async function deliverJobEmail(job: JobRow): Promise<string | null> {
+  const outcome = await deliverJobEmailWithOutcome(job);
+  return outcome.messageId;
+}
+
+export async function deliverJobEmailWithOutcome(
+  job: JobRow,
+): Promise<EmailOutcome> {
   const admin = createAdminClient();
   const payload = job.payload as SendEmailPayload;
   const to = payload.to;
@@ -502,27 +917,30 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
     if (investment.status !== "reserved") throw new Error("STALE_RESERVATION");
   }
   if (to && payload.accountEmailId) {
-    const { data: activeRecipient } = await admin
+    const { data: activeRecipient, error: recipientError } = await admin
       .from("account_emails")
       .select("id")
       .eq("id", payload.accountEmailId)
       .eq("email", to)
       .not("verified_at", "is", null)
       .maybeSingle();
+    // A lookup failure must retry — never confuse it with a removed alias.
+    if (recipientError) throw new Error("RECIPIENT_LOOKUP_FAILED");
     // Removing an alias immediately suppresses any queued delivery to it.
     if (!activeRecipient) {
       if (payload.routing?.teamCopySelected) {
-        await admin
+        const { error: flagError } = await admin
           .from("jobs")
           .update({ cc_review_required: true })
           .eq("id", job.id);
+        if (flagError) throw new Error("CC_REVIEW_FLAG_FAILED");
       }
-      return null;
+      return { messageId: null, fanOutCount: 0, suppressed: true };
     }
   }
   if (!to && job.entity_type === "investment") {
-    await fanOutInvestmentEmails(job);
-    return null;
+    const fanOutCount = await fanOutInvestmentEmails(job);
+    return { messageId: null, fanOutCount, suppressed: false };
   }
   if (!to || !payload.template) throw new Error("EMAIL_JOB_INVALID");
   // Ambiguous sends outside Resend's 24h idempotency window need human
@@ -611,11 +1029,12 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
     } else {
       // Historical activation without a receipt (no backfill): themed email
       // without attachment.
-      const { data: investment } = await admin
+      const { data: investment, error: legacyError } = await admin
         .from("investments")
         .select("principal_ugx,investor_id")
         .eq("id", job.entity_id)
         .single();
+      if (legacyError) throw new Error("INVESTMENT_LOOKUP_FAILED");
       let partnerName: string | undefined;
       if (investment?.investor_id) {
         const { data: profile } = await admin
@@ -654,8 +1073,9 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
   const messageId = await sendTransactionalEmail({
     to,
     cc: MATURITY_TEMPLATES.includes(payload.template)
-      ? payload.routing?.cc
-      : undefined,
+      ? (payload.routing?.cc ?? payload.cc)
+      : (payload.cc ?? undefined),
+    bcc: payload.bcc?.length ? payload.bcc : undefined,
     replyTo: MATURITY_TEMPLATES.includes(payload.template)
       ? payload.routing?.replyTo
       : undefined,
@@ -667,7 +1087,7 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
     attachments,
     idempotencyKey,
   });
-  return messageId;
+  return { messageId, fanOutCount: 0, suppressed: false };
 }
 
 // Reservation emails explain the manual expiry policy.
@@ -676,11 +1096,12 @@ async function reservationEmailContent(
 ): Promise<{ detail: string; actionUrl: string }> {
   const admin = createAdminClient();
   const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
-  const { data: investment } = await admin
+  const { data: investment, error: reservationError } = await admin
     .from("investments")
     .select("principal_ugx,investment_cycles(name)")
     .eq("id", investmentId)
     .single();
+  if (reservationError) throw new Error("RESERVATION_LOOKUP_FAILED");
   if (!investment) throw new Error("EMAIL_JOB_INVALID");
   const cycle = Array.isArray(investment.investment_cycles)
     ? investment.investment_cycles[0]
@@ -708,24 +1129,38 @@ async function maturityEmailContent(
 }> {
   const admin = createAdminClient();
   const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
-  const { data: investment } = await admin
+  const { data: investment, error: investmentError } = await admin
     .from("investments")
     .select(
-      "principal_ugx,projected_return_ugx,projected_return_bps,projected_value_ugx,maturity_date",
+      "principal_ugx,projected_return_ugx,projected_return_bps,projected_value_ugx,maturity_date,payout_basis",
     )
     .eq("id", investmentId)
     .single();
+  if (investmentError) throw new Error("INVESTMENT_LOOKUP_FAILED");
   if (!investment) throw new Error("EMAIL_JOB_INVALID");
   const principal = Number(investment.principal_ugx);
   const projectedReturn = Number(investment.projected_return_ugx);
   const payoutDate = date(maturityPayoutDateIso(investment.maturity_date));
-  const { data: instruction } = await admin
+  const { data: instruction, error: instructionError } = await admin
     .from("maturity_instructions")
     .select(
       "choice,requested_withdrawal_ugx,status,projected_payout_ugx,projected_reinvest_ugx,actual_payout_ugx,actual_reinvest_ugx,actual_roi_ugx,proposed_actual_roi_ugx,resolution_notes,target_cycle_id",
     )
     .eq("investment_id", investmentId)
     .maybeSingle();
+  if (instructionError) throw new Error("INSTRUCTION_LOOKUP_FAILED");
+  // A removed request (no instruction), a paid-out investment, or a fulfilled
+  // instruction makes a confirmation stale: never send it, quarantine instead.
+  // Checked immediately before sending so a choice removed or paid while the
+  // job waited cannot go out.
+  if (
+    template === "maturity_choice_confirmed" &&
+    (investment.payout_basis === "reported_paid" ||
+      !instruction ||
+      instruction.status === "fulfilled")
+  ) {
+    throw new Error("STALE_MATURITY_CONFIRMATION");
+  }
   const basis =
     `Your OURMU investment of ${ugx(principal)} matured on ${date(investment.maturity_date)} ` +
     `with a projected ${bpsToPercent(investment.projected_return_bps)}% return of ` +
@@ -824,8 +1259,9 @@ async function maturityEmailContent(
 }
 
 // Exported for worker-level regression tests (the production caller is
-// deliverJobEmail above).
-export async function fanOutInvestmentEmails(job: JobRow) {
+// deliverJobEmail above). Returns the number of recipient delivery jobs
+// ensured so the worker can report recipient preparation separately.
+export async function fanOutInvestmentEmails(job: JobRow): Promise<number> {
   const payload = job.payload as SendEmailPayload;
   const template = payload.template;
   if (!template) throw new Error("EMAIL_JOB_INVALID");
@@ -836,7 +1272,7 @@ export async function fanOutInvestmentEmails(job: JobRow) {
       p_action_url: actionUrl,
     });
     if (error) throw new Error("EMAIL_FANOUT_FAILED");
-    return;
+    return 0;
   }
   const admin = createAdminClient();
   const { data: investment } = await admin
@@ -892,4 +1328,5 @@ export async function fanOutInvestmentEmails(job: JobRow) {
     ignoreDuplicates: true,
   });
   if (error) throw new Error("EMAIL_FANOUT_FAILED");
+  return rows.length;
 }

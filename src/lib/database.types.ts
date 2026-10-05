@@ -932,6 +932,7 @@ export type Database = {
           attempts: number
           cc_review_required: boolean
           available_at: string
+          claim_token: string | null
           completed_at: string | null
           created_at: string
           email_dedupe_key: string | null
@@ -941,6 +942,7 @@ export type Database = {
           id: string
           kind: Database["public"]["Enums"]["job_kind"]
           last_error_code: string | null
+          lease_expires_at: string | null
           locked_at: string | null
           max_attempts: number
           payload: Json
@@ -953,6 +955,7 @@ export type Database = {
           attempts?: number
           cc_review_required?: boolean
           available_at?: string
+          claim_token?: string | null
           completed_at?: string | null
           created_at?: string
           email_dedupe_key?: string | null
@@ -962,6 +965,7 @@ export type Database = {
           id?: string
           kind: Database["public"]["Enums"]["job_kind"]
           last_error_code?: string | null
+          lease_expires_at?: string | null
           locked_at?: string | null
           max_attempts?: number
           payload?: Json
@@ -974,6 +978,7 @@ export type Database = {
           attempts?: number
           cc_review_required?: boolean
           available_at?: string
+          claim_token?: string | null
           completed_at?: string | null
           created_at?: string
           email_dedupe_key?: string | null
@@ -983,6 +988,7 @@ export type Database = {
           id?: string
           kind?: Database["public"]["Enums"]["job_kind"]
           last_error_code?: string | null
+          lease_expires_at?: string | null
           locked_at?: string | null
           max_attempts?: number
           payload?: Json
