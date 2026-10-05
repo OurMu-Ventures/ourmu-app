@@ -185,77 +185,40 @@ export async function submitApplication(
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   const admin = createAdminClient();
-  const tokenHash = toBytea(fingerprintRequestValue("invite", token));
-  const { data: invitation } = await admin
-    .from("application_invitations")
-    .select("id,invited_email,expires_at,used_at,revoked_at")
-    .eq("token_hash", tokenHash)
-    .maybeSingle();
-  if (
-    !invitation ||
-    invitation.used_at ||
-    invitation.revoked_at ||
-    new Date(invitation.expires_at) <= new Date() ||
-    invitation.invited_email !== parsed.data.email
-  ) {
-    return {
-      ok: false,
-      message: "This application link is invalid or no longer available.",
-    };
-  }
   const envelope = encryptNin(parsed.data.nin);
   const applicationId = requestId();
-  const now = new Date().toISOString();
-  const { error: appError } = await admin.from("investor_applications").insert({
-    id: applicationId,
-    invitation_id: invitation.id,
-    legal_name: parsed.data.legalName,
-    email: parsed.data.email,
-    phone: parsed.data.phone,
-    date_of_birth: parsed.data.dateOfBirth,
-    address: parsed.data.address,
-    district: parsed.data.district,
-    country: parsed.data.country,
-    privacy_policy_version: getServerEnv().LEGAL_PRIVACY_VERSION,
-    privacy_consented_at: now,
-  });
-  if (appError)
-    return {
-      ok: false,
-      message:
-        appError.code === "23505"
-          ? "An application is already in progress for these details."
-          : "The application could not be submitted.",
-    };
-  const { error: identityError } = await admin
-    .schema("private")
-    .from("investor_identities")
-    .insert({
-      application_id: applicationId,
+  const { error } = await admin.rpc("submit_partner_application", {
+    p_token_hash: toBytea(fingerprintRequestValue("invite", token)),
+    p_application: {
+      id: applicationId,
+      legal_name: parsed.data.legalName,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      date_of_birth: parsed.data.dateOfBirth,
+      address: parsed.data.address,
+      district: parsed.data.district,
+      country: parsed.data.country,
+      privacy_policy_version: getServerEnv().LEGAL_PRIVACY_VERSION,
+    },
+    p_identity: {
       nin_ciphertext: toBytea(envelope.ciphertext),
       nin_iv: toBytea(envelope.iv),
       nin_auth_tag: toBytea(envelope.authTag),
       nin_fingerprint: toBytea(envelope.fingerprint),
       nin_last_four: envelope.lastFour,
       key_version: envelope.keyVersion,
-    });
-  if (identityError) {
-    await admin.from("investor_applications").delete().eq("id", applicationId);
+    },
+  });
+  if (error)
     return {
       ok: false,
       message:
-        identityError.code === "23505"
-          ? "An application is already associated with this identity."
-          : "The application could not be secured.",
+        error.code === "23505"
+          ? "An application is already in progress for these details or identity."
+          : error.code === "P0001"
+            ? "This application link is invalid or no longer available."
+            : "The application could not be secured. Please try again later.",
     };
-  }
-  const { error: inviteError } = await admin
-    .from("application_invitations")
-    .update({ used_at: now })
-    .eq("id", invitation.id)
-    .is("used_at", null)
-    .is("revoked_at", null);
-  if (inviteError) throw new Error("Invitation finalization failed");
   await audit({
     action: "application.submitted",
     entityType: "investor_application",
@@ -325,23 +288,14 @@ export async function approveApplication(
   });
   if (profileError)
     return { ok: false, message: "The partner profile could not be created." };
-  await admin
-    .schema("private")
-    .from("investor_identities")
-    .update({ user_id: userId })
-    .eq("application_id", applicationId);
-  const { error } = await admin
-    .from("investor_applications")
-    .update({
-      status: "approved",
-      auth_user_id: userId,
-      kyc_verification_reference: verificationReference,
-      kyc_notes: notes || null,
-      reviewed_by: reviewer.id,
-      reviewed_at: now,
-    })
-    .eq("id", applicationId)
-    .eq("status", "submitted");
+  const { error } = await admin.rpc("review_partner_application", {
+    p_application_id: applicationId,
+    p_admin_id: reviewer.id,
+    p_decision: "approved",
+    p_user_id: userId,
+    p_reference: verificationReference,
+    p_notes: notes || null,
+  });
   if (error) return { ok: false, message: "Approval could not be finalized." };
   const env = getServerEnv();
   const redirectTo = `${env.NEXT_PUBLIC_APP_URL}/auth/confirm`;
@@ -399,31 +353,15 @@ export async function rejectApplication(
   if (!reference)
     return { ok: false, message: "A verification reference is required." };
   const admin = createAdminClient();
-  const now = new Date().toISOString();
-  const { error } = await admin
-    .from("investor_applications")
-    .update({
-      status: "rejected",
-      kyc_verification_reference: reference,
-      kyc_notes: notes || null,
-      reviewed_by: reviewer.id,
-      reviewed_at: now,
-    })
-    .eq("id", applicationId)
-    .eq("status", "submitted");
+  const { error } = await admin.rpc("review_partner_application", {
+    p_application_id: applicationId,
+    p_admin_id: reviewer.id,
+    p_decision: "rejected",
+    p_user_id: null,
+    p_reference: reference,
+    p_notes: notes || null,
+  });
   if (error) return { ok: false, message: "Rejection could not be recorded." };
-  await admin
-    .schema("private")
-    .from("investor_identities")
-    .update({
-      nin_ciphertext: null,
-      nin_iv: null,
-      nin_auth_tag: null,
-      nin_fingerprint: null,
-      erased_at: now,
-    })
-    .eq("application_id", applicationId)
-    .is("erased_at", null);
   await audit({
     actorId: reviewer.id,
     action: "application.rejected",
