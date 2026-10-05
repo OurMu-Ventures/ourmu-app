@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminPayoutDestinationForm } from "@/components/admin-payout-destination-form";
 import { beginMaturityProcessing } from "@/actions/maturity";
 import {
   MaturityFulfillmentForm,
@@ -249,6 +250,9 @@ export default async function AdminMaturitiesPage({
                   This investment was reported paid. Withdrawal and reinvestment
                   processing are unavailable.
                 </p>
+              )}
+              {!alreadyPaid && item.status === "requested" && !item.payout_destination_id && Number(item.projected_payout_ugx) > 0 && (
+                <AdminPayoutDestinationForm instructionId={item.id} />
               )}
               {destination && (
                 <div className="notice">
