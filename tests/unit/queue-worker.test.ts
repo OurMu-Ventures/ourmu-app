@@ -267,9 +267,12 @@ class FakeQuery {
     if (this.patch) {
       const patchKeys = Object.keys(this.patch);
       const isTracking =
-        patchKeys.length === 2 &&
+        patchKeys.length === 3 &&
         patchKeys.includes("send_attempts") &&
         patchKeys.includes("first_send_attempt_at");
+      if (isTracking && !rows[0]?.first_send_attempt_at &&
+          state.jobs.filter((job) => job.first_send_attempt_at).length >= 80)
+        return { data: null, error: { message: "EMAIL_DAILY_BUDGET_DEFERRED" } };
       if (isTracking && state.trackingError)
         return { data: null, error: state.trackingError };
       const idOp = this.ops.find((op) => op.m === "eq" && op.col === "id");
@@ -491,10 +494,32 @@ describe("leases and overlapping workers", () => {
     expect(state.send).toHaveBeenCalledTimes(1);
   });
 
+  it("recovers recorded acceptance without resending or counting a new acceptance", async () => {
+    const job = sendEmailJob({}, { status: "running", claim_token: "expired", lease_expires_at: pastIso(10), provider_message_id: "already-accepted", first_send_attempt_at: pastIso(2000) });
+    state.jobs.push(job);
+    const result = await processDueJobs(10, undefined, { pacingMs: 0 });
+    expect(result.recoveredLeases).toBe(1);
+    expect(result.succeeded).toBe(1);
+    expect(result.providerAccepted).toBe(0);
+    expect(state.send).not.toHaveBeenCalled();
+  });
+
+  it("does not send or change tracking when the pre-send lease is lost", async () => {
+    const job = sendEmailJob({}, { status: "running", claim_token: "new-owner", send_attempts: 2 });
+    state.jobs.push(job);
+    await expect(deliverJobEmail({ ...job, claim_token: "old-owner" } as JobRow))
+      .rejects.toThrow("JOB_CLAIM_LOST");
+    expect(state.send).not.toHaveBeenCalled();
+    expect(job.send_attempts).toBe(2);
+  });
+
   it("reports provider acceptance separately when completion loses its lease race", async () => {
     const job = sendEmailJob({});
     state.jobs.push(job);
-    state.staleTokenIds.add(job.id);
+    state.send.mockImplementation(async () => {
+      state.staleTokenIds.add(job.id);
+      return "resend-1";
+    });
     const result = await processDueJobs(10, undefined, {
       drainQueue: true,
       pacingMs: 0,
@@ -590,6 +615,9 @@ describe("delivery guards", () => {
       { template: "agreement_ready", to: "a@example.com", idempotencyKey: "orig-key" },
       { first_send_attempt_at: new Date().toISOString(), send_attempts: 1 },
     );
+    job.status = "running";
+    job.claim_token = "current-claim";
+    state.jobs.push(job);
     await expect(deliverJobEmail(job as JobRow)).resolves.toBe("resend-1");
     expect(state.send).toHaveBeenCalledTimes(1);
     const firstSend = state.send.mock.calls[0]?.[0] as

@@ -5,24 +5,33 @@ import { EmailQuotaError, EmailRateLimitError } from "@/lib/email/quota";
 
 const PROVIDER_TIMEOUT_MS = 15_000;
 
-function providerErrorDetail(error: unknown): {
+function providerErrorDetail(
+  error: unknown,
+  responseHeaders?: Headers | Record<string, string> | null,
+): {
   name: string;
   statusCode: number | null;
   retryAfterSec: number | null;
 } {
   const record = (error ?? {}) as Record<string, unknown>;
-  const headers = (record.headers ?? {}) as Record<string, unknown>;
-  const rawRetry =
-    record.retryAfter ??
-    record.retry_after ??
-    headers["retry-after"] ??
-    headers["Retry-After"];
-  const parsedRetry =
-    typeof rawRetry === "string" && rawRetry.trim().length > 0
-      ? Number.parseInt(rawRetry.split(",")[0]?.trim() ?? "", 10)
-      : typeof rawRetry === "number"
-        ? rawRetry
-        : Number.NaN;
+  const headers = responseHeaders ?? record.headers ?? {};
+  const retryHeader =
+    headers instanceof Headers
+      ? headers.get("retry-after")
+      : ((headers as Record<string, unknown>)["retry-after"] ??
+        (headers as Record<string, unknown>)["Retry-After"]);
+  const rawRetry = record.retryAfter ?? record.retry_after ?? retryHeader;
+  const numericRetry =
+    typeof rawRetry === "number"
+      ? rawRetry
+      : typeof rawRetry === "string" && /^\d+(\.\d+)?$/.test(rawRetry.trim())
+        ? Number(rawRetry)
+        : NaN;
+  const parsedRetry = Number.isFinite(numericRetry)
+    ? numericRetry
+    : typeof rawRetry === "string"
+      ? Math.max(0, (Date.parse(rawRetry) - Date.now()) / 1000)
+      : NaN;
   return {
     name: typeof record.name === "string" ? record.name : "unknown",
     statusCode:
@@ -32,22 +41,30 @@ function providerErrorDetail(error: unknown): {
 }
 
 async function withProviderTimeout<T>(
-  promise: Promise<T>,
+  operation: (signal: AbortSignal) => Promise<T>,
+  parentSignal?: AbortSignal,
   timeoutMs = PROVIDER_TIMEOUT_MS,
 ): Promise<T> {
+  const controller = new AbortController();
+  const signal = parentSignal
+    ? AbortSignal.any([parentSignal, controller.signal])
+    : controller.signal;
+  signal.throwIfAborted();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      promise,
+      operation(signal),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error("EMAIL_PROVIDER_TIMEOUT")),
-          timeoutMs,
-        );
+        timer = setTimeout(() => {
+          const error = new Error("EMAIL_PROVIDER_TIMEOUT");
+          controller.abort(error);
+          reject(error);
+        }, timeoutMs);
       }),
     ]);
   } finally {
     if (timer) clearTimeout(timer);
+    controller.abort();
   }
 }
 
@@ -72,33 +89,43 @@ export async function sendTransactionalEmail(input: {
   activationReceipt?: import("@/lib/email/template").ActivationReceiptInput;
   attachments?: { filename: string; content: Buffer | Uint8Array | string }[];
   idempotencyKey?: string;
+  signal?: AbortSignal;
 }): Promise<string | null> {
   const env = getServerEnv();
   if (!env.RESEND_API_KEY) throw new Error("EMAIL_PROVIDER_NOT_CONFIGURED");
   const resend = new Resend(env.RESEND_API_KEY);
   const content = renderTransactionalEmail(input);
-  const { data, error } = await withProviderTimeout(
-    resend.emails.send(
-      {
-        from: env.RESEND_FROM_EMAIL,
-        replyTo: input.replyTo?.length ? input.replyTo : "community@ourmu.org",
-      to: input.to,
-      cc: input.cc?.length ? input.cc : undefined,
-      bcc: input.bcc?.length ? input.bcc : undefined,
-      subject: content.subject,
-        html: content.html,
-        text: "text" in content ? content.text : undefined,
-        attachments: input.attachments?.map((a) => ({
-          filename: a.filename,
-          content: a.content as Buffer,
-          contentType: "application/pdf",
-        })),
-      },
-      input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
-    ),
+  const { data, error, headers } = await withProviderTimeout(
+    (signal) =>
+      resend.emails.send(
+        {
+          from: env.RESEND_FROM_EMAIL,
+          replyTo: input.replyTo?.length
+            ? input.replyTo
+            : "community@ourmu.org",
+          to: input.to,
+          cc: input.cc?.length ? input.cc : undefined,
+          bcc: input.bcc?.length ? input.bcc : undefined,
+          subject: content.subject,
+          html: content.html,
+          text: "text" in content ? content.text : undefined,
+          attachments: input.attachments?.map((a) => ({
+            filename: a.filename,
+            content: a.content as Buffer,
+            contentType: "application/pdf",
+          })),
+        },
+        // The installed SDK forwards request options to fetch. A variable allows
+        // its narrower public type while retaining the standard RequestInit signal.
+        { idempotencyKey: input.idempotencyKey, signal } as Parameters<
+          typeof resend.emails.send
+        >[1] & { signal: AbortSignal },
+      ),
+    input.signal,
   );
+  input.signal?.throwIfAborted();
   if (error) {
-    const detail = providerErrorDetail(error);
+    const detail = providerErrorDetail(error, headers);
     // Do not log the recipient or provider message: either may contain
     // personal data. The stable fields are enough to alert and correlate.
     console.error("email.transactional.delivery_failed", {
@@ -112,15 +139,8 @@ export async function sendTransactionalEmail(input: {
     if (error.name === "monthly_quota_exceeded")
       throw new EmailQuotaError("EMAIL_MONTHLY_QUOTA_EXCEEDED");
     // Rate limits honour Retry-After and defer without exhausting retries.
-    if (
-      error.name === "rate_limit_exceeded" ||
-      detail.statusCode === 429 ||
-      detail.statusCode === 503
-    )
-      throw new EmailRateLimitError(
-        detail.retryAfterSec ?? 60,
-        detail.name,
-      );
+    if (error.name === "rate_limit_exceeded" || detail.statusCode === 429)
+      throw new EmailRateLimitError(detail.retryAfterSec ?? 60, detail.name);
     // Preserve the provider error code for diagnosis without leaking
     // recipient data into the job record.
     const code = String(detail.name || "unknown")

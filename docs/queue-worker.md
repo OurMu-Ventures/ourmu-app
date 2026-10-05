@@ -15,7 +15,7 @@ repository, not here. Configure the hourly dispatch there:
 name: queue-worker
 on:
   schedule:
-    - cron: "0 * * * *" # hourly; GitHub may delay scheduled runs
+    - cron: "17 * * * *" # hourly; GitHub may delay scheduled runs
   workflow_dispatch:
 permissions: { contents: read }
 concurrency:
@@ -26,8 +26,11 @@ jobs:
     runs-on: ubuntu-latest # standard Linux runner; keep each run under one billable minute
     steps:
       - name: Invoke worker
+        env:
+          PROD_BASE_URL: ${{ secrets.TEMP_DEPLOYMENT_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          response=$(curl --fail --max-time 55 -s -X POST "$PROD_WORKER_URL" \
+          response=$(curl --fail --max-time 55 -s -X POST "${PROD_BASE_URL%/}/api/cron/jobs" \
             -H "Authorization: Bearer $CRON_SECRET")
           echo "$response" | jq . > worker-response.json
           echo "$response" | jq -e '.ok == true' > /dev/null
@@ -35,6 +38,7 @@ jobs:
         run: |
           # Fail on processing errors or database-state failures. Deliberate
           # quota/budget deferral is a reported condition, not a retry signal.
+          jq -e '.jobs.failed == 0' worker-response.json > /dev/null
           jq -e '.jobs.stateErrors == 0' worker-response.json > /dev/null
           jq -e '.jobs.needsReconciliation == 0' worker-response.json > /dev/null
       - name: Summary
@@ -61,8 +65,9 @@ jobs:
 ```
 
 Use the existing GitHub workflow notifications for failures. Do not add
-recurring Resend alert emails. The existing URL secret is the production
-worker URL (`/api/cron/jobs`); keep it compatible.
+recurring Resend alert emails. The existing `TEMP_DEPLOYMENT_URL` secret is the production base URL; the
+workflow appends `/api/cron/jobs`. Confirm that the authorization secret name
+matches the existing private ops workflow before copying this snippet.
 
 ## Worker response
 
@@ -79,7 +84,9 @@ credentials never appear in workflow logs.
 
 - Claims carry a unique token with a five-minute lease; completion and
   failure writes must match the token, so an expired worker cannot overwrite a
-  newer attempt. Expired leases recover to pending before processing.
+  newer attempt. Pre-send tracking also matches the token and running status,
+  and requires a returned row before contacting the provider. Expired leases
+  recover to pending before processing.
 - Ambiguous email sends retry only with their original idempotency key inside
   Resend's 24-hour window; outside it they quarantine (`dead`,
   `NEEDS_RECONCILIATION`) for manual reconciliation. Existing dead jobs are
@@ -91,8 +98,13 @@ credentials never appear in workflow logs.
   local-budget deferrals never consume the ordinary retry budget, and
   document/recipient preparation continues while sending is deferred.
 - Local email budget is a conservative 80 recipient deliveries/day and
-  2,400/month (To + CC + BCC, ambiguous sends counted, deduplicated retries
-  never reserved twice). It is reconciled against provider quota responses:
+  2,400 per rolling 31 days (To + CC + BCC, ambiguous sends counted,
+  deduplicated retries consume each budget window once). A private reservation ledger and
+  database advisory lock make tracking and reservations atomic across workers.
+  Explicit provider rejections retain their reservations conservatively; worker
+  retries on the same day do not reserve again. Retries crossing UTC midnight
+  must reserve the new day's capacity while retaining one monthly charge.
+  Historical sends seed the ledger at rollout. It is reconciled against provider quota responses:
   authentication SMTP and manual sends share the same Resend allowance, so
   local counters alone are not a complete account quota guarantee.
 
@@ -101,9 +113,33 @@ credentials never appear in workflow logs.
 1. Before rollout, measure organization-wide GitHub minutes, Supabase
    database/storage/egress usage, and current Resend usage. Proceed only with
    headroom for backups, maintenance, builds, and login emails.
-2. Apply the additive migration first, then deploy the worker and ops changes.
+2. Pause scheduled/manual queue dispatches and let any current invocation
+   finish. Apply `20261005000000_queue_worker_throughput.sql`, followed by
+   `20261005115634_queue_worker_review_fixes.sql`, before deploying the worker.
+   The second migration gives legacy running documents/fan-out jobs five minutes
+   to settle and quarantines legacy recipient emails without send tracking as
+   `NEEDS_RECONCILIATION`. Inspect these rows before retrying; never bulk-reset
+   dead email jobs. Deploy the worker, update the private ops workflow, then
+   resume dispatches. A code rollback must retain both migrations and the
+   pre-send token/tracking safeguards; old workers cannot enforce these guards.
 3. Manually dispatch one monitored production run; verify generated receipts
    and provider acceptance.
 4. Observe quota consumption, queue age, and duplicate prevention for 48 hours.
 5. If necessary, roll queue draining back to one batch while retaining the
    stale-email protections and recovery safeguards.
+
+## Verification commands
+
+- `npm test`, `npx tsc --noEmit`, and ESLint on touched files.
+- `node scripts/test-queue-worker-migration.mjs` checks legacy backfill and
+  quarantine in a local transaction that rolls back.
+- `supabase test db` includes reservation counting, stale tracking, deduplication,
+  monthly rollover, and privilege checks.
+- `node scripts/test-queue-budget-concurrency.mjs` uses two local Postgres
+  sessions competing for the last daily slot. Run on an empty local test budget.
+
+Cancellation is cooperative: all job Supabase/Storage operations and provider
+fetches receive the job signal. A delayed PDF can finish computing but cannot
+start an upload, record write, fan-out or send after cancellation. Already
+accepted external operations cannot be undone; ambiguous sends retain their
+tracking/reservation and the original 24-hour reconciliation protection.

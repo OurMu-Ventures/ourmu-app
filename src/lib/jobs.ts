@@ -1,5 +1,8 @@
 import "server-only";
 
+import { AsyncLocalStorage } from "node:async_hooks";
+import { guardOperation, runBoundedOperation } from "@/lib/jobs/operation";
+
 import { createHash, randomUUID } from "node:crypto";
 import {
   deferralCode,
@@ -8,8 +11,6 @@ import {
   EmailBudgetDeferredError,
   EmailRateLimitError,
   isEmailDeferralError,
-  QUEUED_EMAIL_DAILY_BUDGET,
-  QUEUED_EMAIL_MONTHLY_BUDGET,
 } from "@/lib/email/quota";
 
 import { buildAgreementPdf } from "@/lib/agreements/pdf";
@@ -147,24 +148,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function withJobTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error("JOB_OPERATION_TIMEOUT")),
-          timeoutMs,
-        );
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+const operationScope = new AsyncLocalStorage<AbortSignal>();
+
+function jobAdminClient() {
+  const signal = operationScope.getStore();
+  const admin = createAdminClient(signal);
+  return signal ? guardOperation(admin, signal) : admin;
+}
+
+async function withJobTimeout<T>(operation: () => Promise<T>, timeoutMs: number): Promise<T> {
+  return runBoundedOperation(
+    (signal) => operationScope.run(signal, operation), timeoutMs,
+  );
 }
 
 // Recover workers that died mid-job: running rows whose five-minute lease
@@ -191,51 +186,9 @@ async function recoverExpiredLeases(
   return ((data ?? []) as unknown[]).length;
 }
 
-type BudgetUsage = { dailyRecipients: number; monthlyRecipients: number };
-
 export function recipientsForPayload(payload: SendEmailPayload): number {
   const cc = payload.routing?.cc?.length ?? payload.cc?.length ?? 0;
-  const bcc = payload.bcc?.length ?? 0;
-  return 1 + cc + bcc;
-}
-
-// Local recipient budget: count provider send attempts (including ambiguous
-// ones, conservatively) in the current UTC day/month. One table row equals
-// one delivery, so deduplicated retries never reserve twice; retries of a row
-// that already attempted skip reservation. Reconciled against provider quota
-// responses — never a complete account guarantee.
-async function emailBudgetUsage(
-  admin: ReturnType<typeof createAdminClient>,
-  nowMs: number,
-): Promise<BudgetUsage> {
-  const now = new Date(nowMs);
-  const dayStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  ).toISOString();
-  const monthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  ).toISOString();
-  const { data, error } = await admin
-    .from("jobs")
-    .select("payload,first_send_attempt_at")
-    .eq("kind", "send_email")
-    .gte("first_send_attempt_at", monthStart)
-    .limit(3000);
-  if (error) throw new Error("EMAIL_BUDGET_USAGE_FAILED");
-  let dailyRecipients = 0;
-  let monthlyRecipients = 0;
-  for (const row of (data ?? []) as Array<{
-    payload: Record<string, unknown>;
-    first_send_attempt_at: string | null;
-  }>) {
-    if (!row.first_send_attempt_at) continue;
-    const recipients = recipientsForPayload(
-      row.payload as SendEmailPayload,
-    );
-    monthlyRecipients += recipients;
-    if (row.first_send_attempt_at >= dayStart) dailyRecipients += recipients;
-  }
-  return { dailyRecipients, monthlyRecipients };
+  return 1 + cc + (payload.bcc?.length ?? 0);
 }
 
 async function queueStatus(
@@ -331,13 +284,6 @@ export async function processDueJobs(
   if (quotaHoldError) throw new Error("EMAIL_QUOTA_HOLD_FETCH_FAILED");
   let emailPaused = Boolean(quotaHold);
 
-  let budget: BudgetUsage | null = null;
-  let reservedRecipients = 0;
-  const ensureBudget = async (): Promise<BudgetUsage> => {
-    if (!budget) budget = await emailBudgetUsage(admin, Date.now());
-    return budget;
-  };
-
   let lastProviderSendAt = 0;
 
   const maxBatches = drainQueue
@@ -397,6 +343,8 @@ export async function processDueJobs(
           attempts: raw.attempts + 1,
         })
         .eq("id", raw.id)
+        .eq("attempts", raw.attempts)
+        .lte("available_at", claimNow)
         .in("status", ["pending", "failed"])
         .select("id");
       if (claimError) throw new Error("JOB_CLAIM_FAILED");
@@ -407,7 +355,7 @@ export async function processDueJobs(
       result.claimed += 1;
 
       // Pace provider sends to one request per second within this run.
-      const claimedJob: JobRow = { ...raw, attempts: raw.attempts + 1 };
+      const claimedJob: JobRow = { ...raw, claim_token: claimToken, attempts: raw.attempts + 1 };
       const willSend =
         raw.kind === "send_email" &&
         (claimedJob.payload as SendEmailPayload).to;
@@ -419,51 +367,37 @@ export async function processDueJobs(
       let providerMessageId: string | null = null;
       let outcome: EmailOutcome = { messageId: null, fanOutCount: 0, suppressed: false };
       const remainingMs = Math.max(0, deadline - Date.now());
+      if (remainingMs === 0) {
+        const { error: releaseError } = await admin.from("jobs").update({
+          status: "pending", attempts: raw.attempts, locked_at: null,
+          claim_token: null, lease_expires_at: null,
+        }).eq("id", raw.id).eq("claim_token", claimToken);
+        if (releaseError) throw new Error("JOB_RELEASE_FAILED");
+        result.stopReason = "time_budget";
+        break;
+      }
       try {
         if (raw.kind === "generate_agreement_pdf") {
           await withJobTimeout(
-            generateAgreement(raw.entity_id),
-            Math.min(jobTimeoutMs, Math.max(1000, remainingMs)),
+            () => generateAgreement(raw.entity_id),
+            Math.min(jobTimeoutMs, remainingMs),
           );
           result.documentsGenerated += 1;
         } else if (raw.kind === "generate_receipt_pdf") {
           await withJobTimeout(
-            generateReceipt(raw.entity_id),
-            Math.min(jobTimeoutMs, Math.max(1000, remainingMs)),
+            () => generateReceipt(raw.entity_id),
+            Math.min(jobTimeoutMs, remainingMs),
           );
           result.documentsGenerated += 1;
           // Receipt generation queues its activation email for this run to pick up.
           result.recipientJobsCreated += 1;
         } else if (raw.kind === "send_email") {
-          // Conservative local budget: first sends reserve recipient capacity
-          // (To + CC + BCC). Retries of an already-attempted row never reserve
-          // twice, and document/recipient preparation continues while deferred.
-          if (!raw.first_send_attempt_at) {
-            const usage = await ensureBudget();
-            const recipients = recipientsForPayload(
-              raw.payload as SendEmailPayload,
-            );
-            if (
-              (claimedJob.payload as SendEmailPayload).to &&
-              usage.dailyRecipients + reservedRecipients + recipients >
-                QUEUED_EMAIL_DAILY_BUDGET
-            )
-              throw new EmailBudgetDeferredError("daily");
-            if (
-              (claimedJob.payload as SendEmailPayload).to &&
-              usage.monthlyRecipients + reservedRecipients + recipients >
-                QUEUED_EMAIL_MONTHLY_BUDGET
-            )
-              throw new EmailBudgetDeferredError("monthly");
-            reservedRecipients +=
-              (claimedJob.payload as SendEmailPayload).to ? recipients : 0;
-          }
           outcome = await withJobTimeout(
-            deliverJobEmailWithOutcome(claimedJob),
-            Math.min(jobTimeoutMs, Math.max(1000, remainingMs)),
+            () => deliverJobEmailWithOutcome(claimedJob),
+            Math.min(jobTimeoutMs, remainingMs),
           );
           providerMessageId = outcome.messageId;
-          if (providerMessageId) {
+          if (providerMessageId && !raw.provider_message_id) {
             result.providerAccepted += 1;
             lastProviderSendAt = Date.now();
           }
@@ -602,7 +536,7 @@ export async function processDueJobs(
 }
 
 async function generateAgreement(investmentId: string) {
-  const admin = createAdminClient();
+  const admin = jobAdminClient();
   const { data: investment } = await admin
     .from("investments")
     .select(
@@ -696,7 +630,7 @@ type ReceiptRow = {
 };
 
 async function fetchReceipt(receiptId: string): Promise<ReceiptRow | null> {
-  const admin = createAdminClient() as never as {
+  const admin = jobAdminClient() as never as {
     from: (t: string) => {
       select: (c: string) => {
         eq: (
@@ -748,7 +682,7 @@ function receiptDisplayDate(isoDate: string): string {
 // delivery failures never reverse the activated investment; retries reuse the
 // same receipt number and stored document.
 async function generateReceipt(receiptId: string) {
-  const admin = createAdminClient() as never as {
+  const admin = jobAdminClient() as never as {
     from: (
       t: string,
     ) => ReturnType<ReturnType<typeof createAdminClient>["from"]>;
@@ -836,7 +770,7 @@ async function generateReceipt(receiptId: string) {
 }
 
 async function queueActivationEmail(receipt: ReceiptRow) {
-  const admin = createAdminClient();
+  const admin = jobAdminClient();
   const { error } = await admin.from("jobs").insert({
     kind: "send_email",
     entity_type: "investment",
@@ -852,7 +786,7 @@ async function queueActivationEmail(receipt: ReceiptRow) {
 async function receiptForInvestment(
   investmentId: string,
 ): Promise<ReceiptRow | null> {
-  const admin = createAdminClient() as never as {
+  const admin = jobAdminClient() as never as {
     from: (t: string) => {
       select: (c: string) => {
         eq: (
@@ -900,7 +834,11 @@ export async function deliverJobEmail(job: JobRow): Promise<string | null> {
 export async function deliverJobEmailWithOutcome(
   job: JobRow,
 ): Promise<EmailOutcome> {
-  const admin = createAdminClient();
+  // A recovered job with recorded provider acceptance needs state repair,
+  // never another send (including after the provider idempotency window).
+  if (job.provider_message_id)
+    return { messageId: job.provider_message_id, fanOutCount: 0, suppressed: true };
+  const admin = jobAdminClient();
   const payload = job.payload as SendEmailPayload;
   const to = payload.to;
   if (
@@ -1062,14 +1000,28 @@ export async function deliverJobEmailWithOutcome(
   // first: if tracking is lost while Resend accepts the email, a retry past
   // the 24h window could otherwise bypass reconciliation and double-send.
   const sendAttemptAt = new Date().toISOString();
-  const { error: trackingError } = await admin
+  let tracking = admin
     .from("jobs")
     .update({
+      payload: { ...job.payload, providerIdempotencyKey: idempotencyKey },
       send_attempts: (job.send_attempts ?? 0) + 1,
       first_send_attempt_at: job.first_send_attempt_at ?? sendAttemptAt,
     })
     .eq("id", job.id);
-  if (trackingError) throw new Error("SEND_TRACKING_FAILED");
+  // Direct helper callers must also supply an active lease; never send on a
+  // missing or superseded claim.
+  if (!job.claim_token) throw new Error("JOB_CLAIM_LOST");
+  tracking = tracking.eq("claim_token", job.claim_token).eq("status", "running");
+  const { data: tracked, error: trackingError } = await tracking.select("id");
+  if (trackingError) {
+    if (trackingError.message.includes("EMAIL_DAILY_BUDGET_DEFERRED"))
+      throw new EmailBudgetDeferredError("daily");
+    if (trackingError.message.includes("EMAIL_MONTHLY_BUDGET_DEFERRED"))
+      throw new EmailBudgetDeferredError("monthly");
+    throw new Error("SEND_TRACKING_FAILED");
+  }
+  if (!tracked?.length) throw new Error("JOB_CLAIM_LOST");
+  operationScope.getStore()?.throwIfAborted();
   const messageId = await sendTransactionalEmail({
     to,
     cc: MATURITY_TEMPLATES.includes(payload.template)
@@ -1086,6 +1038,7 @@ export async function deliverJobEmailWithOutcome(
     activationReceipt,
     attachments,
     idempotencyKey,
+    signal: operationScope.getStore(),
   });
   return { messageId, fanOutCount: 0, suppressed: false };
 }
@@ -1094,7 +1047,7 @@ export async function deliverJobEmailWithOutcome(
 async function reservationEmailContent(
   investmentId: string,
 ): Promise<{ detail: string; actionUrl: string }> {
-  const admin = createAdminClient();
+  const admin = jobAdminClient();
   const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
   const { data: investment, error: reservationError } = await admin
     .from("investments")
@@ -1127,7 +1080,7 @@ async function maturityEmailContent(
   actionUrl: string;
   maturityNotice?: MaturityNoticeInput;
 }> {
-  const admin = createAdminClient();
+  const admin = jobAdminClient();
   const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
   const { data: investment, error: investmentError } = await admin
     .from("investments")
@@ -1267,14 +1220,14 @@ export async function fanOutInvestmentEmails(job: JobRow): Promise<number> {
   if (!template) throw new Error("EMAIL_JOB_INVALID");
   if (MATURITY_TEMPLATES.includes(template)) {
     const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${job.entity_id}`;
-    const { error } = await createAdminClient().rpc("fan_out_maturity_email", {
+    const { error } = await jobAdminClient().rpc("fan_out_maturity_email", {
       p_job_id: job.id,
       p_action_url: actionUrl,
     });
     if (error) throw new Error("EMAIL_FANOUT_FAILED");
     return 0;
   }
-  const admin = createAdminClient();
+  const admin = jobAdminClient();
   const { data: investment } = await admin
     .from("investments")
     .select("investor_id")

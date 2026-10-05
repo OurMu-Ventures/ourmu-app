@@ -75,6 +75,12 @@ export type Database = {
         }
         Relationships: []
       }
+      queued_email_reservations: {
+        Row: { delivery_key: string; job_id: string; recipients: number; reserved_at: string; daily_reserved_at: string }
+        Insert: { delivery_key: string; job_id: string; recipients: number; reserved_at?: string; daily_reserved_at?: string }
+        Update: { delivery_key?: string; job_id?: string; recipients?: number; reserved_at?: string; daily_reserved_at?: string }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
