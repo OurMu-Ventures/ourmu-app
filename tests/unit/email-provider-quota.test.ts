@@ -13,7 +13,7 @@ vi.mock("@/lib/env", () => ({
   }),
 }));
 import { sendTransactionalEmail } from "@/lib/email/send";
-import { EmailQuotaError } from "@/lib/email/quota";
+import { EmailQuotaError, EmailRateLimitError } from "@/lib/email/quota";
 afterEach(() => vi.restoreAllMocks());
 describe("provider error classification", () => {
   it.each([
@@ -42,17 +42,42 @@ describe("provider error classification", () => {
       );
     },
   );
-  it("does not classify ordinary rate limiting as quota exhaustion", async () => {
+  it.each([new Headers({ "Retry-After": "75" }), { "retry-after": "75" }])("reads response headers in both SDK forms", async (headers) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    send.mockResolvedValue({ data: null, error: { name: "rate_limit_exceeded", statusCode: 429 }, headers });
+    await expect(sendTransactionalEmail({ to: "a@example.test", template: "magic_link" }))
+      .rejects.toMatchObject({ retryAfterSec: 75 });
+  });
+  it("passes cancellation through the installed SDK request options", async () => {
+    send.mockResolvedValue({ data: { id: "accepted" }, error: null, headers: {} });
+    const controller = new AbortController();
+    await sendTransactionalEmail({ to: "a@example.test", template: "magic_link", signal: controller.signal });
+    expect(send.mock.lastCall?.[1].signal).toBeInstanceOf(AbortSignal);
+  });
+  it("keeps a 503 ambiguous rather than restoring send tracking", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    send.mockResolvedValue({ data: null, error: { name: "application_error", statusCode: 503 }, headers: {} });
+    await expect(sendTransactionalEmail({ to: "a@example.test", template: "magic_link" }))
+      .rejects.toThrow("EMAIL_DELIVERY_FAILED:application_error");
+  });
+  it("defers ordinary rate limiting with Retry-After instead of failing it", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     send.mockResolvedValue({
-      error: { name: "rate_limit_exceeded" },
+      error: {
+        name: "rate_limit_exceeded",
+        statusCode: 429,
+
+      },
       data: null,
+      headers: { "retry-after": "120" },
     });
     const error = await sendTransactionalEmail({
       to: "partner@example.test",
       template: "magic_link",
     }).catch((e) => e);
     expect(error).not.toBeInstanceOf(EmailQuotaError);
-    expect(error.message).toBe("EMAIL_DELIVERY_FAILED");
+    expect(error).toBeInstanceOf(EmailRateLimitError);
+    expect(error.code).toBe("EMAIL_RATE_LIMITED");
+    expect(error.retryAfterSec).toBe(120);
   });
 });

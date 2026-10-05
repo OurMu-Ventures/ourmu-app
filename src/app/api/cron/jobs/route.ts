@@ -16,7 +16,21 @@ export async function POST(request: Request) {
       { status: 401, headers: { "Cache-Control": "no-store" } },
     );
 
-  const jobs = await processDueJobs(10);
+  // Queue draining: successive batches of 10 (up to 50 jobs or 40s) so
+  // document generation, recipient creation, and email delivery complete in
+  // the same hourly run when time permits. Hourly GitHub scheduling remains
+  // subject to delays; this improves throughput without promising immediacy.
+  let jobs;
+  try {
+    jobs = await processDueJobs(10, undefined, { drainQueue: true });
+  } catch (error) {
+    const code =
+      error instanceof Error ? error.message.slice(0, 80) : "WORKER_FAILED";
+    return Response.json(
+      { ok: false, requestId, error: code },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   return Response.json(
     { ok: true, requestId, jobs },
     { headers: { "Cache-Control": "no-store" } },

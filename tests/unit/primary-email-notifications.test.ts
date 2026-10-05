@@ -12,7 +12,10 @@ vi.mock("@/lib/supabase/admin", () => ({
     from: (table: string) => {
       if (table !== "jobs") throw new Error(`unexpected table ${table}`);
       return {
-        update: () => ({ eq: () => Promise.resolve({ error: state.trackingError }) }),
+        update: () => {
+          const query = { eq: () => query, select: () => Promise.resolve({ data: [{ id: "job-1" }], error: state.trackingError }) };
+          return query;
+        },
       };
     },
   }),
@@ -35,7 +38,8 @@ function noticeJob(overrides: Record<string, unknown> = {}): JobRow {
   return {
     id: "job-1",
     kind: "send_email",
-    status: "pending",
+    status: "running",
+    claim_token: "test-claim",
     entity_type: "profile",
     entity_id: "user-1",
     payload: {

@@ -45,7 +45,7 @@ function handle(table: string, ops: Op[]): { data: unknown; error: unknown } {
   if (table === "jobs") {
     if (ops.some((op) => op.m === "update")) {
       state.updates.push(ops.find((op) => op.m === "update")?.args[0]);
-      return { data: null, error: state.trackingError };
+      return { data: [{ id: "job-1" }], error: state.trackingError };
     }
     return { data: null, error: null };
   }
@@ -120,6 +120,7 @@ function sendEmailJob(
     id: "job-1",
     kind: "send_email",
     status: "running",
+    claim_token: "test-claim",
     entity_type: "investment",
     entity_id: "inv-1",
     payload,
