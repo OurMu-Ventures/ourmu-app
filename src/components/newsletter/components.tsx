@@ -17,11 +17,11 @@ export function NewsletterMasthead({
   return (
     <header className="nl-masthead">
       <Image
-        src="/logos/ourmu-color.png"
+        src="/logos/ourmu-white.jpg"
         alt="OURMU — Together for tomorrow"
-        width={168}
-        height={72}
-        priority
+        width={240}
+        height={162}
+        preload
         className="nl-logo"
       />
       <div className="nl-masthead-text">
@@ -64,12 +64,17 @@ export function NewsletterSection({
 export function NewsletterMetrics({
   items,
   ariaLabel,
+  compact = false,
 }: {
   items: { label: string; value: string; sub?: string }[];
   ariaLabel: string;
+  compact?: boolean;
 }) {
   return (
-    <dl aria-label={ariaLabel} className="nl-metrics">
+    <dl
+      aria-label={ariaLabel}
+      className={`nl-metrics${compact ? " nl-metrics-compact" : ""}`}
+    >
       {items.map((item) => (
         <div key={item.label} className="nl-metric">
           <dt className="nl-metric-label">{item.label}</dt>
@@ -84,25 +89,26 @@ export function NewsletterMetrics({
 export function NewsletterPhoto({
   caption,
   description,
-  placeholderLabel,
+  src,
+  width,
+  height,
 }: {
   caption: string;
   description: string;
-  placeholderLabel: string;
+  src: string;
+  width: number;
+  height: number;
 }) {
-  // Photographs are cropped from the PDF's embedded images during
-  // production and placed under /public/newsletters/<slug>/.
-  // Until those crops land, render an accessible placeholder that keeps
-  // reading order, captions, and descriptions intact.
   return (
     <figure className="nl-photo">
-      <div
-        role="img"
-        aria-label={description}
-        className="nl-photo-placeholder"
-      >
-        <span aria-hidden="true">{placeholderLabel}</span>
-      </div>
+      <Image
+        src={src}
+        alt={description}
+        width={width}
+        height={height}
+        sizes="(min-width: 1400px) 480px, (min-width: 900px) 40vw, 90vw"
+        className="nl-photo-image"
+      />
       <figcaption>{caption}</figcaption>
     </figure>
   );

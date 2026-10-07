@@ -11,6 +11,8 @@ import {
   Users,
 } from "lucide-react";
 
+import { getNewsletterContactEmail } from "@/lib/env";
+
 import {
   NewsletterCallout,
   NewsletterFooter,
@@ -27,6 +29,7 @@ import {
  * Figures are frozen as published; they are not live portfolio data.
  */
 export function August2026Newsletter() {
+  const contactEmail = getNewsletterContactEmail();
   return (
     <article aria-labelledby="nl-august-2026-title" className="nl-article">
       <NewsletterMasthead
@@ -70,7 +73,9 @@ export function August2026Newsletter() {
           <NewsletterPhoto
             caption="Bwooji Elijah shares the August partner note."
             description="Photograph of Bwooji Elijah reading papers outdoors among banana trees."
-            placeholderLabel="Photo: Bwooji Elijah"
+            src="/newsletters/august-2026/elijah.webp"
+            width={1200}
+            height={799}
           />
         </div>
 
@@ -153,9 +158,11 @@ export function August2026Newsletter() {
             </ol>
           </NewsletterSection>
           <NewsletterPhoto
-            caption="Preparatory work at the Buyege hatchery site."
-            description="Photograph of people preparing the Buyege hatchery site beside a pond and palm trees."
-            placeholderLabel="Photo: Buyege hatchery site"
+            caption="Ponds at the Buyege hatchery site."
+            description="Ponds at the Buyege hatchery site, surrounded by grass and trees, with birds flying over the water."
+            src="/newsletters/august-2026/buyege-hatchery.webp"
+            width={1200}
+            height={675}
           />
         </div>
 
@@ -196,7 +203,9 @@ export function August2026Newsletter() {
               <NewsletterPhoto
                 caption="Left to right: Migishas + Tushabes"
                 description="Group photograph of Migisha and Tushabe family members smiling outdoors."
-                placeholderLabel="Photo: Migishas and Tushabes"
+                src="/newsletters/august-2026/migishas-tushabes.webp"
+                width={1200}
+                height={900}
               />
             </NewsletterSection>
           </div>
@@ -255,6 +264,7 @@ export function August2026Newsletter() {
           >
             <NewsletterMetrics
               ariaLabel="Partner activity, January to June 2026"
+              compact
               items={[
                 { label: "Reinvestments", value: "106" },
                 { label: "Partners who added new money", value: "44" },
@@ -286,7 +296,7 @@ export function August2026Newsletter() {
                 style={{ verticalAlign: "text-bottom" }}
               />{" "}
               Contact:{" "}
-              <a href="mailto:tushabe@ourmu.co">tushabe@ourmu.co</a>
+              <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
             </p>
           </NewsletterCallout>
         </div>

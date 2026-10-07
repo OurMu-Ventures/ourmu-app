@@ -51,7 +51,7 @@
 
 .nl-issue-badge {
   display: inline-flex;
-  background: #e8640a;
+  background: #a94300;
   color: #fff;
   font-weight: 800;
   border-radius: 999px;
@@ -131,6 +131,7 @@
 }
 
 .nl-metric-label {
+  overflow-wrap: anywhere;
   font-size: 0.85rem;
   font-weight: 700;
   color: #102923;
@@ -140,7 +141,7 @@
   margin: 0.3rem 0 0;
   font-size: 1.45rem;
   font-weight: 800;
-  color: #e8640a;
+  color: #a94300;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
@@ -161,7 +162,7 @@
 }
 
 .nl-metric-strip strong {
-  color: #e8640a;
+  color: #a94300;
 }
 
 .nl-photo {
@@ -169,18 +170,11 @@
   min-width: 0;
 }
 
-.nl-photo-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 220px;
+.nl-photo-image {
+  display: block;
+  width: 100%;
+  height: auto;
   border-radius: 0.9rem;
-  background: linear-gradient(160deg, #e8f3ee, #fdf2e6);
-  border: 1.5px solid #0c5654;
-  color: #0c3d2e;
-  font-weight: 700;
-  text-align: center;
-  padding: 1rem;
 }
 
 .nl-photo figcaption {
@@ -226,7 +220,7 @@
   gap: 0.55rem;
   margin: 0 0 0.6rem;
   font-size: 1.1rem;
-  color: #e8640a;
+  color: #a94300;
 }
 
 .nl-callout-green .nl-callout-title {
@@ -319,7 +313,7 @@
   }
 
   .nl-metrics {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
   }
 
   .nl-metrics-compact {

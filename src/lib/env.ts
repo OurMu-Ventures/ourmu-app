@@ -33,3 +33,9 @@ export function getServerEnv(): ServerEnv {
 export function isEnvironmentConfigured() {
   return publicSchema.safeParse(process.env).success;
 }
+
+/** Personal newsletter contact details stay in server configuration, outside public source. */
+export function getNewsletterContactEmail(): string {
+  const result = z.email().safeParse(process.env.NEWSLETTER_CONTACT_EMAIL);
+  return result.success ? result.data : "hello@ourmu.co";
+}
