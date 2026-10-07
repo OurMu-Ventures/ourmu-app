@@ -1,0 +1,328 @@
+/* Scoped newsletter styles. All selectors are prefixed with .nl- so other
+   portal pages are unaffected. Green/orange palette on white, stacked on
+   mobile, two-column text/photo on desktop. No horizontal scrolling. */
+.nl-article {
+  background: #fff;
+  color: #102923;
+  border: 2px solid #0c5654;
+  border-radius: 1.25rem;
+  overflow: clip;
+  max-width: 100%;
+}
+
+.nl-masthead {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem 1.25rem;
+  border-bottom: 3px solid #e8640a;
+  background: #fff;
+}
+
+.nl-logo {
+  object-fit: contain;
+  width: min(168px, 60vw);
+  height: auto;
+}
+
+.nl-kicker {
+  margin: 0;
+  color: #0c5654;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.nl-title {
+  margin: 0.25rem 0;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: #0c3d2e;
+}
+
+.nl-issue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.nl-issue-badge {
+  display: inline-flex;
+  background: #e8640a;
+  color: #fff;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 0.2rem 0.8rem;
+}
+
+.nl-issue-note {
+  font-size: 0.82rem;
+  color: #5d6c67;
+}
+
+.nl-body {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.25rem;
+}
+
+.nl-panel {
+  border: 1.5px solid #0c5654;
+  border-radius: 1rem;
+  padding: 1.1rem 1rem;
+  background: #fff;
+  min-width: 0;
+}
+
+.nl-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+  color: #0c3d2e;
+  letter-spacing: -0.01em;
+}
+
+.nl-section-icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  color: #0c5654;
+}
+
+.nl-section-body {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.nl-section-body p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.nl-two-col {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  min-width: 0;
+}
+
+.nl-metrics {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+  margin: 0;
+  padding: 0;
+}
+
+.nl-metric {
+  border: 1.5px solid #0c5654;
+  border-radius: 0.9rem;
+  padding: 0.9rem 0.8rem;
+  text-align: center;
+  background: #fff;
+  min-width: 0;
+  margin: 0;
+}
+
+.nl-metric-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #102923;
+}
+
+.nl-metric-value {
+  margin: 0.3rem 0 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #e8640a;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.nl-metric-sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: #5d6c67;
+}
+
+.nl-metric-strip {
+  text-align: center;
+  font-weight: 800;
+  border: 1.5px dashed #0c5654;
+  border-radius: 999px;
+  padding: 0.6rem 1rem;
+  margin: 0;
+}
+
+.nl-metric-strip strong {
+  color: #e8640a;
+}
+
+.nl-photo {
+  margin: 0;
+  min-width: 0;
+}
+
+.nl-photo-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  border-radius: 0.9rem;
+  background: linear-gradient(160deg, #e8f3ee, #fdf2e6);
+  border: 1.5px solid #0c5654;
+  color: #0c3d2e;
+  font-weight: 700;
+  text-align: center;
+  padding: 1rem;
+}
+
+.nl-photo figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #5d6c67;
+  text-align: center;
+}
+
+.nl-quote {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border-left: 4px solid #0c5654;
+  border-top: 1px solid #0c5654;
+  border-right: 1px solid #0c5654;
+  border-bottom: 1px solid #0c5654;
+  border-radius: 0 0.9rem 0.9rem 0;
+  background: #f6fbf8;
+  font-style: italic;
+  line-height: 1.7;
+}
+
+.nl-callout {
+  border-radius: 1rem;
+  padding: 1.1rem 1rem;
+  min-width: 0;
+}
+
+.nl-callout-green {
+  border: 1.5px solid #0c5654;
+  background: #f2f8f4;
+}
+
+.nl-callout-orange {
+  border: 1.5px solid #e8640a;
+  background: #fff7ef;
+}
+
+.nl-callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.6rem;
+  font-size: 1.1rem;
+  color: #e8640a;
+}
+
+.nl-callout-green .nl-callout-title {
+  color: #0c3d2e;
+}
+
+.nl-callout-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.nl-callout-body {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.nl-callout-body p,
+.nl-callout-body ol {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.nl-process {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0c3d2e;
+}
+
+.nl-footer {
+  border-top: 3px solid #0c3d2e;
+  background: #0c3d2e;
+  color: #fff;
+  padding: 1.25rem;
+}
+
+.nl-footer a {
+  color: #ffd9b8;
+  font-weight: 800;
+}
+
+.nl-list {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.nl-card {
+  background: #fff;
+  border: 1px solid #d9ddd6;
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.nl-card h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.3rem;
+}
+
+.nl-card-meta {
+  margin: 0 0 0.6rem;
+  color: #0c5654;
+  font-weight: 800;
+  font-size: 0.88rem;
+}
+
+@media (min-width: 900px) {
+  .nl-body {
+    padding: 2rem;
+    gap: 1.5rem;
+  }
+
+  .nl-masthead {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    padding: 2rem;
+  }
+
+  .nl-two-col {
+    grid-template-columns: 1.05fr 0.95fr;
+    align-items: start;
+    gap: 1.5rem;
+  }
+
+  .nl-metrics {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .nl-metrics-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
