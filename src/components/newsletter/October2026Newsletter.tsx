@@ -151,23 +151,30 @@ export function October2026Newsletter() {
           </NewsletterSection>
           <NewsletterSection id="october-jonathan" title="Meet Jonathan Amwesiga">
             <p>Partner since June 2024</p>
-            <h3>What drew him to OURMU</h3>
-            <p>“The community and mission to grow together.”</p>
             <p>
-              Jonathan first heard about OURMU through a colleague who was already a Partner. A visit
-              to Nsena Ku Jengo — and the warm, inviting interaction with the community there — helped
-              him take the step to become a Partner.
+              Jonathan’s journey to OURMU began through a colleague who was already a Partner. An
+              introduction led to a visit to Nsena Ku Jengo, where seeing the farm and experiencing
+              the community’s warm welcome helped him take the next step.
             </p>
-            <h3>What has stood out</h3>
-            <p>For Jonathan, OURMU’s ambition and the strong sense of community have stood out most.</p>
-            <NewsletterQuote>“Don’t just live. Make it count 💪🏾”</NewsletterQuote>
-            <h3>His reflection for fellow and prospective Partners</h3>
             <p>
+              Asked what drew him to OURMU, his answer is simple: <strong>“The community and mission
+              to grow together.”</strong> He became a Partner in June 2024, and OURMU’s ambition and
+              strong sense of community have continued to stand out for him.
+            </p>
+            <p>
+              For Jonathan, the partnership has been a chance to take part in something meaningful,
+              learn along the way, and grow with purpose. His encouragement to others reflects that
+              experience:
+            </p>
+            <NewsletterQuote>
               “OURMU has been about being part of something meaningful, learning along the way, and
               growing with purpose. I’d encourage anyone considering the journey to take that first step.”
+            </NewsletterQuote>
+            <p>
+              Outside OURMU, Jonathan shares a cheerful expression of his faith: <strong>“Jesus loves
+              you all 😁”</strong> His personal motto carries that same warmth and energy:
             </p>
-            <h3>Outside OURMU</h3>
-            <p>“Jesus loves you all 😁”</p>
+            <NewsletterQuote>“Don’t just live. Make it count 💪🏾”</NewsletterQuote>
           </NewsletterSection>
         </div>
 
