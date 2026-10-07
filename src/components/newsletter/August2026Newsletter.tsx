@@ -332,7 +332,7 @@ export function August2026Newsletter() {
                 style={{ verticalAlign: "text-bottom" }}
               />{" "}
               Email us:{" "}
-              <a href="mailto:hello@ourmu.co">hello@ourmu.co</a>
+              <a href="mailto:community@ourmu.org">community@ourmu.org</a>
             </p>
             <p>
               <HandCoins aria-hidden="true" width={16} height={16} />{" "}

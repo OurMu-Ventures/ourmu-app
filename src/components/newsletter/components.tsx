@@ -153,9 +153,9 @@ export function NewsletterFooter() {
       </p>
       <p>
         Email us:{" "}
-        <a href="mailto:hello@ourmu.co">hello@ourmu.co</a> ·{" "}
-        <a href="https://ourmu.co" target="_blank" rel="noreferrer">
-          ourmu.co
+        <a href="mailto:community@ourmu.org">community@ourmu.org</a> ·{" "}
+        <a href="https://ourmu.org" target="_blank" rel="noreferrer">
+          ourmu.org
         </a>
       </p>
     </footer>
