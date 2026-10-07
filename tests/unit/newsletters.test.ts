@@ -10,10 +10,17 @@ import {
 describe("newsletters registry", () => {
   it("lists only published issues newest first", () => {
     const issues = listPublishedNewsletters();
-    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.map((issue) => issue.slug)).toEqual(["october-2026", "august-2026"]);
     expect(issues.every((issue) => issue.status === "published")).toBe(true);
     const dates = issues.map((issue) => issue.issueDate);
     expect([...dates].sort().reverse()).toEqual(dates);
+  });
+
+  it("resolves the published October 2026 issue", () => {
+    const issue = getPublishedNewsletter("october-2026");
+    expect(issue?.title).toBe("Partner Update — October 2026");
+    expect(issue?.issueMonth).toBe("October 2026");
+    expect(issue?.status).toBe("published");
   });
 
   it("resolves the August 2026 launch issue", () => {

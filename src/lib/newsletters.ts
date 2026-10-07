@@ -2,6 +2,8 @@ import "server-only";
 
 import type { ComponentType } from "react";
 
+import { October2026Newsletter } from "@/components/newsletter/October2026Newsletter";
+
 import { August2026Newsletter } from "@/components/newsletter/August2026Newsletter";
 
 export type NewsletterStatus = "published" | "draft";
@@ -19,6 +21,16 @@ export type NewsletterEntry = {
 };
 
 const registry: NewsletterEntry[] = [
+  {
+    slug: "october-2026",
+    title: "Partner Update — October 2026",
+    issueMonth: "October 2026",
+    issueDate: "2026-10-01",
+    summary:
+      "Nsena Ku Jengo farm performance, feed efficiency and net improvements, featured Partner Jonathan Amwesiga, Buyege broodstock arrival, and the Partner Portal Q&A webinar on 31 October.",
+    status: "published",
+    Content: October2026Newsletter,
+  },
   {
     slug: "august-2026",
     title: "Partner Update — August 2026",

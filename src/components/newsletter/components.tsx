@@ -8,10 +8,12 @@ import "./newsletter.css";
 export function NewsletterMasthead({
   title,
   issueMonth,
+  issueNote = "Historical issue; figures are editorial content, not live portfolio data.",
   kicker = "Monthly newsletter for OURMU partners",
 }: {
   title: string;
   issueMonth: string;
+  issueNote?: string;
   kicker?: string;
 }) {
   return (
@@ -30,8 +32,7 @@ export function NewsletterMasthead({
         <p className="nl-issue">
           <span className="nl-issue-badge">{issueMonth}</span>
           <span className="nl-issue-note">
-            Historical issue; figures are editorial content, not live portfolio
-            data.
+            {issueNote}
           </span>
         </p>
       </div>
