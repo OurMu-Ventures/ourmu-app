@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/components/NewsletterReadingAnalytics", () => ({
+  NewsletterReadingAnalytics: () => null,
+}));
+
 const state = vi.hoisted(() => ({
   oldest: null as { requested_at: string } | null,
   calls: [] as Array<{ method: string; args: unknown[] }>,

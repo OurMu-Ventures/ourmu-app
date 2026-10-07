@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { NewsletterReadTracker } from "@/components/NewsletterReadTracker";
 import { LinkStatus } from "@/components/ui/link-status";
 import { requireInvestor } from "@/lib/auth";
 import { getPublishedNewsletter } from "@/lib/newsletters";
@@ -10,7 +11,7 @@ export default async function NewsletterDetailPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  await requireInvestor();
+  const profile = await requireInvestor();
   const { slug } = await params;
   const issue = getPublishedNewsletter(slug);
   if (!issue) notFound();
@@ -25,7 +26,9 @@ export default async function NewsletterDetailPage({
           <LinkStatus label="Back to newsletters" />
         </Link>
       </p>
-      <Content />
+      {profile.role === "investor" && !profile.is_test ? (
+        <NewsletterReadTracker key={slug} slug={slug}><Content /></NewsletterReadTracker>
+      ) : <Content />}
     </>
   );
 }

@@ -101,6 +101,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      newsletter_visits: {
+        Row: {
+          newsletter_slug: string
+          opened_at: string
+          partner_id: string
+          reached_end_at: string | null
+          visit_id: string
+        }
+        Insert: {
+          newsletter_slug: string
+          opened_at?: string
+          partner_id: string
+          reached_end_at?: string | null
+          visit_id: string
+        }
+        Update: {
+          newsletter_slug?: string
+          opened_at?: string
+          partner_id?: string
+          reached_end_at?: string | null
+          visit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_visits_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       account_closure_requests: {
         Row: {
           id: string
@@ -1727,6 +1759,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      newsletter_reading_report: { Args: { p_slugs: string[] }; Returns: Json }
+      record_newsletter_visit: {
+        Args: {
+          p_event: string
+          p_newsletter_slug: string
+          p_partner_id: string
+          p_visit_id: string
+        }
+        Returns: boolean
+      }
       save_admin_maturity_payout_destination: {
         Args: {
           p_admin_id: string

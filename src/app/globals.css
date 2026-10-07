@@ -920,3 +920,31 @@ th {
     display: none;
   }
 }
+
+.newsletter-analytics-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+.newsletter-analytics-list > .card {
+  min-width: 0;
+}
+.newsletter-reader-table {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+.newsletter-reader-table table {
+  width: 100%;
+  min-width: 640px;
+}
+.newsletter-reader-table th {
+  text-align: left;
+}
+
+.newsletter-analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 1rem;
+}
