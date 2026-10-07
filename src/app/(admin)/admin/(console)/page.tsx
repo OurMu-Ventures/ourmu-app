@@ -1,4 +1,5 @@
 import { resolveClosure } from "@/actions/admin";
+import { NewsletterReadingAnalytics } from "@/components/NewsletterReadingAnalytics";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
 import { ugx, units } from "@/lib/format";
@@ -138,6 +139,7 @@ export default async function AdminPage() {
           </p>
         </article>
       </div>
+      <NewsletterReadingAnalytics />
       <section style={{ marginTop: "2rem" }}>
         <h2>Closure requests</h2>
         {(closures ?? []).map((item) => {
