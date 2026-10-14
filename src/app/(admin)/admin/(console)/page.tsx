@@ -69,7 +69,8 @@ export default async function AdminPage() {
     ? Math.max(
         0,
         Math.floor(
-          (now - new Date(oldestPending.requested_at).getTime()) / 3_600_000,
+          (now - new Date(oldestPending.requested_at).getTime()) /
+            3_600_000,
         ),
       )
     : null;
