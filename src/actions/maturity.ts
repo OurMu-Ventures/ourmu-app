@@ -315,7 +315,7 @@ export async function fulfillMaturityInstruction(
     return {
       ok: false,
       message:
-        "Check the actual ROI (zero or more) and type FULFILL exactly.",
+        "Check the actual ROI (zero or more), then review and confirm completion.",
     };
   const supabase = await createClient();
   const { data: aal } =
@@ -330,7 +330,7 @@ export async function fulfillMaturityInstruction(
       ? Number(parsed.data.actualRoiUgx)
       : null) as unknown as number,
     p_payout_reference: parsed.data.payoutReference?.trim() || "",
-    p_confirmation: parsed.data.confirmation,
+    p_confirmation: "FULFILL",
     p_admin_aal2: aal?.currentLevel === "aal2",
     p_request_id: requestId(),
     p_destination_verified: parsed.data.destinationVerified === "yes",
