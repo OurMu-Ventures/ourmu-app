@@ -6,12 +6,28 @@ export function PortfolioSummary({
   projected,
   activeCount,
   maturedCount,
+  actualCount = 0,
 }: {
   principal: number;
+  // Value at maturity: actual where a cycle return is recorded, else projected.
   projected: number;
   activeCount: number;
   maturedCount: number;
+  // Active placements whose cycle has a recorded actual return.
+  actualCount?: number;
 }) {
+  const returnLabel =
+    actualCount === 0
+      ? "Projected return"
+      : actualCount === activeCount
+        ? "Actual return"
+        : "Return (actual where recorded)";
+  const returnHint =
+    actualCount === 0
+      ? "Portfolio value at maturity minus principal, using each placement's projected rate. This is a projection, not a guarantee."
+      : actualCount === activeCount
+        ? "Portfolio value at maturity minus principal, using the actual return recorded for each placement's cycle. Returns published before maturity may still be revised until maturity."
+        : "Portfolio value at maturity minus principal. Uses the actual return where a cycle's return is recorded and the projected rate otherwise. Projections are not guaranteed.";
   return (
     <div className="portfolio-summary">
       <article className="card portfolio-hero-card">
@@ -19,7 +35,11 @@ export function PortfolioSummary({
           Active portfolio value at maturity{" "}
           <InfoHint
             label="How active portfolio value is calculated"
-            text="Sum of principal plus projected returns across your reserved and active placements. Projected amounts are estimates, not guaranteed."
+            text={
+              actualCount === 0
+                ? "Sum of principal plus projected returns across your reserved and active placements. Projected amounts are estimates, not guaranteed."
+                : "Sum of principal plus returns across your reserved and active placements, using the actual return where a cycle's return is recorded and the projection otherwise."
+            }
           />
         </p>
         <p className="stat">{ugx(projected)}</p>
@@ -36,10 +56,10 @@ export function PortfolioSummary({
           </p>
           <p>
             <span>
-              Projected return{" "}
+              {returnLabel}{" "}
               <InfoHint
-                label="How projected return is calculated"
-                text="Portfolio value at maturity minus principal, using each placement's projected rate. This is a projection, not a guarantee."
+                label={`How ${returnLabel.toLowerCase()} is calculated`}
+                text={returnHint}
               />
             </span>
             <strong>{ugx(projected - principal)}</strong>

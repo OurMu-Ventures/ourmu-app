@@ -13,6 +13,7 @@ import {
   isEmailDeferralError,
 } from "@/lib/email/quota";
 
+import { investmentReturnView } from "@/lib/actual-returns";
 import { buildAgreementPdf } from "@/lib/agreements/pdf";
 import { sendTransactionalEmail, type EmailTemplate } from "@/lib/email/send";
 import { getPublicEnv } from "@/lib/env";
@@ -959,7 +960,7 @@ async function maturityEmailContent(
   const { data: investment, error: investmentError } = await admin
     .from("investments")
     .select(
-      "principal_ugx,projected_return_ugx,projected_return_bps,projected_value_ugx,maturity_date,payout_basis",
+      "principal_ugx,projected_return_ugx,projected_return_bps,projected_value_ugx,maturity_date,payout_basis,reported_return_ugx,reported_payout_ugx,investment_cycles(actual_return_bps,legacy_settlement)",
     )
     .eq("id", investmentId)
     .single();
@@ -967,11 +968,13 @@ async function maturityEmailContent(
   if (!investment) throw new Error("EMAIL_JOB_INVALID");
   const principal = Number(investment.principal_ugx);
   const projectedReturn = Number(investment.projected_return_ugx);
+  const returns = investmentReturnView(investment, investment.investment_cycles);
+  const actual = returns.basis === "actual";
   const payoutDate = date(maturityPayoutDateIso(investment.maturity_date));
   const { data: instruction, error: instructionError } = await admin
     .from("maturity_instructions")
     .select(
-      "choice,requested_withdrawal_ugx,status,projected_payout_ugx,projected_reinvest_ugx,actual_payout_ugx,actual_reinvest_ugx,actual_roi_ugx,proposed_actual_roi_ugx,resolution_notes,target_cycle_id",
+      "choice,requested_withdrawal_ugx,status,amount_basis,projected_payout_ugx,projected_reinvest_ugx,actual_payout_ugx,actual_reinvest_ugx,actual_roi_ugx,proposed_actual_roi_ugx,resolution_notes,target_cycle_id",
     )
     .eq("investment_id", investmentId)
     .maybeSingle();
@@ -990,8 +993,11 @@ async function maturityEmailContent(
   }
   const basis =
     `Your OURMU investment of ${ugx(principal)} matured on ${date(investment.maturity_date)} ` +
-    `with a projected ${bpsToPercent(investment.projected_return_bps)}% return of ` +
-    `${ugx(projectedReturn)} (projected value ${ugx(investment.projected_value_ugx)}). ` +
+    (actual
+      ? `with an actual ${bpsToPercent(returns.actualReturnBps ?? 0)}% return of ` +
+        `${ugx(returns.profitUgx)} (actual value ${ugx(returns.valueUgx)}). `
+      : `with a projected ${bpsToPercent(investment.projected_return_bps)}% return of ` +
+        `${ugx(projectedReturn)} (projected value ${ugx(investment.projected_value_ugx)}). `) +
     `Payouts are scheduled for ${payoutDate}.`;
   if (template === "maturity_notice") {
     const maturityNotice: MaturityNoticeInput = {
@@ -1001,6 +1007,12 @@ async function maturityEmailContent(
       projectedPercent: bpsToPercent(investment.projected_return_bps),
       maturityDate: date(investment.maturity_date),
       payoutDate,
+      actualReturnUgx: actual ? returns.profitUgx : null,
+      actualValueUgx: actual ? returns.valueUgx : null,
+      actualPercent: actual
+        ? bpsToPercent(returns.actualReturnBps ?? 0)
+        : null,
+      actualPending: returns.pending,
     };
     return {
       actionUrl,
@@ -1020,6 +1032,12 @@ async function maturityEmailContent(
           .eq("id", instruction.target_cycle_id)
           .maybeSingle()
       : { data: null };
+    const instructionBasis =
+      instruction.amount_basis === "actual" ? "actual" : "projected";
+    const pendingSuffix =
+      instructionBasis === "projected" && returns.pending
+        ? " The actual return for your cycle is pending; you will confirm any revised amounts before anything is paid or reinvested."
+        : "";
     const cycleSuffix =
       assigned && Number(instruction.projected_reinvest_ugx) > 0
         ? ` Assigned cycle ${assigned.name} (matures ${date(assigned.maturity_date)}). The cycle was assigned automatically when your choice was recorded.`
@@ -1027,10 +1045,10 @@ async function maturityEmailContent(
     return {
       actionUrl,
       detail:
-        `Your maturity choice (${maturityChoiceLabel(instruction.choice)}) is recorded: projected payout ` +
-        `${ugx(instruction.projected_payout_ugx)}, projected reinvestment ` +
+        `Your maturity choice (${maturityChoiceLabel(instruction.choice)}) is recorded: ${instructionBasis} payout ` +
+        `${ugx(instruction.projected_payout_ugx)}, ${instructionBasis} reinvestment ` +
         `${ugx(instruction.projected_reinvest_ugx)}.${cycleSuffix} ${instructionTerms ? `${instructionTerms} ` : ""}You can revise it until our team begins ` +
-        `processing. Scheduled payout date: ${payoutDate}.`,
+        `processing. Scheduled payout date: ${payoutDate}.${pendingSuffix}`,
     };
   }
   if (template === "maturity_fulfilled" && instruction) {

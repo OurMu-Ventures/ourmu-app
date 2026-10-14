@@ -76,9 +76,27 @@ export type Database = {
         Relationships: []
       }
       queued_email_reservations: {
-        Row: { delivery_key: string; job_id: string; recipients: number; reserved_at: string; daily_reserved_at: string }
-        Insert: { delivery_key: string; job_id: string; recipients: number; reserved_at?: string; daily_reserved_at?: string }
-        Update: { delivery_key?: string; job_id?: string; recipients?: number; reserved_at?: string; daily_reserved_at?: string }
+        Row: {
+          daily_reserved_at: string
+          delivery_key: string
+          job_id: string
+          recipients: number
+          reserved_at: string
+        }
+        Insert: {
+          daily_reserved_at?: string
+          delivery_key: string
+          job_id: string
+          recipients: number
+          reserved_at?: string
+        }
+        Update: {
+          daily_reserved_at?: string
+          delivery_key?: string
+          job_id?: string
+          recipients?: number
+          reserved_at?: string
+        }
         Relationships: []
       }
     }
@@ -86,11 +104,45 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      allocate_receipt_number: { Args: { p_is_test: boolean }; Returns: string }
+      cycle_actual_return_locked: {
+        Args: { p_at?: string; p_maturity_date: string }
+        Returns: boolean
+      }
+      cycle_actual_return_state: {
+        Args: {
+          p_actual_return_bps: number
+          p_at?: string
+          p_cycle: Database["public"]["Tables"]["investment_cycles"]["Row"]
+        }
+        Returns: Json
+      }
+      cycle_actual_return_ugx: {
+        Args: { p_actual_return_bps: number; p_principal_ugx: number }
+        Returns: number
+      }
+      cycle_return_totals: {
+        Args: { p_actual_return_bps: number; p_cycle_id: string }
+        Returns: {
+          actual_profit_ugx: number
+          investment_count: number
+          principal_ugx: number
+          projected_profit_ugx: number
+          test_investment_count: number
+          total_value_ugx: number
+        }[]
+      }
+      cycle_settlement_started: {
+        Args: { p_cycle_id: string }
+        Returns: boolean
+      }
       is_accepted_import_batch: {
         Args: { check_batch_id: string }
         Returns: boolean
       }
       is_admin: { Args: { check_user_id?: string }; Returns: boolean }
+      kampala_date: { Args: { p_at?: string }; Returns: string }
+      resolve_portal_cycle: { Args: { p_at: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
@@ -101,38 +153,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      newsletter_visits: {
-        Row: {
-          newsletter_slug: string
-          opened_at: string
-          partner_id: string
-          reached_end_at: string | null
-          visit_id: string
-        }
-        Insert: {
-          newsletter_slug: string
-          opened_at?: string
-          partner_id: string
-          reached_end_at?: string | null
-          visit_id: string
-        }
-        Update: {
-          newsletter_slug?: string
-          opened_at?: string
-          partner_id?: string
-          reached_end_at?: string | null
-          visit_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "newsletter_visits_partner_id_fkey"
-            columns: ["partner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       account_closure_requests: {
         Row: {
           id: string
@@ -417,8 +437,8 @@ export type Database = {
           id: string
           investment_id: string
           received_amount_ugx: number
-          received_date: string
           received_at: string | null
+          received_date: string
           recorded_by: string
         }
         Insert: {
@@ -428,8 +448,8 @@ export type Database = {
           id?: string
           investment_id: string
           received_amount_ugx: number
-          received_date: string
           received_at?: string | null
+          received_date: string
           recorded_by: string
         }
         Update: {
@@ -439,8 +459,8 @@ export type Database = {
           id?: string
           investment_id?: string
           received_amount_ugx?: number
-          received_date?: string
           received_at?: string | null
+          received_date?: string
           recorded_by?: string
         }
         Relationships: [
@@ -454,6 +474,66 @@ export type Database = {
           {
             foreignKeyName: "bank_receipts_recorded_by_fkey"
             columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_campaigns: {
+        Row: {
+          admin_count: number | null
+          campaign_key: string
+          created_at: string
+          created_by: string | null
+          id: string
+          partner_count: number | null
+          recipient_count: number | null
+          released_at: string | null
+          released_by: string | null
+          status: string
+          test_provider_message_id: string | null
+          test_sent_at: string | null
+        }
+        Insert: {
+          admin_count?: number | null
+          campaign_key: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          partner_count?: number | null
+          recipient_count?: number | null
+          released_at?: string | null
+          released_by?: string | null
+          status?: string
+          test_provider_message_id?: string | null
+          test_sent_at?: string | null
+        }
+        Update: {
+          admin_count?: number | null
+          campaign_key?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          partner_count?: number | null
+          recipient_count?: number | null
+          released_at?: string | null
+          released_by?: string | null
+          status?: string
+          test_provider_message_id?: string | null
+          test_sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_released_by_fkey"
+            columns: ["released_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -616,6 +696,11 @@ export type Database = {
       }
       investment_cycles: {
         Row: {
+          actual_return_bps: number | null
+          actual_return_late_entry: boolean
+          actual_return_recorded_at: string | null
+          actual_return_recorded_by: string | null
+          actual_return_revision: number
           agreement_version_id: string | null
           capacity_ugx: number | null
           capacity_units: number | null
@@ -624,6 +709,7 @@ export type Database = {
           created_by: string
           id: string
           import_batch_id: string | null
+          legacy_settlement: boolean
           maturity_date: string
           name: string
           opens_at: string
@@ -634,6 +720,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          actual_return_bps?: number | null
+          actual_return_late_entry?: boolean
+          actual_return_recorded_at?: string | null
+          actual_return_recorded_by?: string | null
+          actual_return_revision?: number
           agreement_version_id?: string | null
           capacity_ugx?: number | null
           capacity_units?: number | null
@@ -642,6 +733,7 @@ export type Database = {
           created_by: string
           id?: string
           import_batch_id?: string | null
+          legacy_settlement?: boolean
           maturity_date: string
           name: string
           opens_at: string
@@ -652,6 +744,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          actual_return_bps?: number | null
+          actual_return_late_entry?: boolean
+          actual_return_recorded_at?: string | null
+          actual_return_recorded_by?: string | null
+          actual_return_revision?: number
           agreement_version_id?: string | null
           capacity_ugx?: number | null
           capacity_units?: number | null
@@ -660,6 +757,7 @@ export type Database = {
           created_by?: string
           id?: string
           import_batch_id?: string | null
+          legacy_settlement?: boolean
           maturity_date?: string
           name?: string
           opens_at?: string
@@ -670,6 +768,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "investment_cycles_actual_return_recorded_by_fkey"
+            columns: ["actual_return_recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "investment_cycles_agreement_version_id_fkey"
             columns: ["agreement_version_id"]
@@ -693,10 +798,127 @@ export type Database = {
           },
         ]
       }
+      investment_receipts: {
+        Row: {
+          account_description: string
+          amount_ugx: number
+          bank_receipt_id: string | null
+          company_address: string
+          company_name: string
+          created_at: string
+          generated_at: string | null
+          id: string
+          investment_id: string
+          investor_id: string
+          is_test: boolean
+          last_error_code: string | null
+          maturity_instruction_id: string | null
+          original_investment_id: string | null
+          partner_name: string
+          partner_phone: string | null
+          pdf_hash: string | null
+          pdf_path: string | null
+          pdf_status: Database["public"]["Enums"]["receipt_status"]
+          receipt_number: string
+          source: Database["public"]["Enums"]["receipt_source"]
+          template_version: string
+          transaction_date: string
+          updated_at: string
+        }
+        Insert: {
+          account_description: string
+          amount_ugx: number
+          bank_receipt_id?: string | null
+          company_address: string
+          company_name: string
+          created_at?: string
+          generated_at?: string | null
+          id?: string
+          investment_id: string
+          investor_id: string
+          is_test?: boolean
+          last_error_code?: string | null
+          maturity_instruction_id?: string | null
+          original_investment_id?: string | null
+          partner_name: string
+          partner_phone?: string | null
+          pdf_hash?: string | null
+          pdf_path?: string | null
+          pdf_status?: Database["public"]["Enums"]["receipt_status"]
+          receipt_number: string
+          source: Database["public"]["Enums"]["receipt_source"]
+          template_version?: string
+          transaction_date: string
+          updated_at?: string
+        }
+        Update: {
+          account_description?: string
+          amount_ugx?: number
+          bank_receipt_id?: string | null
+          company_address?: string
+          company_name?: string
+          created_at?: string
+          generated_at?: string | null
+          id?: string
+          investment_id?: string
+          investor_id?: string
+          is_test?: boolean
+          last_error_code?: string | null
+          maturity_instruction_id?: string | null
+          original_investment_id?: string | null
+          partner_name?: string
+          partner_phone?: string | null
+          pdf_hash?: string | null
+          pdf_path?: string | null
+          pdf_status?: Database["public"]["Enums"]["receipt_status"]
+          receipt_number?: string
+          source?: Database["public"]["Enums"]["receipt_source"]
+          template_version?: string
+          transaction_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_receipts_bank_receipt_id_fkey"
+            columns: ["bank_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "bank_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_receipts_investment_id_fkey"
+            columns: ["investment_id"]
+            isOneToOne: true
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_receipts_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_receipts_maturity_instruction_id_fkey"
+            columns: ["maturity_instruction_id"]
+            isOneToOne: false
+            referencedRelation: "maturity_instructions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_receipts_original_investment_id_fkey"
+            columns: ["original_investment_id"]
+            isOneToOne: false
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       investments: {
         Row: {
-          alias: string | null
           activated_at: string | null
+          alias: string | null
           cancelled_at: string | null
           created_at: string
           cycle_id: string
@@ -708,6 +930,7 @@ export type Database = {
           matured_at: string | null
           maturity_date: string
           payout_basis: Database["public"]["Enums"]["payout_basis"]
+          policy_version: string | null
           principal_ugx: number
           projected_return_bps: number
           projected_return_ugx: number
@@ -717,7 +940,6 @@ export type Database = {
           reported_return_ugx: number | null
           requested_at: string
           reservation_expires_at: string | null
-          policy_version: string | null
           source_key: string | null
           source_row: number | null
           source_sheet: string | null
@@ -726,8 +948,8 @@ export type Database = {
           units: number | null
         }
         Insert: {
-          alias?: string | null
           activated_at?: string | null
+          alias?: string | null
           cancelled_at?: string | null
           created_at?: string
           cycle_id: string
@@ -739,6 +961,7 @@ export type Database = {
           matured_at?: string | null
           maturity_date: string
           payout_basis?: Database["public"]["Enums"]["payout_basis"]
+          policy_version?: string | null
           principal_ugx: number
           projected_return_bps: number
           projected_return_ugx: number
@@ -748,7 +971,6 @@ export type Database = {
           reported_return_ugx?: number | null
           requested_at?: string
           reservation_expires_at?: string | null
-          policy_version?: string | null
           source_key?: string | null
           source_row?: number | null
           source_sheet?: string | null
@@ -757,8 +979,8 @@ export type Database = {
           units?: number | null
         }
         Update: {
-          alias?: string | null
           activated_at?: string | null
+          alias?: string | null
           cancelled_at?: string | null
           created_at?: string
           cycle_id?: string
@@ -770,6 +992,7 @@ export type Database = {
           matured_at?: string | null
           maturity_date?: string
           payout_basis?: Database["public"]["Enums"]["payout_basis"]
+          policy_version?: string | null
           principal_ugx?: number
           projected_return_bps?: number
           projected_return_ugx?: number
@@ -779,7 +1002,6 @@ export type Database = {
           reported_return_ugx?: number | null
           requested_at?: string
           reservation_expires_at?: string | null
-          policy_version?: string | null
           source_key?: string | null
           source_row?: number | null
           source_sheet?: string | null
@@ -902,77 +1124,11 @@ export type Database = {
           },
         ]
       }
-      email_campaigns: {
-        Row: {
-          admin_count: number | null
-          campaign_key: string
-          created_at: string
-          created_by: string | null
-          id: string
-          partner_count: number | null
-          recipient_count: number | null
-          released_at: string | null
-          released_by: string | null
-          status: string
-          test_provider_message_id: string | null
-          test_sent_at: string | null
-        }
-        Insert: {
-          admin_count?: number | null
-          campaign_key: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          partner_count?: number | null
-          recipient_count?: number | null
-          released_at?: string | null
-          released_by?: string | null
-          status?: string
-          test_provider_message_id?: string | null
-          test_sent_at?: string | null
-        }
-        Update: {
-          admin_count?: number | null
-          campaign_key?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          partner_count?: number | null
-          recipient_count?: number | null
-          released_at?: string | null
-          released_by?: string | null
-          status?: string
-          test_provider_message_id?: string | null
-          test_sent_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "email_campaigns_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "email_campaigns_released_by_fkey"
-            columns: ["released_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      maturity_email_settings: {
-        Row: { id: boolean; contacts: string[]; enabled: boolean; revision: number; updated_at: string; updated_by: string | null }
-        Insert: { id?: boolean; contacts?: string[]; enabled?: boolean; revision?: number; updated_at?: string; updated_by?: string | null }
-        Update: { id?: boolean; contacts?: string[]; enabled?: boolean; revision?: number; updated_at?: string; updated_by?: string | null }
-        Relationships: []
-      }
       jobs: {
         Row: {
           attempts: number
-          cc_review_required: boolean
           available_at: string
+          cc_review_required: boolean
           claim_token: string | null
           completed_at: string | null
           created_at: string
@@ -994,8 +1150,8 @@ export type Database = {
         }
         Insert: {
           attempts?: number
-          cc_review_required?: boolean
           available_at?: string
+          cc_review_required?: boolean
           claim_token?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1017,8 +1173,8 @@ export type Database = {
         }
         Update: {
           attempts?: number
-          cc_review_required?: boolean
           available_at?: string
+          cc_review_required?: boolean
           claim_token?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1038,115 +1194,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
         }
-        Relationships: []
-      }
-      investment_receipts: {
-        Row: {
-          account_description: string
-          amount_ugx: number
-          bank_receipt_id: string | null
-          company_address: string
-          company_name: string
-          created_at: string
-          generated_at: string | null
-          id: string
-          investment_id: string
-          investor_id: string
-          is_test: boolean
-          last_error_code: string | null
-          maturity_instruction_id: string | null
-          original_investment_id: string | null
-          partner_name: string
-          partner_phone: string | null
-          pdf_hash: string | null
-          pdf_path: string | null
-          pdf_status: Database["public"]["Enums"]["receipt_status"]
-          receipt_number: string
-          source: Database["public"]["Enums"]["receipt_source"]
-          template_version: string
-          transaction_date: string
-          updated_at: string
-        }
-        Insert: {
-          account_description: string
-          amount_ugx: number
-          bank_receipt_id?: string | null
-          company_address: string
-          company_name: string
-          created_at?: string
-          generated_at?: string | null
-          id?: string
-          investment_id: string
-          investor_id: string
-          is_test?: boolean
-          last_error_code?: string | null
-          maturity_instruction_id?: string | null
-          original_investment_id?: string | null
-          partner_name: string
-          partner_phone?: string | null
-          pdf_hash?: string | null
-          pdf_path?: string | null
-          pdf_status?: Database["public"]["Enums"]["receipt_status"]
-          receipt_number: string
-          source: Database["public"]["Enums"]["receipt_source"]
-          template_version?: string
-          transaction_date: string
-          updated_at?: string
-        }
-        Update: {
-          account_description?: string
-          amount_ugx?: number
-          bank_receipt_id?: string | null
-          company_address?: string
-          company_name?: string
-          created_at?: string
-          generated_at?: string | null
-          id?: string
-          investment_id?: string
-          investor_id?: string
-          is_test?: boolean
-          last_error_code?: string | null
-          maturity_instruction_id?: string | null
-          original_investment_id?: string | null
-          partner_name?: string
-          partner_phone?: string | null
-          pdf_hash?: string | null
-          pdf_path?: string | null
-          pdf_status?: Database["public"]["Enums"]["receipt_status"]
-          receipt_number?: string
-          source?: Database["public"]["Enums"]["receipt_source"]
-          template_version?: string
-          transaction_date?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "investment_receipts_original_investment_id_fkey"
-            columns: ["original_investment_id"]
-            isOneToOne: false
-            referencedRelation: "investments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "investment_receipts_investment_id_fkey"
-            columns: ["investment_id"]
-            isOneToOne: true
-            referencedRelation: "investments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "investment_receipts_investor_id_fkey"
-            columns: ["investor_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      receipt_counters: {
-        Row: { year: number; last_seq: number }
-        Insert: { year: number; last_seq?: number }
-        Update: { year?: number; last_seq?: number }
         Relationships: []
       }
       legacy_monthly_financial_summaries: {
@@ -1250,6 +1297,41 @@ export type Database = {
           },
         ]
       }
+      maturity_email_settings: {
+        Row: {
+          contacts: string[]
+          enabled: boolean
+          id: boolean
+          revision: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          contacts?: string[]
+          enabled?: boolean
+          id?: boolean
+          revision?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          contacts?: string[]
+          enabled?: boolean
+          id?: boolean
+          revision?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maturity_email_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maturity_instructions: {
         Row: {
           acceptance_captured_at: string | null
@@ -1260,6 +1342,8 @@ export type Database = {
           actual_reinvest_ugx: number | null
           actual_roi_ugx: number | null
           agreement_accepted: boolean
+          amount_basis: string
+          basis_actual_return_bps: number | null
           choice: Database["public"]["Enums"]["maturity_choice"]
           confirmed_actual_roi_ugx: number | null
           created_at: string
@@ -1275,6 +1359,7 @@ export type Database = {
           payout_destination_id: string | null
           payout_reference: string | null
           payout_verified_at: string | null
+          policy_version: string | null
           processed_at: string | null
           processed_by: string | null
           projected_payout_ugx: number
@@ -1288,7 +1373,6 @@ export type Database = {
           status: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id: string | null
           target_cycle_id: string | null
-          policy_version: string | null
           updated_at: string
         }
         Insert: {
@@ -1300,6 +1384,8 @@ export type Database = {
           actual_reinvest_ugx?: number | null
           actual_roi_ugx?: number | null
           agreement_accepted?: boolean
+          amount_basis?: string
+          basis_actual_return_bps?: number | null
           choice: Database["public"]["Enums"]["maturity_choice"]
           confirmed_actual_roi_ugx?: number | null
           created_at?: string
@@ -1315,6 +1401,7 @@ export type Database = {
           payout_destination_id?: string | null
           payout_reference?: string | null
           payout_verified_at?: string | null
+          policy_version?: string | null
           processed_at?: string | null
           processed_by?: string | null
           projected_payout_ugx: number
@@ -1328,7 +1415,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id?: string | null
           target_cycle_id?: string | null
-          policy_version?: string | null
           updated_at?: string
         }
         Update: {
@@ -1340,6 +1426,8 @@ export type Database = {
           actual_reinvest_ugx?: number | null
           actual_roi_ugx?: number | null
           agreement_accepted?: boolean
+          amount_basis?: string
+          basis_actual_return_bps?: number | null
           choice?: Database["public"]["Enums"]["maturity_choice"]
           confirmed_actual_roi_ugx?: number | null
           created_at?: string
@@ -1355,6 +1443,7 @@ export type Database = {
           payout_destination_id?: string | null
           payout_reference?: string | null
           payout_verified_at?: string | null
+          policy_version?: string | null
           processed_at?: string | null
           processed_by?: string | null
           projected_payout_ugx?: number
@@ -1368,7 +1457,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["maturity_instruction_status"]
           target_agreement_version_id?: string | null
           target_cycle_id?: string | null
-          policy_version?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1523,6 +1611,38 @@ export type Database = {
           {
             foreignKeyName: "maturity_reinvest_authorizations_investor_id_fkey"
             columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      newsletter_visits: {
+        Row: {
+          newsletter_slug: string
+          opened_at: string
+          partner_id: string
+          reached_end_at: string | null
+          visit_id: string
+        }
+        Insert: {
+          newsletter_slug: string
+          opened_at?: string
+          partner_id: string
+          reached_end_at?: string | null
+          visit_id: string
+        }
+        Update: {
+          newsletter_slug?: string
+          opened_at?: string
+          partner_id?: string
+          reached_end_at?: string | null
+          visit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_visits_partner_id_fkey"
+            columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1757,67 +1877,26 @@ export type Database = {
           },
         ]
       }
+      receipt_counters: {
+        Row: {
+          last_seq: number
+          year: number
+        }
+        Insert: {
+          last_seq?: number
+          year: number
+        }
+        Update: {
+          last_seq?: number
+          year?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      ensure_investment_receipt: {
-        Args: { p_investor_id: string; p_investment_id: string };
-        Returns: string;
-      };
-      newsletter_reading_report: { Args: { p_slugs: string[] }; Returns: Json }
-      record_newsletter_visit: {
-        Args: {
-          p_event: string
-          p_newsletter_slug: string
-          p_partner_id: string
-          p_visit_id: string
-        }
-        Returns: boolean
-      }
-      save_admin_maturity_payout_destination: {
-        Args: {
-          p_admin_id: string
-          p_admin_aal2: boolean
-          p_instruction_id: string
-          p_request_id: string
-          p_verification_method: string
-          p_reference_source: string
-          p_expected_profile_updated_at: string | null
-          p_destination: Json
-        }
-        Returns: Json
-      }
-
-      submit_partner_application: {
-        Args: { p_token_hash: string; p_application: Json; p_identity: Json };
-        Returns: undefined;
-      };
-      review_partner_application: {
-        Args: {
-          p_application_id: string;
-          p_admin_id: string;
-          p_decision: string;
-          p_user_id: string | null;
-          p_reference: string;
-          p_notes: string | null;
-        };
-        Returns: undefined;
-      };
-      set_partner_investment_limit: {
-        Args: {
-          p_admin_id: string
-          p_investor_id: string
-          p_limit_ugx: number | null
-          p_reason: string
-          p_request_id: string
-        }
-        Returns: undefined
-      }
-      fan_out_maturity_email: { Args: { p_job_id: string; p_action_url: string }; Returns: number }
-      update_maturity_email_settings: { Args: { p_admin_id: string; p_contacts: string[]; p_enabled: boolean; p_request_id: string; p_admin_aal2: boolean }; Returns: undefined }
-      resolve_maturity_cc_review: { Args: { p_admin_id: string; p_job_id: string; p_admin_aal2: boolean; p_request_id: string }; Returns: undefined }
       accept_partner_import: {
         Args: {
           p_admin_aal2: boolean
@@ -1846,9 +1925,9 @@ export type Database = {
           p_confirmation: string
           p_investment_id: string
           p_received_amount_ugx: number
+          p_received_at?: string
           p_received_date: string
           p_request_id: string
-          p_received_at?: string
         }
         Returns: undefined
       }
@@ -1861,21 +1940,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      apply_september_partner_update: {
+        Args: { p_admin_id: string; p_manifest: Json; p_request_id: string }
+        Returns: Json
+      }
       begin_maturity_instruction_processing: {
         Args: {
           p_admin_aal2: boolean
           p_admin_id: string
           p_instruction_id: string
-          p_request_id: string
-        }
-        Returns: undefined
-      }
-      expire_investment: {
-        Args: {
-          p_admin_id: string
-          p_investment_id: string
-          p_confirmation: string
-          p_admin_aal2: boolean
           p_request_id: string
         }
         Returns: undefined
@@ -1895,6 +1968,24 @@ export type Database = {
           p_request_id: string
         }
         Returns: undefined
+      }
+      ensure_investment_receipt: {
+        Args: { p_investment_id: string; p_investor_id: string }
+        Returns: string
+      }
+      expire_investment: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_confirmation: string
+          p_investment_id: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
+      fan_out_maturity_email: {
+        Args: { p_action_url: string; p_job_id: string }
+        Returns: number
       }
       fulfill_maturity_instruction: {
         Args: {
@@ -1922,9 +2013,60 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_partner_portal_welcome_test_sent: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_provider_message_id: string
+          p_request_id: string
+        }
+        Returns: string
+      }
       maturity_payout_date: {
         Args: { p_maturity_date: string }
         Returns: string
+      }
+      newsletter_reading_report: { Args: { p_slugs: string[] }; Returns: Json }
+      preview_cycle_actual_return: {
+        Args: {
+          p_actual_return_bps?: number
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_cycle_id: string
+        }
+        Returns: Json
+      }
+      record_cycle_actual_return: {
+        Args: {
+          p_actual_return_bps: number
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_confirmed: boolean
+          p_cycle_id: string
+          p_expected_investment_count: number
+          p_expected_principal_ugx: number
+          p_expected_revision: number
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      record_newsletter_visit: {
+        Args: {
+          p_event: string
+          p_newsletter_slug: string
+          p_partner_id: string
+          p_visit_id: string
+        }
+        Returns: boolean
+      }
+      release_partner_portal_welcome_campaign: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_expected_count: number
+          p_request_id: string
+        }
+        Returns: Json
       }
       reopen_maturity_instruction: {
         Args: {
@@ -1939,38 +2081,63 @@ export type Database = {
       request_investment: {
         Args: {
           p_cycle_id: string
+          p_expected_agreement_version_id?: string
           p_investor_id: string
           p_ip_fingerprint: string
           p_principal_ugx: number
           p_request_id: string
           p_user_agent: string
-          p_expected_agreement_version_id?: string
         }
         Returns: string
       }
-      mark_partner_portal_welcome_test_sent: {
+      resolve_maturity_cc_review: {
         Args: {
           p_admin_aal2: boolean
           p_admin_id: string
-          p_provider_message_id: string
+          p_job_id: string
           p_request_id: string
         }
-        Returns: string
+        Returns: undefined
       }
-      release_partner_portal_welcome_campaign: {
+      review_partner_application: {
         Args: {
-          p_admin_aal2: boolean
           p_admin_id: string
-          p_expected_count: number
-          p_request_id: string
+          p_application_id: string
+          p_decision: string
+          p_notes: string | null
+          p_reference: string
+          p_user_id: string | null
         }
-        Returns: Json
+        Returns: undefined
       }
       revoke_standing_reinvest_authorization: {
         Args: { p_investor_id: string; p_request_id: string }
         Returns: undefined
       }
       run_maintenance: { Args: { p_request_id: string }; Returns: Json }
+      save_admin_maturity_payout_destination: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_destination: Json
+          p_expected_profile_updated_at: string | null
+          p_instruction_id: string
+          p_reference_source: string
+          p_request_id: string
+          p_verification_method: string
+        }
+        Returns: Json
+      }
+      set_partner_investment_limit: {
+        Args: {
+          p_admin_id: string
+          p_investor_id: string
+          p_limit_ugx: number | null
+          p_reason: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
       stage_partner_import: {
         Args: { p_admin_id: string; p_manifest: Json; p_request_id: string }
         Returns: string
@@ -1981,6 +2148,7 @@ export type Database = {
           p_choice: Database["public"]["Enums"]["maturity_choice"]
           p_custom_split?: boolean
           p_destination_confirmed: boolean
+          p_expected_agreement_version_id?: string
           p_investment_id: string
           p_investor_id: string
           p_ip_fingerprint: string
@@ -1989,9 +2157,22 @@ export type Database = {
           p_requested_withdrawal_ugx?: number
           p_target_cycle_id: string
           p_user_agent: string
-          p_expected_agreement_version_id?: string
         }
         Returns: string
+      }
+      submit_partner_application: {
+        Args: { p_application: Json; p_identity: Json; p_token_hash: string }
+        Returns: undefined
+      }
+      update_maturity_email_settings: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_contacts: string[]
+          p_enabled: boolean
+          p_request_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
@@ -2011,8 +2192,8 @@ export type Database = {
       job_kind:
         | "send_email"
         | "generate_agreement_pdf"
-        | "generate_receipt_pdf"
         | "revoke_sessions"
+        | "generate_receipt_pdf"
       job_status: "pending" | "running" | "succeeded" | "failed" | "dead"
       maturity_choice:
         | "withdraw_all"
@@ -2169,7 +2350,12 @@ export const Constants = {
         "expired",
         "matured",
       ],
-      job_kind: ["send_email", "generate_agreement_pdf", "generate_receipt_pdf", "revoke_sessions"],
+      job_kind: [
+        "send_email",
+        "generate_agreement_pdf",
+        "revoke_sessions",
+        "generate_receipt_pdf",
+      ],
       job_status: ["pending", "running", "succeeded", "failed", "dead"],
       maturity_choice: [
         "withdraw_all",
@@ -2179,8 +2365,11 @@ export const Constants = {
       maturity_instruction_status: ["requested", "processing", "fulfilled"],
       payout_basis: ["projected", "reported_paid"],
       payout_channel: ["bank", "mobile_money"],
+      receipt_source: ["bank_activation", "reinvestment", "investment_record"],
+      receipt_status: ["generating", "ready", "failed"],
       record_origin: ["portal", "legacy_import", "hybrid"],
       user_role: ["investor", "admin"],
     },
   },
 } as const
+

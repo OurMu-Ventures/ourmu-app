@@ -353,6 +353,26 @@ p {
   color: #79221b;
   border: 1px solid #e2aca6;
 }
+.actual-return-required {
+  background: #fff6e2;
+  border: 1px solid var(--gold);
+  border-left: 4px solid var(--gold-dark);
+  color: #5a3f0f;
+}
+.actual-return-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+.actual-return-preview dt {
+  font-size: 0.8rem;
+  color: var(--muted, #5d6c67);
+}
+.actual-return-preview dd {
+  margin: 0;
+  font-weight: 700;
+}
 .form {
   display: grid;
   gap: 1rem;

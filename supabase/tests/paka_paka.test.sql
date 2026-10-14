@@ -93,6 +93,11 @@ values ('66666666-6666-6666-6666-666666666666', '22222222-2222-2222-2222-2222222
 ('77777777-7777-7777-7777-777777777777', '22222222-2222-2222-2222-222222222222', 'withdraw_all', 'processing', 325000, 0, '99999999-9999-9999-9999-999999999999', gen_random_uuid());
 alter table public.maturity_instructions enable trigger guard_paid_maturity_instruction;
 
+-- These fixtures exercise the per-investment ROI workflow that cycles settled
+-- before cycle-wide actual returns keep (see cycle_actual_returns.test.sql).
+select set_config('ourmu.recording_cycle_actual_return', 'on', true);
+update public.investment_cycles set legacy_settlement = true where actual_return_bps is null;
+select set_config('ourmu.recording_cycle_actual_return', 'off', true);
 set local role service_role;
 select lives_ok($$select pg_temp.submit_paka(5000000)$$, 'partner example accepted');
 select is((select projected_payout_ugx from public.maturity_instructions where id = pg_temp.instruction()), 5000000::numeric, 'example withdrawal is exact');

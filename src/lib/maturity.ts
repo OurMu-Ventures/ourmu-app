@@ -9,6 +9,13 @@ export type MaturityNoticeInput = {
   projectedPercent: number;
   maturityDate: string;
   payoutDate: string;
+  // The cycle's recorded actual return, when one exists. It locks at
+  // maturity, so a maturity notice quotes final figures.
+  actualReturnUgx?: number | null;
+  actualValueUgx?: number | null;
+  actualPercent?: number | null;
+  // Matured without a recorded cycle return.
+  actualPending?: boolean;
 };
 
 export const MATURITY_CHOICES: {
@@ -195,28 +202,56 @@ export function safeFulfilledSplits(
 
 // Pure composer for the maturity notice email body. Kept here (instead of
 // the job runner) so the figures it quotes are unit-tested.
+export function hasActualReturn(
+  input: MaturityNoticeInput,
+): input is MaturityNoticeInput & {
+  actualReturnUgx: number;
+  actualValueUgx: number;
+  actualPercent: number;
+} {
+  return (
+    input.actualReturnUgx != null &&
+    input.actualValueUgx != null &&
+    input.actualPercent != null
+  );
+}
+
 export function maturityNoticeDetail(input: MaturityNoticeInput): string {
+  const actual = hasActualReturn(input) ? input : null;
+  const returnUgx = actual?.actualReturnUgx ?? input.projectedReturnUgx;
   const withdrawAll = maturitySplits(
     input.principalUgx,
-    input.projectedReturnUgx,
+    returnUgx,
     "withdraw_all",
   );
   const reinvestAll = maturitySplits(
     input.principalUgx,
-    input.projectedReturnUgx,
+    returnUgx,
     "reinvest_all",
   );
   const money = (value: number) =>
     `UGX ${value.toLocaleString("en-UG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const standing = actual
+    ? `with an actual ${actual.actualPercent}% return of ${money(actual.actualReturnUgx)} ` +
+      `(actual value ${money(actual.actualValueUgx)}; projected ${input.projectedPercent}% return of ` +
+      `${money(input.projectedReturnUgx)}).`
+    : `with a projected ${input.projectedPercent}% return of ${money(input.projectedReturnUgx)} ` +
+      `(projected value ${money(input.projectedValueUgx)}).`;
+  const closing = actual
+    ? "These amounts use the actual return recorded for your cycle."
+    : input.actualPending
+      ? "The actual return for your cycle is pending. You will confirm any revised amounts before anything is paid or reinvested."
+      : "The amount actually paid follows the return recorded by the fund, which may differ from this projection.";
   return (
     `Your OURMU investment of ${money(input.principalUgx)} matured on ${input.maturityDate} ` +
-    `with a projected ${input.projectedPercent}% return of ${money(input.projectedReturnUgx)} ` +
-    `(projected value ${money(input.projectedValueUgx)}). Payouts are scheduled for ${input.payoutDate}. ` +
+    `${standing} Payouts are scheduled for ${input.payoutDate}. ` +
     `Record your choice on the investment page: ${maturityChoiceLabel("withdraw_all")} ` +
     `(${money(withdrawAll.payoutUgx)} payout). ${maturityChoiceLabel("withdraw_roi_reinvest_principal")} ` +
-    `(choose how much to withdraw and reinvest the rest; amounts adjust proportionally if the final return changes). ` +
+    (actual
+      ? `(choose how much to withdraw and reinvest the rest). `
+      : `(choose how much to withdraw and reinvest the rest; amounts adjust proportionally if the final return changes). `) +
     `${maturityChoiceLabel("reinvest_all")} (${money(reinvestAll.reinvestUgx)} reinvested). ` +
-    `The amount actually paid follows the return recorded by the fund, which may differ from this projection.`
+    closing
   );
 }
 // The ROI implied by an instruction's projected splits. Fulfillment uses
