@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cancelInvestment } from "@/actions/investments";
 import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
+import { DownloadReceiptButton } from "@/components/DownloadReceiptButton";
 import {
   MaturityConfirmAmountsForm,
   MaturityInstructionForm,
@@ -183,7 +184,9 @@ export default async function InvestmentPage({
             </Link>
           </Button>
         )}
-        {receipt ? (
+        {data.status === "active" ? (
+          <DownloadReceiptButton investmentId={data.id} />
+        ) : receipt ? (
           receipt.pdf_status === "ready" ? (
             <Button asChild variant="secondary">
               <Link href={`/receipts/${receipt.id}`}>
@@ -201,8 +204,6 @@ export default async function InvestmentPage({
               Receipt {receipt.receipt_number} is generating…
             </p>
           )
-        ) : data.status === "active" ? (
-          <p className="muted">Receipt generation pending…</p>
         ) : null}
         {isCancellable && (
           <div style={{ marginTop: "1rem" }}>

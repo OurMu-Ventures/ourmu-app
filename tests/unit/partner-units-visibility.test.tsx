@@ -14,6 +14,7 @@ import NewInvestmentPage from "@/app/(investor)/investments/new/page";
 import { InvestmentRequestForm } from "@/components/forms";
 import { MaturityInstructionForm } from "@/components/maturity-forms";
 import { InvestmentCard } from "@/components/InvestmentCard";
+import { DownloadReceiptButton } from "@/components/DownloadReceiptButton";
 import {
   CurrentOpportunityRate,
   PortfolioSummary,
@@ -32,6 +33,7 @@ vi.mock("@/actions/investments", () => ({
   activateInvestment: vi.fn(),
 }));
 vi.mock("@/actions/maturity", () => ({}));
+vi.mock("@/actions/receipts", () => ({ downloadInvestmentReceipt: vi.fn() }));
 vi.mock("@/actions/admin", () => ({}));
 vi.mock("@/actions/applications", () => ({}));
 vi.mock("@/actions/auth", () => ({}));
@@ -408,4 +410,63 @@ describe("partner limit in the existing investment form", () => {
       limitUgx: 100_000_000,
     });
   });
+});
+
+describe("receipt availability on investment details", () => {
+  it.each([
+    ["portal", null],
+    ["legacy_import", null],
+    [
+      "portal",
+      {
+        id: "receipt-1",
+        receipt_number: "OURMU-2026-1",
+        pdf_status: "generating",
+      },
+    ],
+    [
+      "legacy_import",
+      { id: "receipt-1", receipt_number: "OURMU-2026-1", pdf_status: "failed" },
+    ],
+    [
+      "portal",
+      { id: "receipt-1", receipt_number: "OURMU-2026-1", pdf_status: "ready" },
+    ],
+  ])(
+    "active %s investment offers a download with receipt state %j",
+    async (origin, receipt) => {
+      mockClient({
+        investments: {
+          ...placement,
+          record_origin: origin,
+          status: "active",
+          maturity_date: "2099-02-28",
+          investment_receipts: receipt ? [receipt] : [],
+        },
+      });
+      const tree = await InvestmentDetailPage({
+        params: Promise.resolve({ id: placement.id }),
+      });
+      const download = walk(tree).find(
+        (element) => element.type === DownloadReceiptButton,
+      );
+      expect(download?.props).toMatchObject({ investmentId: placement.id });
+      expect(collectText(tree)).not.toContain("Receipt generation pending");
+    },
+  );
+
+  it.each(["reserved", "expired", "cancelled"])(
+    "%s unpaid investment does not offer a receipt",
+    async (status) => {
+      mockClient({
+        investments: { ...placement, status, investment_receipts: [] },
+      });
+      const tree = await InvestmentDetailPage({
+        params: Promise.resolve({ id: placement.id }),
+      });
+      expect(
+        walk(tree).some((element) => element.type === DownloadReceiptButton),
+      ).toBe(false);
+    },
+  );
 });

@@ -119,7 +119,7 @@ export default async function DashboardPage() {
         <div className="page-head">
           <div>
             <p className="eyebrow">Placement history</p>
-            <h2>Your active and past cycles</h2>
+            <h2>Your active and past investments</h2>
           </div>
           <Button asChild variant="secondary">
             <Link href="/investments">
