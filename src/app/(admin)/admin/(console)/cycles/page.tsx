@@ -52,7 +52,8 @@ export default async function CyclesPage() {
   const { data: cycles } = await admin
     .from("investment_cycles")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("opens_at", { ascending: false })
+    .order("id", { ascending: true });
   const nextStatus = {
     draft: ["open", "Open"],
     open: ["closed", "Close"],
