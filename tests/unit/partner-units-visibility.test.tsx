@@ -25,6 +25,8 @@ vi.mock("@/lib/auth", () => ({ requireInvestor: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 // Cut the server-only import chain below the pages and the request form.
 vi.mock("@/actions/investments", () => ({
+  renameInvestment: vi.fn(),
+  renameInvestmentForm: vi.fn(),
   cancelInvestment: vi.fn(),
   requestInvestment: vi.fn(),
   activateInvestment: vi.fn(),

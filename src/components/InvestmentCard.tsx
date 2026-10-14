@@ -1,12 +1,16 @@
 import Link from "next/link";
 
 import { InfoHint } from "@/components/InfoHint";
+import { InvestmentAlias } from "@/components/InvestmentAlias";
 import { buttonVariants } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { date, ugx } from "@/lib/format";
 import { maturityProgress } from "@/lib/investments";
 
 export type InvestmentCardData = {
+  investmentId: string;
+  alias: string | null;
+  defaultTitle: string;
   name: string;
   status: string;
   statusLabel: string;
@@ -41,7 +45,11 @@ export function InvestmentCard({
     <article className="card invest-card">
       <div className="invest-head">
         <div>
-          <h3>{item.name}</h3>
+          <InvestmentAlias
+            investmentId={item.investmentId}
+            alias={item.alias}
+            defaultTitle={item.defaultTitle}
+          />
           <p className="invest-amount">
             <span>
               {ugx(item.principalUgx)}{" "}
