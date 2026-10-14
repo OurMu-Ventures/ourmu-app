@@ -480,6 +480,7 @@ export function MaturityFulfillmentForm({
     <>
       <form
         className="form"
+        method="post"
         onSubmit={(event) => {
           event.preventDefault();
           if (!event.currentTarget.reportValidity()) return;
