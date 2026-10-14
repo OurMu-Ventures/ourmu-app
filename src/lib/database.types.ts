@@ -1762,6 +1762,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ensure_investment_receipt: {
+        Args: { p_investor_id: string; p_investment_id: string };
+        Returns: string;
+      };
       newsletter_reading_report: { Args: { p_slugs: string[] }; Returns: Json }
       record_newsletter_visit: {
         Args: {
@@ -2017,7 +2021,7 @@ export type Database = {
       maturity_instruction_status: "requested" | "processing" | "fulfilled"
       payout_basis: "projected" | "reported_paid"
       payout_channel: "bank" | "mobile_money"
-      receipt_source: "bank_activation" | "reinvestment"
+      receipt_source: "bank_activation" | "reinvestment" | "investment_record"
       receipt_status: "generating" | "ready" | "failed"
       record_origin: "portal" | "legacy_import" | "hybrid"
       user_role: "investor" | "admin"

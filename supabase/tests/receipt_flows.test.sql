@@ -1,5 +1,5 @@
 begin;
-select plan(29);
+select plan(48);
 
 -- Receipt flow integration, executed as service_role (the only role granted
 -- the activation functions). Covers the allocator grant, bank activation,
@@ -177,6 +177,84 @@ select throws_ok($$update public.investment_receipts set amount_ugx = 1
 select lives_ok($$update public.investment_receipts set pdf_status = 'failed', last_error_code = 'PDF_UPLOAD_FAILED'
   where investment_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'$$,
   'generation fields on a receipt stay writable for retries');
+
+-- On-demand issuance for existing/imported investments.
+select is(
+  public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222', 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
+  (select id from public.investment_receipts where investment_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
+  'on-demand download reuses the bank receipt even when generation failed');
+select is(
+  public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222',
+    (select fulfilled_investment_id from public.maturity_instructions where id = 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa')),
+  (select id from public.investment_receipts where maturity_instruction_id = 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa'),
+  'on-demand download reuses the existing reinvestment receipt');
+
+reset role;
+insert into public.import_batches (id, source_filename, source_sha256, partner_count, profile_count,
+  unclaimed_count, cycle_count, investment_count, monthly_summary_count,
+  principal_total_ugx, return_total_ugx, payout_total_ugx, staged_by)
+values ('71000000-0000-4000-8000-000000000001', 'receipt-fixture.xlsx', repeat('7', 64),
+  1, 1, 0, 1, 1, 0, 10000000, 3000000, 13000000, '11111111-1111-1111-1111-111111111111');
+insert into public.legacy_partner_identities (id, import_batch_id, profile_id, canonical_name)
+values ('71000000-0000-4000-8000-000000000002', '71000000-0000-4000-8000-000000000001',
+  '22222222-2222-2222-2222-222222222222', 'Receipt Partner');
+insert into public.investments (id, investor_id, cycle_id, principal_ugx, unit_price_ugx,
+  projected_return_bps, projected_return_ugx, projected_value_ugx, maturity_date,
+  status, record_origin, import_batch_id, legacy_partner_id, source_sheet, source_row, source_key,
+  requested_at, reservation_expires_at)
+values ('71000000-0000-4000-8000-000000000003', '22222222-2222-2222-2222-222222222222',
+  'cccccccc-cccc-cccc-cccc-cccccccccccc', 10000000, 125000, 3000, 3000000, 13000000,
+  (now() + interval '6 months')::date, 'active', 'legacy_import',
+  '71000000-0000-4000-8000-000000000001', '71000000-0000-4000-8000-000000000002',
+  'Reinvestments', 2, 'receipt-import-fixture', '2026-09-01 00:00:00+03', null);
+insert into public.investments (id, investor_id, cycle_id, principal_ugx, unit_price_ugx,
+  projected_return_bps, projected_return_ugx, projected_value_ugx, maturity_date,
+  status, record_origin, reservation_expires_at)
+select ('71000000-0000-4000-8000-00000000000' || n)::uuid,
+  '22222222-2222-2222-2222-222222222222', 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+  125000.12, 125000, 3000, 37500.036, 162500.156, (now() + interval '6 months')::date,
+  st::public.investment_status, 'portal', now() + interval '1 day'
+from (values (4, 'active'), (5, 'reserved'), (6, 'expired'), (7, 'cancelled')) f(n, st);
+set local role service_role;
+
+select lives_ok($$select public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222',
+  '71000000-0000-4000-8000-000000000003')$$, 'imported active investment can issue a receipt');
+select is((select source::text from public.investment_receipts where investment_id = '71000000-0000-4000-8000-000000000003'),
+  'investment_record', 'imported receipt acknowledges the record without inventing bank/rollover evidence');
+select is((select amount_ugx::text from public.investment_receipts where investment_id = '71000000-0000-4000-8000-000000000003'),
+  '10000000.00000000', 'imported receipt has the actual principal');
+select is((select transaction_date from public.investment_receipts where investment_id = '71000000-0000-4000-8000-000000000003'),
+  '2026-09-01'::date, 'imported receipt uses the recorded investment date in Kampala');
+select is((select partner_name from public.investment_receipts where investment_id = '71000000-0000-4000-8000-000000000003'),
+  'Receipt Partner', 'receipt snapshots the authenticated investment owner');
+select is(public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222', '71000000-0000-4000-8000-000000000003'),
+  (select id from public.investment_receipts where investment_id = '71000000-0000-4000-8000-000000000003'),
+  'repeated downloads retain the same receipt ID and number');
+select is((select count(*)::integer from public.jobs where entity_id in
+  ('71000000-0000-4000-8000-000000000003'::uuid,
+   (select id from public.investment_receipts where investment_id = '71000000-0000-4000-8000-000000000003'))),
+  0, 'on-demand receipts queue no activation emails or background jobs');
+select lives_ok($$select public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222',
+  '71000000-0000-4000-8000-000000000004')$$, 'old portal active investment without payment links can issue a receipt');
+select is((select amount_ugx::text from public.investment_receipts where investment_id = '71000000-0000-4000-8000-000000000004'),
+  '125000.12000000', 'on-demand receipt preserves fractional principal');
+select throws_ok($$select public.ensure_investment_receipt('11111111-1111-1111-1111-111111111111',
+  '71000000-0000-4000-8000-000000000003')$$, 'P0002', null, 'another investor cannot issue or retrieve the receipt');
+select throws_ok($$select public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222',
+  '71000000-0000-4000-8000-000000000005')$$, '23514', null, 'unpaid reservation cannot issue a receipt');
+select throws_ok($$select public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222',
+  '71000000-0000-4000-8000-000000000006')$$, '23514', null, 'expired reservation cannot issue a receipt');
+select throws_ok($$select public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222',
+  '71000000-0000-4000-8000-000000000007')$$, '23514', null, 'cancelled reservation cannot issue a receipt');
+select throws_ok($$select public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222',
+  'ffffffff-ffff-ffff-ffff-ffffffffffff')$$, '23514', null, 'payout-only matured record still does not issue a missing receipt');
+select throws_ok($$update public.investment_receipts set transaction_date = current_date
+  where investment_id = '71000000-0000-4000-8000-000000000003'$$,
+  '55000', null, 'imported receipt business details are immutable');
+select ok(not has_function_privilege('anon', 'public.ensure_investment_receipt(uuid,uuid)', 'EXECUTE'),
+  'anonymous users cannot invoke privileged issuance');
+select ok(not has_function_privilege('authenticated', 'public.ensure_investment_receipt(uuid,uuid)', 'EXECUTE'),
+  'browser clients cannot spoof the investor ID to invoke issuance');
 
 reset role;
 select * from finish();

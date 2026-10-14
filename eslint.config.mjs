@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "supabase/.temp/**",
+    "ourmu-september-import/**",
+    "tmp/**",
   ]),
 ]);
 
