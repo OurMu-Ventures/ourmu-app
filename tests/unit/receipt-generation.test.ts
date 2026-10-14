@@ -112,6 +112,50 @@ describe("shared receipt PDF generation", () => {
     );
   });
 
+  it("keeps simultaneous first-generation attempts on one stored PDF and hash", async () => {
+    let release!: () => void;
+    const bothStarted = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let builds = 0;
+    let stored: Buffer | undefined;
+    vi.mocked(buildReceiptPdf).mockImplementation(async () => {
+      const bytes = Buffer.from(`candidate-${++builds}`);
+      if (builds === 2) release();
+      await bothStarted;
+      return { bytes, hash: createHash("sha256").update(bytes).digest("hex") };
+    });
+    upload.mockImplementation(async (_path: string, bytes: Buffer) => {
+      if (stored) return { error: { message: "The resource already exists" } };
+      stored = bytes;
+      return { error: null };
+    });
+    download.mockImplementation(async () => ({
+      data: new Blob([stored!.toString()]),
+      error: null,
+    }));
+
+    const ready = await Promise.all([
+      ensureReceiptPdf(admin, receipt),
+      ensureReceiptPdf(admin, receipt),
+    ]);
+
+    expect(builds).toBe(2); // Duplicate rendering is permitted; issuance/storage stay unique.
+    expect(download).toHaveBeenCalledTimes(1);
+    expect(ready.map((row) => row.receipt_number)).toEqual([
+      receipt.receipt_number,
+      receipt.receipt_number,
+    ]);
+    for (const [fields] of update.mock.calls) {
+      expect(fields).toMatchObject({
+        pdf_status: "ready",
+        pdf_path: "owner-1/receipt-1.pdf",
+        pdf_hash: createHash("sha256").update(stored!).digest("hex"),
+      });
+    }
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+
   it("allows retrying a failed PDF with the same receipt number", async () => {
     await ensureReceiptPdf(admin, { ...receipt, pdf_status: "failed" });
     expect(buildReceiptPdf).toHaveBeenCalledWith(

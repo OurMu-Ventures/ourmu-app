@@ -1,5 +1,5 @@
 begin;
-select plan(48);
+select plan(50);
 
 -- Receipt flow integration, executed as service_role (the only role granted
 -- the activation functions). Covers the allocator grant, bank activation,
@@ -188,6 +188,16 @@ select is(
     (select fulfilled_investment_id from public.maturity_instructions where id = 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa')),
   (select id from public.investment_receipts where maturity_instruction_id = 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa'),
   'on-demand download reuses the existing reinvestment receipt');
+
+update public.investments set status = 'matured'
+where id = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+select is(
+  public.ensure_investment_receipt('22222222-2222-2222-2222-222222222222', 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
+  (select id from public.investment_receipts where investment_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
+  'existing receipts remain retrievable after maturity through the RPC');
+select is(
+  (select count(*)::integer from public.investment_receipts where investment_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
+  1, 'retrieving a matured investment receipt does not mint another receipt');
 
 reset role;
 insert into public.import_batches (id, source_filename, source_sha256, partner_count, profile_count,

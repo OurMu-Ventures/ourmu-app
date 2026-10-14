@@ -20,7 +20,10 @@ export async function downloadInvestmentReceipt(
   let url: string;
   try {
     const admin = createAdminClient();
-    // The RPC checks ownership and investment status and serializes issuance.
+    // The RPC is the authoritative minting gate: only active investments can
+    // issue a missing receipt. Existing receipts remain retrievable after
+    // maturity. Keep this distinction in the RPC if more UI states use it.
+    // It also checks ownership and serializes issuance.
     // Both IDs come from trusted authentication/validated input, never a
     // caller-supplied receipt snapshot or investor ID.
     const { data: receiptId, error: issueError } = await admin.rpc(
