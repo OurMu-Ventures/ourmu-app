@@ -80,3 +80,29 @@ Apply migration `20261005134923_admin_maturity_payout_destination.sql` before de
 For a requested maturity instruction with a withdrawal amount and no saved destination, open Admin → Maturities and expand **Set up a verified payout destination**. Enter the provider and account holder, select the partner’s phone on file for mobile money or enter the verified account reference, choose the offline verification method, and confirm verification. An active administrator with two-factor authentication can save the encrypted destination without partner login.
 
 The action links an immutable destination and records the authenticated administrator in the audit log. It clears only a documented missing-destination setup hold; unrelated or unexplained holds remain for review. It does not change amounts, transfer money, fulfill the instruction, or activate a reinvestment. Follow the normal processing and fulfillment workflow on the scheduled payout date.
+
+## Cycle-wide actual returns
+
+Apply migration `20261014150000_cycle_actual_returns.sql` before deploying the admin form, then regenerate types. The migration is additive: projected fields stay unchanged, every existing cycle starts without an actual return, and cycles that already had a fulfilled instruction or a proposed per-investment ROI are flagged `legacy_settlement` so they finish on the old per-investment workflow.
+
+An active administrator with two-factor authentication records the rate under Admin → Cycles → **Actual return**: enter a percentage (0% to 1,000%, two decimals), review the preview of affected investments, principal, actual profit, total value and difference from projection, confirm, and save. Partners see the rate immediately; before maturity it is labelled as revisable. It locks when the maturity date begins in Africa/Kampala. A cycle that reaches maturity without a rate accepts exactly one late entry, provided no investment in it has been settled. Each save is audited (`cycle.actual_return_recorded`) with the administrator, previous and new rate, and affected totals.
+
+Recording a rate never matures investments or triggers payments; payouts still follow the 15th of the month after maturity. While a rate is missing, fulfillment and automatic reinvestment instruction creation are blocked (`run_maintenance` reports `awaiting_actual_return`), and an **Actual return required** banner appears on Admin → Overview and Cycles from the day before maturity.
+
+Weekly, and before each month end, check upcoming cycles that are missing a rate:
+
+```sql
+select c.name, c.maturity_date, c.status,
+  public.maturity_payout_date(c.maturity_date) as payout_date,
+  count(i.id) filter (where i.status in ('active', 'matured') and i.payout_basis <> 'reported_paid') as open_investments
+from public.investment_cycles c
+left join public.investments i on i.cycle_id = c.id
+where c.actual_return_bps is null
+  and not c.legacy_settlement
+  and c.status <> 'draft'
+  and c.maturity_date <= (now() at time zone 'Africa/Kampala')::date + 14
+group by c.id
+order by c.maturity_date;
+```
+
+Any row with open investments needs a rate before its payout date. Run `npm run db:test:actual-return-races` against the local stack to recheck save and fulfillment locking after changes to these functions.

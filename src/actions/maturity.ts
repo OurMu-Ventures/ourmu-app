@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin, requireInvestor } from "@/lib/auth";
+import { cycleActualReturnUgx } from "@/lib/actual-returns";
 import { canChooseMaturity } from "@/lib/investments";
 import { customWithdrawalError } from "@/lib/maturity";
 import { publicError, requestId, toBytea } from "@/lib/db";
@@ -63,11 +64,26 @@ export async function submitMaturityInstruction(
       message: maturityInstructionValidationMessage(parsed.error),
     };
   const input = parsed.data;
+  // The basis the partner was shown; the database rejects a stale page.
+  const expectedBasis = formData.get("expectedReturnBasis");
+  const expectedBpsRaw = String(formData.get("expectedActualReturnBps") ?? "");
+  const expectedBps = /^\d{1,6}$/.test(expectedBpsRaw)
+    ? Number(expectedBpsRaw)
+    : null;
+  if (
+    (expectedBasis !== "actual" && expectedBasis !== "projected") ||
+    (expectedBasis === "actual") !== (expectedBps !== null)
+  )
+    return {
+      ok: false,
+      message:
+        "Reload this page to review the current amounts before recording your choice.",
+    };
   const admin = createAdminClient();
   const { data: investment } = await admin
     .from("investments")
     .select(
-      "status,record_origin,payout_basis,principal_ugx,projected_return_ugx,maturity_instructions!maturity_instructions_investment_id_fkey(status)",
+      "status,record_origin,payout_basis,principal_ugx,projected_return_ugx,investment_cycles(actual_return_bps),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
     )
     .eq("id", input.investmentId)
     .eq("investor_id", profile.id)
@@ -91,10 +107,16 @@ export async function submitMaturityInstruction(
         "This choice is already being processed and can no longer be revised.",
     };
   if (input.choice === "withdraw_roi_reinvest_principal") {
+    // Validate against the amount the database will quote: the recorded
+    // cycle return when it exists, otherwise the projection.
+    const actualReturnBps = investment.investment_cycles?.actual_return_bps;
+    const returnUgx =
+      actualReturnBps == null
+        ? Number(investment.projected_return_ugx)
+        : cycleActualReturnUgx(investment.principal_ugx, actualReturnBps);
     const message = customWithdrawalError(
       input.requestedWithdrawalUgx ?? "",
-      Number(investment.principal_ugx) +
-        Number(investment.projected_return_ugx),
+      Number(investment.principal_ugx) + returnUgx,
       effectiveInvestmentLimit(profile.investment_limit_ugx),
     );
     if (message) return { ok: false, message };
@@ -241,6 +263,8 @@ export async function submitMaturityInstruction(
     p_expected_agreement_version_id: (involvesReinvestment(input.choice)
       ? input.expectedAgreementVersionId
       : null) as unknown as string,
+    p_expected_amount_basis: expectedBasis,
+    p_expected_actual_return_bps: expectedBps as unknown as number,
   });
   if (error)
     return {
@@ -282,7 +306,7 @@ export async function fulfillMaturityInstruction(
   const profile = await requireAdmin();
   const parsed = maturityFulfillmentSchema.safeParse({
     instructionId: formData.get("instructionId"),
-    actualRoiUgx: formData.get("actualRoiUgx"),
+    actualRoiUgx: formData.get("actualRoiUgx") ?? undefined,
     payoutReference: formData.get("payoutReference") ?? "",
     destinationVerified: formData.get("destinationVerified") ?? "",
     confirmation: formData.get("confirmation"),
@@ -290,7 +314,8 @@ export async function fulfillMaturityInstruction(
   if (!parsed.success)
     return {
       ok: false,
-      message: "Enter the actual ROI (zero or more) and type FULFILL exactly.",
+      message:
+        "Check the actual ROI (zero or more) and type FULFILL exactly.",
     };
   const supabase = await createClient();
   const { data: aal } =
@@ -299,7 +324,11 @@ export async function fulfillMaturityInstruction(
   const { data, error } = await admin.rpc("fulfill_maturity_instruction", {
     p_admin_id: profile.id,
     p_instruction_id: parsed.data.instructionId,
-    p_actual_roi_ugx: Number(parsed.data.actualRoiUgx),
+    // Null lets the database apply the cycle's recorded actual return; a
+    // submitted amount must match it (stale pages are rejected).
+    p_actual_roi_ugx: (parsed.data.actualRoiUgx
+      ? Number(parsed.data.actualRoiUgx)
+      : null) as unknown as number,
     p_payout_reference: parsed.data.payoutReference?.trim() || "",
     p_confirmation: parsed.data.confirmation,
     p_admin_aal2: aal?.currentLevel === "aal2",

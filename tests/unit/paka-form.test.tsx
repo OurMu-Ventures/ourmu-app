@@ -25,7 +25,8 @@ afterEach(() => {
 const props = {
   investmentId: "f7213635-be92-5ebe-b501-b39276a45bf1",
   principalUgx: 4_569_760,
-  projectedReturnUgx: 1_370_928,
+  returnUgx: 1_370_928,
+  returnBasis: "projected" as const,
   savedDestinations: [],
   openCycles: [],
   isRevision: false,
@@ -212,5 +213,39 @@ describe("Paka Paka withdrawal form", () => {
     );
     expect(screen.getByLabelText("Amount to withdraw (UGX)")).toHaveValue("");
     expect(screen.getByText(/replace those original terms/)).toBeVisible();
+  });
+});
+
+describe("Maturity choices on a recorded actual return", () => {
+  it("quotes actual amounts without the proportional-adjustment caveat", () => {
+    render(
+      <MaturityInstructionForm
+        {...props}
+        principalUgx={1_000_000}
+        returnUgx={273_500}
+        returnBasis="actual"
+        actualReturnBps={2735}
+      />,
+    );
+    expect(
+      document.querySelector('input[name="expectedReturnBasis"]'),
+    ).toHaveValue("actual");
+    expect(
+      document.querySelector('input[name="expectedActualReturnBps"]'),
+    ).toHaveValue("2735");
+    expect(
+      screen.getByText(/Actual payout UGX 1,273,500.00/),
+    ).toBeVisible();
+    selectPaka();
+    expect(screen.getByText(/Available actual total/)).toHaveTextContent(
+      "1,273,500.00",
+    );
+    expect(screen.queryByText(/adjust proportionally/)).toBeNull();
+    fireEvent.change(screen.getByLabelText("Amount to withdraw (UGX)"), {
+      target: { value: "273500" },
+    });
+    expect(screen.getByText(/Actual payout UGX 273,500.00/)).toHaveTextContent(
+      "actual reinvestment UGX 1,000,000.00",
+    );
   });
 });

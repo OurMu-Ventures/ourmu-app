@@ -112,6 +112,11 @@ $fn$;
 
 -- A real new-policy reservation with deadline capped at a near closing time.
 update public.investment_cycles set closes_at = now() + interval '1 hour' where id='d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4';
+-- These fixtures exercise the per-investment ROI workflow that cycles settled
+-- before cycle-wide actual returns keep (see cycle_actual_returns.test.sql).
+select set_config('ourmu.recording_cycle_actual_return', 'on', true);
+update public.investment_cycles set legacy_settlement = true where actual_return_bps is null;
+select set_config('ourmu.recording_cycle_actual_return', 'off', true);
 set local role service_role;
 select lives_ok($$select public.request_investment('b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2', 'd4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4',125000,gen_random_uuid(),'test','\x00','c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3')$$,'new app can reserve as service_role');
 select is((select min(reservation_expires_at) from public.investments where investor_id='b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2' and requested_at=now() and policy_version='auto_cycle_v1'), null::timestamptz,'new reservations have no automatic expiry');

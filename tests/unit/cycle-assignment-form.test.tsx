@@ -20,7 +20,8 @@ afterEach(() => {
 const base = {
   investmentId: "f7213635-be92-5ebe-b501-b39276a45bf1",
   principalUgx: 125000,
-  projectedReturnUgx: 37500,
+  returnUgx: 37500,
+  returnBasis: "projected" as const,
   savedDestinations: [],
   isRevision: false,
 };

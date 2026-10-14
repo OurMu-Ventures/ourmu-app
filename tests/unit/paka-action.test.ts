@@ -37,6 +37,8 @@ function form(amount: string, choice = "withdraw_roi_reinvest_principal") {
     targetCycleId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
     agreementAccepted: "yes",
     expectedAgreementVersionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    expectedReturnBasis: "projected",
+    expectedActualReturnBps: "",
   }))
     data.set(key, value);
   return data;
@@ -145,4 +147,45 @@ describe("custom maturity action", () => {
       );
     },
   );
+});
+
+describe("displayed return basis", () => {
+  it("rejects a page that does not state the basis it showed", async () => {
+    const data = form("1370928");
+    data.delete("expectedReturnBasis");
+    const result = await submitMaturityInstruction(
+      { ok: false, message: "" },
+      data,
+    );
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/Reload this page/);
+    expect(state.rpc).not.toHaveBeenCalled();
+  });
+
+  it("sends the displayed actual rate and validates against the actual total", async () => {
+    state.investment = {
+      ...state.investment,
+      principal_ugx: 1_000_000,
+      projected_return_ugx: 300_000,
+      investment_cycles: { actual_return_bps: 2735 },
+    };
+    const tooLarge = form("1273500");
+    tooLarge.set("expectedReturnBasis", "actual");
+    tooLarge.set("expectedActualReturnBps", "2735");
+    expect(
+      (await submitMaturityInstruction({ ok: false, message: "" }, tooLarge))
+        .ok,
+    ).toBe(false);
+    const data = form("273500");
+    data.set("expectedReturnBasis", "actual");
+    data.set("expectedActualReturnBps", "2735");
+    await submitMaturityInstruction({ ok: false, message: "" }, data);
+    expect(state.rpc).toHaveBeenCalledWith(
+      "submit_maturity_instruction",
+      expect.objectContaining({
+        p_expected_amount_basis: "actual",
+        p_expected_actual_return_bps: 2735,
+      }),
+    );
+  });
 });

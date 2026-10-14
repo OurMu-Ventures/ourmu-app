@@ -142,3 +142,41 @@ describe("InvestmentCard computed-metric hints", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("InvestmentCard return basis", () => {
+  it("labels actual returns, including revisable ones before maturity", () => {
+    render(
+      <InvestmentCard
+        item={{
+          ...baseItem,
+          returnBasis: "actual",
+          returnRevisable: true,
+          profitUgx: 68375,
+          payoutUgx: 318375,
+        }}
+      />,
+    );
+    expect(screen.getByText("UGX 68,375.00")).toBeVisible();
+    expect(
+      screen.getByText("Actual · may be revised until maturity"),
+    ).toBeVisible();
+  });
+
+  it("shows a pending actual return on matured projections", () => {
+    render(
+      <InvestmentCard
+        item={{ ...baseItem, status: "matured", returnPending: true }}
+      />,
+    );
+    expect(screen.getByText("Actual return pending")).toBeVisible();
+  });
+
+  it("marks plain projections and leaves paid history unlabelled", () => {
+    const { unmount } = render(<InvestmentCard item={baseItem} />);
+    expect(screen.getByText("Projected")).toBeVisible();
+    unmount();
+    render(<InvestmentCard item={{ ...baseItem, isPaid: true }} />);
+    expect(screen.queryByText("Projected")).toBeNull();
+    expect(screen.queryByText("Actual return")).toBeNull();
+  });
+});

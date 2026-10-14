@@ -16,6 +16,7 @@ import {
 } from "@/actions/maturity";
 import { ActionButton } from "@/components/ActionButton";
 import { StateMessage } from "@/components/StateMessage";
+import { formatBpsPercent } from "@/lib/actual-returns";
 import { ugx } from "@/lib/format";
 import {
   MATURITY_CHOICES,
@@ -54,7 +55,9 @@ export function MaturityInstructionForm({
   limitUgx = DEFAULT_INVESTMENT_LIMIT_UGX,
   investmentId,
   principalUgx,
-  projectedReturnUgx,
+  returnUgx,
+  returnBasis,
+  actualReturnBps = null,
   savedDestinations,
   openCycles,
   assignedCycle,
@@ -65,7 +68,12 @@ export function MaturityInstructionForm({
   limitUgx?: number;
   investmentId: string;
   principalUgx: number;
-  projectedReturnUgx: number;
+  // The recorded cycle return when it exists, otherwise the projection.
+  returnUgx: number;
+  returnBasis: "actual" | "projected";
+  // The recorded cycle rate behind returnUgx; sent back so the server
+  // rejects the choice if the displayed basis is stale.
+  actualReturnBps?: number | null;
   savedDestinations: SavedDestination[];
   openCycles?: OpenCycleOption[];
   assignedCycle?: AssignedCycleOption | null;
@@ -103,8 +111,9 @@ export function MaturityInstructionForm({
   const [withdrawal, setWithdrawal] = useState(
     existingWithdrawalUgx == null ? "" : String(existingWithdrawalUgx),
   );
-  const total = principalUgx + projectedReturnUgx;
-  const withdrawalError = [principalUgx, projectedReturnUgx].some(
+  const basisLabel = returnBasis === "actual" ? "Actual" : "Projected";
+  const total = principalUgx + returnUgx;
+  const withdrawalError = [principalUgx, returnUgx].some(
     (amount) => !Number.isFinite(amount) || amount < 0,
   )
     ? "This investment total is unavailable. Please reload."
@@ -117,7 +126,7 @@ export function MaturityInstructionForm({
     ? null
     : maturitySplits(
         principalUgx,
-        projectedReturnUgx,
+        returnUgx,
         "withdraw_roi_reinvest_principal",
         Number(withdrawal),
       );
@@ -163,14 +172,16 @@ export function MaturityInstructionForm({
         </div>
       )}
       <input type="hidden" name="investmentId" value={investmentId} />
+      <input type="hidden" name="expectedReturnBasis" value={returnBasis} />
+      <input
+        type="hidden"
+        name="expectedActualReturnBps"
+        value={returnBasis === "actual" ? (actualReturnBps ?? "") : ""}
+      />
       <fieldset>
         <legend>Your maturity choice</legend>
         {MATURITY_CHOICES.map((option) => {
-          const splits = maturitySplits(
-            principalUgx,
-            projectedReturnUgx,
-            option.value,
-          );
+          const splits = maturitySplits(principalUgx, returnUgx, option.value);
           return (
             <label className="checkbox" key={option.value}>
               <input
@@ -189,8 +200,9 @@ export function MaturityInstructionForm({
                     "Enter your withdrawal amount below to see the split."
                   ) : (
                     <>
-                      Projected payout {ugx(splits.payoutUgx)} · projected
-                      reinvestment {ugx(splits.reinvestUgx)}
+                      {basisLabel} payout {ugx(splits.payoutUgx)} ·{" "}
+                      {basisLabel.toLowerCase()} reinvestment{" "}
+                      {ugx(splits.reinvestUgx)}
                     </>
                   )}
                 </small>
@@ -204,7 +216,8 @@ export function MaturityInstructionForm({
         <fieldset>
           <legend>Your withdrawal amount</legend>
           <p>
-            Available projected total: <strong>{ugx(total)}</strong>
+            Available {basisLabel.toLowerCase()} total:{" "}
+            <strong>{ugx(total)}</strong>
           </p>
           {existingChoice === "withdraw_roi_reinvest_principal" &&
             existingWithdrawalUgx == null && (
@@ -230,15 +243,18 @@ export function MaturityInstructionForm({
           <p id="withdrawal-preview" aria-live="polite">
             {customSplit ? (
               <>
-                Projected payout {ugx(customSplit.payoutUgx)} · projected
-                reinvestment {ugx(customSplit.reinvestUgx)}
+                {basisLabel} payout {ugx(customSplit.payoutUgx)} ·{" "}
+                {basisLabel.toLowerCase()} reinvestment{" "}
+                {ugx(customSplit.reinvestUgx)}
               </>
             ) : (
               withdrawalError
             )}
           </p>
           <p id="withdrawal-help" className="muted">
-            {PAKA_PAKA_EXPLANATION}
+            {returnBasis === "actual"
+              ? "These amounts use the cycle's recorded actual return."
+              : PAKA_PAKA_EXPLANATION}
           </p>
         </fieldset>
       )}
@@ -383,12 +399,21 @@ export function MaturityInstructionForm({
   );
 }
 
+// Cycle: the recorded cycle rate is authoritative and not editable here; the
+// derived amount is submitted only so a stale page is rejected. Legacy: a
+// cycle settled before cycle-wide returns keeps the per-investment entry.
+export type FulfillmentReturn =
+  | { kind: "cycle"; actualRoiUgx: number; actualReturnBps: number }
+  | { kind: "legacy" };
+
 export function MaturityFulfillmentForm({
   instructionId,
   needsPayout,
+  actualReturn,
 }: {
   instructionId: string;
   needsPayout: boolean;
+  actualReturn: FulfillmentReturn;
 }) {
   const [state, action] = useActionState(
     fulfillMaturityInstruction,
@@ -398,21 +423,39 @@ export function MaturityFulfillmentForm({
     <form className="form" action={action}>
       <input type="hidden" name="instructionId" value={instructionId} />
       <div className="form-grid">
-        <label>
-          Actual ROI (UGX)
-          <input
-            name="actualRoiUgx"
-            type="number"
-            min="0"
-            step="0.01"
-            required
-          />
-          <small className="muted">
-            Record the actual return from the fund. The projected figure is
-            never proof of cash. If it differs from the projection, the partner
-            must confirm the new amounts before anything moves.
-          </small>
-        </label>
+        {actualReturn.kind === "cycle" ? (
+          <p>
+            <input
+              type="hidden"
+              name="actualRoiUgx"
+              value={actualReturn.actualRoiUgx}
+            />
+            Actual ROI <strong>{ugx(actualReturn.actualRoiUgx)}</strong>
+            <br />
+            <small className="muted">
+              From the cycle&apos;s recorded actual return of{" "}
+              {formatBpsPercent(actualReturn.actualReturnBps)}. It cannot be
+              edited per investment.
+            </small>
+          </p>
+        ) : (
+          <label>
+            Actual ROI (UGX)
+            <input
+              name="actualRoiUgx"
+              type="number"
+              min="0"
+              step="0.01"
+              required
+            />
+            <small className="muted">
+              Legacy per-investment settlement: this cycle started settling
+              before cycle-wide returns. If the amount differs from the
+              projection, the partner must confirm the new amounts before
+              anything moves.
+            </small>
+          </label>
+        )}
         {needsPayout && (
           <label>
             External payout reference

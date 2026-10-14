@@ -60,6 +60,11 @@ values
 
 insert into public.next_of_kin (user_id, legal_name, relationship, phone, address)
 values ('22222222-2222-2222-2222-222222222222', 'Test Kin', 'Sibling', '+256700000003', 'Kampala');
+-- These fixtures exercise the per-investment ROI workflow that cycles settled
+-- before cycle-wide actual returns keep (see cycle_actual_returns.test.sql).
+select set_config('ourmu.recording_cycle_actual_return', 'on', true);
+update public.investment_cycles set legacy_settlement = true where actual_return_bps is null;
+select set_config('ourmu.recording_cycle_actual_return', 'off', true);
 set local role service_role;
 update public.maturity_instructions set proposed_actual_roi_ugx = 10000000,
   confirmed_actual_roi_ugx = 10000000 where id = 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa';

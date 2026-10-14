@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { investmentReturnView } from "@/lib/actual-returns";
 import { requireInvestor } from "@/lib/auth";
 import { InvestmentCard } from "@/components/InvestmentCard";
 import {
@@ -24,7 +25,7 @@ export default async function DashboardPage() {
       supabase
         .from("investments")
         .select(
-          "*,investment_cycles(name,status,maturity_date,opens_at),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
+          "*,investment_cycles(name,status,maturity_date,opens_at,actual_return_bps,legacy_settlement),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
         )
         .eq("investor_id", profile.id)
         .order("requested_at", { ascending: false }),
@@ -51,10 +52,16 @@ export default async function DashboardPage() {
     (sum, item) => sum + Number(item.principal_ugx),
     0,
   );
-  const projected = activeInvestments.reduce(
-    (sum, item) => sum + Number(item.projected_value_ugx),
+  const activeReturns = activeInvestments.map((item) =>
+    investmentReturnView(item, item.investment_cycles),
+  );
+  const projected = activeReturns.reduce(
+    (sum, view) => sum + view.valueUgx,
     0,
   );
+  const actualCount = activeReturns.filter(
+    (view) => view.basis === "actual",
+  ).length;
   const eligible = profile.kyc_status === "verified" && Boolean(kin);
   return (
     <>
@@ -82,6 +89,7 @@ export default async function DashboardPage() {
         principal={principal}
         projected={projected}
         activeCount={activeInvestments.length}
+        actualCount={actualCount}
         maturedCount={maturedInvestments.length}
       />
       <section style={{ marginTop: "2rem" }}>
@@ -135,9 +143,7 @@ export default async function DashboardPage() {
               item,
               item.maturity_instructions?.status,
             );
-            const payout = paid
-              ? (item.reported_payout_ugx ?? item.projected_value_ugx)
-              : item.projected_value_ugx;
+            const returns = investmentReturnView(item, itemCycle);
             return (
               <InvestmentCard
                 key={item.id}
@@ -162,8 +168,11 @@ export default async function DashboardPage() {
                       : item.status,
                   principalUgx: item.principal_ugx,
                   isPaid: paid,
-                  profitUgx: Number(payout ?? 0) - Number(item.principal_ugx),
-                  payoutUgx: payout ?? 0,
+                  returnBasis: returns.basis,
+                  returnPending: returns.pending,
+                  returnRevisable: returns.revisable,
+                  profitUgx: returns.valueUgx - Number(item.principal_ugx),
+                  payoutUgx: returns.valueUgx,
                   maturityDate: item.maturity_date,
                   startIso: item.requested_at,
                   detailHref: `/investments/${item.id}`,

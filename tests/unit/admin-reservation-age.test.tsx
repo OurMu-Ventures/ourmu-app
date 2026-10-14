@@ -38,6 +38,9 @@ vi.mock("@/lib/supabase/admin", () => ({
           return query;
         },
         in: () => query,
+        is: () => query,
+        neq: () => query,
+        lte: () => query,
         order: (...args: unknown[]) => {
           state.calls.push({ method: "order", args });
           return query;

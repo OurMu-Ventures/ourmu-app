@@ -60,6 +60,11 @@ values
     null, null, null, null, gen_random_uuid());
 
 -- Everything below runs as service_role, mirroring the application worker.
+-- These fixtures exercise the per-investment ROI workflow that cycles settled
+-- before cycle-wide actual returns keep (see cycle_actual_returns.test.sql).
+select set_config('ourmu.recording_cycle_actual_return', 'on', true);
+update public.investment_cycles set legacy_settlement = true where actual_return_bps is null;
+select set_config('ourmu.recording_cycle_actual_return', 'off', true);
 set local role service_role;
 
 select matches(
