@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Pencil } from "lucide-react";
 
-import { renameInvestment } from "@/actions/investments";
+import { renameInvestment, renameInvestmentForm } from "@/actions/investments";
 
 export function InvestmentAlias({
   investmentId,
@@ -14,7 +14,11 @@ export function InvestmentAlias({
   alias: string | null;
   defaultTitle: string;
 }) {
-  const [saved, setSaved] = useState(alias);
+  const [localSave, setLocalSave] = useState<{
+    from: string | null;
+    to: string | null;
+  } | null>(null);
+  const saved = localSave && alias === localSave.from ? localSave.to : alias;
   const [draft, setDraft] = useState(alias ?? "");
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
@@ -40,7 +44,7 @@ export function InvestmentAlias({
           setError(result.message);
           return;
         }
-        setSaved(result.alias);
+        setLocalSave({ from: alias, to: result.alias });
         setDraft(result.alias ?? "");
         setEditing(false);
       } catch {
@@ -51,17 +55,39 @@ export function InvestmentAlias({
 
   if (!editing)
     return (
-      <h3 className="investment-alias-heading">
-        <button
-          type="button"
-          className="investment-alias-title"
-          onClick={() => setEditing(true)}
-          aria-label={`Rename investment ${saved || defaultTitle}`}
-        >
-          <span>{saved || defaultTitle}</span>
-          <Pencil size={16} aria-hidden="true" />
-        </button>
-      </h3>
+      <>
+        <h3 className="investment-alias-heading">
+          <button
+            type="button"
+            className="investment-alias-title"
+            onClick={() => {
+              setDraft(saved ?? "");
+              setEditing(true);
+            }}
+            aria-label={`Rename investment ${saved || defaultTitle}`}
+          >
+            <span>{saved || defaultTitle}</span>
+            <Pencil size={16} aria-hidden="true" />
+          </button>
+        </h3>
+        <noscript>
+          <details className="investment-alias-editor">
+            <summary>Rename investment</summary>
+            <form action={renameInvestmentForm}>
+              <input type="hidden" name="investmentId" value={investmentId} />
+              <input
+                type="text"
+                name="alias"
+                aria-label="Investment name"
+                defaultValue={saved ?? ""}
+                placeholder={defaultTitle}
+                maxLength={80}
+              />
+              <button type="submit">Save</button>
+            </form>
+          </details>
+        </noscript>
+      </>
     );
 
   return (

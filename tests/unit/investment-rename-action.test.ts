@@ -16,7 +16,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
-import { renameInvestment } from "@/actions/investments";
+import { renameInvestment, renameInvestmentForm } from "@/actions/investments";
 import { requireInvestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -83,5 +83,13 @@ describe("renameInvestment", () => {
     );
     expect(updateQuery.update).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("accepts the native form submission without JavaScript", async () => {
+    const form = new FormData();
+    form.set("investmentId", investmentId);
+    form.set("alias", "  Form name  ");
+    await renameInvestmentForm(form);
+    expect(updateQuery.update).toHaveBeenCalledWith({ alias: "Form name" });
   });
 });

@@ -3,7 +3,10 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/actions/investments", () => ({ renameInvestment: vi.fn() }));
+vi.mock("@/actions/investments", () => ({
+  renameInvestment: vi.fn(),
+  renameInvestmentForm: vi.fn(),
+}));
 
 import {
   InvestmentCard,

@@ -69,6 +69,13 @@ export async function renameInvestment(input: {
   return { ok: true as const, alias };
 }
 
+export async function renameInvestmentForm(formData: FormData): Promise<void> {
+  await renameInvestment({
+    investmentId: String(formData.get("investmentId") ?? ""),
+    alias: String(formData.get("alias") ?? ""),
+  });
+}
+
 export async function requestInvestment(
   _: ActionState,
   formData: FormData,
