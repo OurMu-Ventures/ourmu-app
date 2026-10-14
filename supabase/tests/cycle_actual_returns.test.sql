@@ -82,6 +82,8 @@ select pg_temp.investment('11','04',500000,'matured');
 select pg_temp.investment('12','04',1250000,'matured');
 select pg_temp.investment('13','04',2000000,'matured');
 select pg_temp.investment('14','04',750000,'matured');
+select pg_temp.investment('16','04',125001,'matured');
+select pg_temp.investment('17','04',1000000,'matured');
 insert into public.investments(id,investor_id,cycle_id,unit_price_ugx,principal_ugx,projected_return_bps,projected_return_ugx,projected_value_ugx,maturity_date,status,record_origin,payout_basis,reported_return_ugx,reported_payout_ugx,activated_at,matured_at)
 select pg_temp.i('15'),'ca000000-0000-4000-8000-000000000002',pg_temp.c('04'),125000,4000000,3000,1200000,5200000,maturity_date,'matured','portal','reported_paid',1200000,5200000,now()-interval '200 days',now()-interval '10 days'
 from public.investment_cycles where id=pg_temp.c('04');
@@ -118,10 +120,11 @@ select throws_ok($$select pg_temp.record(pg_temp.c('07'),2735)$$,'23514','the ac
 select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),2735)->>'investment_count')::bigint,2::bigint,'only funded real investments counted');
 select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),2735)->>'test_investment_count')::bigint,1::bigint,'test placements counted separately');
 select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),2735)->>'principal_ugx')::numeric,458333.33::numeric,'reservations, expired and cancelled excluded from principal');
-select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),2735)->>'actual_profit_ugx')::numeric,125354.165755::numeric,'actual profit sums individually rounded amounts');
-select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),2735)->>'total_value_ugx')::numeric,583687.495755::numeric,'total value is principal plus actual profit');
-select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),2735)->>'difference_from_projection_ugx')::numeric,-12145.833245::numeric,'difference from projection');
-select is(private.cycle_actual_return_ugx(333333.33,2735),91166.66575500::numeric,'per-investment profit at eight-decimal scale');
+select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),2735)->>'actual_profit_ugx')::numeric,125354.17::numeric,'actual profit sums individually rounded amounts');
+select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),2735)->>'total_value_ugx')::numeric,583687.50::numeric,'total value is principal plus actual profit');
+select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),2735)->>'difference_from_projection_ugx')::numeric,-12145.829::numeric,'difference from projection');
+select is(private.cycle_actual_return_ugx(333333.33,2735),91166.67::numeric,'actual value rounds half-up to whole cents');
+select is(private.cycle_actual_return_ugx(125001,2735),34187.77::numeric,'fractional-cent profits round so value is two-decimal');
 select is((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),null)->>'actual_profit_ugx'),null,'no actual totals without a rate');
 select ok((public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('08'),null)->>'required')::boolean,'missing rate flagged from the day before maturity');
 select ok(not (public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('02'),null)->>'required')::boolean,'future cycles are not yet flagged');
@@ -140,7 +143,7 @@ select is((select actual_return_bps||'/'||actual_return_revision from public.inv
 select ok((pg_temp.record(pg_temp.c('02'),2735)->>'unchanged')::boolean,'resaving the same rate is a no-op');
 select is((select count(*) from public.audit_events where entity_id=pg_temp.c('02') and action='cycle.actual_return_recorded'),2::bigint,'each change audited once');
 select is((select metadata->>'previous_actual_return_bps'||'>'||(metadata->>'actual_return_bps')||'@'||actor_id from public.audit_events where entity_id=pg_temp.c('02') and action='cycle.actual_return_recorded' order by (metadata->>'actual_return_revision')::int desc limit 1),'0>2735@ca000000-0000-4000-8000-000000000001','audit records administrator and previous/new rate');
-select is((select (metadata->>'actual_profit_ugx')::numeric from public.audit_events where entity_id=pg_temp.c('02') and action='cycle.actual_return_recorded' order by (metadata->>'actual_return_revision')::int desc limit 1),125354.165755::numeric,'audit records affected totals');
+select is((select (metadata->>'actual_profit_ugx')::numeric from public.audit_events where entity_id=pg_temp.c('02') and action='cycle.actual_return_recorded' order by (metadata->>'actual_return_revision')::int desc limit 1),125354.17::numeric,'audit records affected totals');
 select is((select count(*) from public.investments where cycle_id=pg_temp.c('02') and status='active'),3::bigint,'recording a return does not mature investments');
 select is((select count(*) from public.jobs where entity_id in (select id from public.investments where cycle_id=pg_temp.c('02'))),0::bigint,'recording a return queues no payments or emails');
 
@@ -151,12 +154,18 @@ select throws_ok($$select pg_temp.record(pg_temp.c('06'),2600)$$,'23514',null,'l
 select is(public.preview_cycle_actual_return('ca000000-0000-4000-8000-000000000001',true,pg_temp.c('06'),null)->>'blocked_reason','legacy_settlement','legacy cycles are flagged for admins');
 
 -- Missing rate blocks settlement ------------------------------------------------------------
-create function pg_temp.submit(p_source text,p_choice public.maturity_choice,p_withdrawal numeric default null) returns uuid language sql as $$
+create function pg_temp.shown_bps(p_source text) returns integer language sql as $$
+ select c.actual_return_bps from public.investments i join public.investment_cycles c on c.id=i.cycle_id where i.id=pg_temp.i(p_source);
+$$;
+create function pg_temp.submit(p_source text,p_choice public.maturity_choice,p_withdrawal numeric default null,
+ p_basis text default 'current',p_bps integer default -1) returns uuid language sql as $$
  select public.submit_maturity_instruction('ca000000-0000-4000-8000-000000000002',pg_temp.i(p_source),p_choice,
   case when p_choice='withdraw_all' then null else pg_temp.c('01') end,
   case when p_choice='reinvest_all' then null else 'ca000000-0000-4000-8000-000000000020'::uuid end,
   p_choice<>'withdraw_all',true,gen_random_uuid(),'test-agent','\x05',p_withdrawal,p_withdrawal is not null,
-  case when p_choice='withdraw_all' then null else 'ca000000-0000-4000-8000-000000000010'::uuid end);
+  case when p_choice='withdraw_all' then null else 'ca000000-0000-4000-8000-000000000010'::uuid end,
+  case when p_basis='current' then case when pg_temp.shown_bps(p_source) is null then 'projected' else 'actual' end else p_basis end,
+  case when p_bps=-1 then pg_temp.shown_bps(p_source) else p_bps end);
 $$;
 create function pg_temp.mi(p_source text) returns uuid language sql as $$ select id from public.maturity_instructions where investment_id=pg_temp.i(p_source) $$;
 create function pg_temp.begin(p_source text) returns void language sql as $$
@@ -183,6 +192,21 @@ select ok((pg_temp.record(pg_temp.c('04'),2735)->>'late_entry')::boolean,'missin
 select ok((select actual_return_late_entry from public.investment_cycles where id=pg_temp.c('04')),'late entry recorded');
 select is((select count(*) from public.investments where cycle_id=pg_temp.c('04') and payout_basis='reported_paid' and status='matured'),1::bigint,'paid history untouched');
 select throws_ok($$select pg_temp.record(pg_temp.c('04'),2800)$$,'23514','the actual return is locked at maturity and can no longer be revised','late entry is not revisable');
+
+-- A page loaded before the late entry cannot accept the new amounts ---------------------------------
+select throws_ok($$select pg_temp.submit('17','withdraw_all',p_basis=>'projected',p_bps=>null)$$,'40001',
+ 'the actual return for this investment changed since this page loaded; review the refreshed amounts and choose again','stale projection page rejected after a late entry');
+select throws_ok($$select pg_temp.submit('17','withdraw_all',p_basis=>null,p_bps=>null)$$,'40001',null,'callers naming no basis cannot accept an actual rate');
+select throws_ok($$select pg_temp.submit('17','withdraw_all',p_basis=>'actual',p_bps=>2500)$$,'40001',null,'a different displayed rate is rejected');
+select is((select count(*) from public.maturity_instructions where investment_id=pg_temp.i('17')),0::bigint,'stale submissions record nothing');
+select lives_ok($$select pg_temp.submit('17','withdraw_all')$$,'refreshed page records the actual amounts');
+
+-- Fractional-cent profits still settle within placement rules -----------------------------------------
+select lives_ok($$select pg_temp.submit('16','reinvest_all')$$,'reinvest-all accepted for UGX 125,001 at 27.35%');
+select is((select projected_reinvest_ugx from public.maturity_instructions where id=pg_temp.mi('16')),159188.77::numeric,'accepted reinvestment is two-decimal');
+select lives_ok($$select pg_temp.begin('16')$$,'begin fractional reinvestment');
+select is(pg_temp.fulfill('16')->>'fulfilled','true','fractional-cent reinvestment fulfilled, not held');
+select is((select principal_ugx from public.investments where id=(select fulfilled_investment_id from public.maturity_instructions where id=pg_temp.mi('16'))),159188.77::numeric,'reinvested principal matches accepted amount');
 
 -- Actual-based choices fulfil without redundant confirmation -------------------------------------
 select lives_ok($$select pg_temp.submit('10','withdraw_all')$$,'withdraw-all choice on the actual rate');

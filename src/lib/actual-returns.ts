@@ -1,6 +1,7 @@
 // Cycle-wide actual returns. An admin records one rate (basis points) per
-// cycle; each placement's actual profit derives from its own principal at the
-// database's eight-decimal scale, exactly as private.cycle_actual_return_ugx.
+// cycle; each placement's actual value (principal plus profit) is rounded
+// half-up to whole cents, exactly as private.cycle_actual_return_ugx, so
+// settlement amounts always meet the two-decimal payout rules.
 // Timing follows Africa/Kampala calendar dates: the rate is revisable until
 // the maturity date begins in Kampala, then locks.
 
@@ -32,7 +33,8 @@ function moneyUnits(value: number | string): bigint {
   return BigInt(numeric.toFixed(8).replace(".", ""));
 }
 
-// round(principal * bps / 10000, 8), half away from zero (amounts are >= 0).
+// round(principal + principal * bps / 10000, 2) - principal, rounding half
+// away from zero (amounts are >= 0).
 export function cycleActualReturnUgx(
   principalUgx: number | string,
   actualReturnBps: number,
@@ -43,8 +45,12 @@ export function cycleActualReturnUgx(
     actualReturnBps > MAX_ACTUAL_RETURN_BPS
   )
     throw new Error("Invalid actual return");
-  const product = moneyUnits(principalUgx) * BigInt(actualReturnBps);
-  return Number((product + 5_000n) / 10_000n) / 100_000_000;
+  const principal = moneyUnits(principalUgx);
+  // Eight-decimal units times (10000 + bps), scaled down to whole cents.
+  const divisor = 10_000n * 1_000_000n;
+  const cents =
+    (principal * (10_000n + BigInt(actualReturnBps)) + divisor / 2n) / divisor;
+  return Number(cents * 1_000_000n - principal) / 100_000_000;
 }
 
 export function kampalaDate(now: Date = new Date()): string {

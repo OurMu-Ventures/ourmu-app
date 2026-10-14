@@ -57,6 +57,7 @@ export function MaturityInstructionForm({
   principalUgx,
   returnUgx,
   returnBasis,
+  actualReturnBps = null,
   savedDestinations,
   openCycles,
   assignedCycle,
@@ -70,6 +71,9 @@ export function MaturityInstructionForm({
   // The recorded cycle return when it exists, otherwise the projection.
   returnUgx: number;
   returnBasis: "actual" | "projected";
+  // The recorded cycle rate behind returnUgx; sent back so the server
+  // rejects the choice if the displayed basis is stale.
+  actualReturnBps?: number | null;
   savedDestinations: SavedDestination[];
   openCycles?: OpenCycleOption[];
   assignedCycle?: AssignedCycleOption | null;
@@ -168,6 +172,12 @@ export function MaturityInstructionForm({
         </div>
       )}
       <input type="hidden" name="investmentId" value={investmentId} />
+      <input type="hidden" name="expectedReturnBasis" value={returnBasis} />
+      <input
+        type="hidden"
+        name="expectedActualReturnBps"
+        value={returnBasis === "actual" ? (actualReturnBps ?? "") : ""}
+      />
       <fieldset>
         <legend>Your maturity choice</legend>
         {MATURITY_CHOICES.map((option) => {

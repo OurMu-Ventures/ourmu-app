@@ -64,6 +64,21 @@ export async function submitMaturityInstruction(
       message: maturityInstructionValidationMessage(parsed.error),
     };
   const input = parsed.data;
+  // The basis the partner was shown; the database rejects a stale page.
+  const expectedBasis = formData.get("expectedReturnBasis");
+  const expectedBpsRaw = String(formData.get("expectedActualReturnBps") ?? "");
+  const expectedBps = /^\d{1,6}$/.test(expectedBpsRaw)
+    ? Number(expectedBpsRaw)
+    : null;
+  if (
+    (expectedBasis !== "actual" && expectedBasis !== "projected") ||
+    (expectedBasis === "actual") !== (expectedBps !== null)
+  )
+    return {
+      ok: false,
+      message:
+        "Reload this page to review the current amounts before recording your choice.",
+    };
   const admin = createAdminClient();
   const { data: investment } = await admin
     .from("investments")
@@ -248,6 +263,8 @@ export async function submitMaturityInstruction(
     p_expected_agreement_version_id: (involvesReinvestment(input.choice)
       ? input.expectedAgreementVersionId
       : null) as unknown as string,
+    p_expected_amount_basis: expectedBasis,
+    p_expected_actual_return_bps: expectedBps as unknown as number,
   });
   if (error)
     return {

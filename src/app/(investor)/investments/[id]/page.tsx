@@ -330,6 +330,7 @@ export default async function InvestmentPage({
                 principalUgx={Number(data.principal_ugx)}
                 returnUgx={returns.profitUgx}
                 returnBasis={returns.basis === "actual" ? "actual" : "projected"}
+                actualReturnBps={returns.actualReturnBps}
                 savedDestinations={(destinations ?? []) as SavedDestination[]}
                 assignedCycle={assignedCycle}
                 existingChoice={instruction?.choice}

@@ -1,9 +1,11 @@
 -- Cycle-wide actual returns.
 --
 -- An administrator records one actual return percentage (in basis points) per
--- cycle. Every included investment derives its actual profit from its own
--- principal at the database's eight-decimal monetary scale; cycle totals are
--- sums of those individual amounts. Projected fields are never changed.
+-- cycle. Every included investment derives its actual value from its own
+-- principal, rounded half-up to whole cents (UGX 0.01), so every settlement
+-- amount meets the two-decimal placement and payout rules; actual profit is
+-- that value minus principal. Cycle totals are sums of the individual
+-- amounts. Projected fields are never changed.
 --
 -- Timing uses Africa/Kampala calendar dates: the rate can be revised until
 -- the maturity date begins in Kampala, then locks. A cycle that reaches
@@ -77,10 +79,15 @@ returns date language sql stable set search_path = '' as $$
   select (p_at at time zone 'Africa/Kampala')::date;
 $$;
 
--- Same arithmetic and scale as investments.projected_return_ugx.
+-- Settlement rounding policy: the actual value (principal plus profit) is
+-- rounded half-up to whole cents, and profit is derived from it. Previews,
+-- accepted instruction amounts and fulfillment all use this one function, so
+-- payouts and reinvestments always satisfy round(amount, 2).
 create function private.cycle_actual_return_ugx(p_principal_ugx numeric, p_actual_return_bps integer)
 returns numeric(28,8) language sql immutable set search_path = '' as $$
-  select round(p_principal_ugx * p_actual_return_bps::numeric / 10000::numeric, 8)::numeric(28,8);
+  select (round(p_principal_ugx
+    + p_principal_ugx * p_actual_return_bps::numeric / 10000::numeric, 2)
+    - p_principal_ugx)::numeric(28,8);
 $$;
 
 -- Revisions close when the maturity date begins in Kampala.
@@ -776,7 +783,10 @@ begin
 end;
 $function$;
 
-CREATE OR REPLACE FUNCTION public.submit_maturity_instruction(p_investor_id uuid, p_investment_id uuid, p_choice maturity_choice, p_target_cycle_id uuid, p_payout_destination_id uuid, p_agreement_accepted boolean, p_destination_confirmed boolean, p_request_id uuid, p_user_agent text, p_ip_fingerprint bytea, p_requested_withdrawal_ugx numeric DEFAULT NULL::numeric, p_custom_split boolean DEFAULT false, p_expected_agreement_version_id uuid DEFAULT NULL::uuid)
+-- Submissions name the return basis the partner was shown, so a stale page
+-- can never be recorded as accepting amounts it did not display.
+drop function public.submit_maturity_instruction(uuid,uuid,public.maturity_choice,uuid,uuid,boolean,boolean,uuid,text,bytea,numeric,boolean,uuid);
+CREATE OR REPLACE FUNCTION public.submit_maturity_instruction(p_investor_id uuid, p_investment_id uuid, p_choice maturity_choice, p_target_cycle_id uuid, p_payout_destination_id uuid, p_agreement_accepted boolean, p_destination_confirmed boolean, p_request_id uuid, p_user_agent text, p_ip_fingerprint bytea, p_requested_withdrawal_ugx numeric DEFAULT NULL::numeric, p_custom_split boolean DEFAULT false, p_expected_agreement_version_id uuid DEFAULT NULL::uuid, p_expected_amount_basis text DEFAULT NULL::text, p_expected_actual_return_bps integer DEFAULT NULL::integer)
  RETURNS uuid
  LANGUAGE plpgsql
  SET search_path TO ''
@@ -833,6 +843,16 @@ begin
     v_return := v_investment.projected_return_ugx;
     v_basis := 'projected';
     v_basis_bps := null;
+  end if;
+  -- The displayed basis is checked under the cycle lock. Callers that name
+  -- no basis (older clients) are only accepted while no rate exists, so a
+  -- late first entry can never be silently treated as already accepted.
+  if (p_expected_amount_basis is null and v_basis = 'actual')
+    or (p_expected_amount_basis is not null
+      and (p_expected_amount_basis is distinct from v_basis
+        or p_expected_actual_return_bps is distinct from v_basis_bps)) then
+    raise exception using errcode = '40001',
+      message = 'the actual return for this investment changed since this page loaded; review the refreshed amounts and choose again';
   end if;
 
   if p_choice = 'withdraw_all' then
@@ -1116,6 +1136,9 @@ begin
     'pending_followup', v_pending_followup, 'awaiting_actual_return', v_awaiting_actual_return);
 end;
 $function$;
+
+revoke all on function public.submit_maturity_instruction(uuid,uuid,public.maturity_choice,uuid,uuid,boolean,boolean,uuid,text,bytea,numeric,boolean,uuid,text,integer) from public, anon, authenticated;
+grant execute on function public.submit_maturity_instruction(uuid,uuid,public.maturity_choice,uuid,uuid,boolean,boolean,uuid,text,bytea,numeric,boolean,uuid,text,integer) to service_role;
 
 notify pgrst, 'reload schema';
 commit;

@@ -2148,7 +2148,9 @@ export type Database = {
           p_choice: Database["public"]["Enums"]["maturity_choice"]
           p_custom_split?: boolean
           p_destination_confirmed: boolean
+          p_expected_actual_return_bps?: number
           p_expected_agreement_version_id?: string
+          p_expected_amount_basis?: string
           p_investment_id: string
           p_investor_id: string
           p_ip_fingerprint: string

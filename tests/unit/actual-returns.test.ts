@@ -41,8 +41,10 @@ describe("formatBpsPercent", () => {
 });
 
 describe("cycleActualReturnUgx", () => {
-  it("matches round(principal * bps / 10000, 8) in the database", () => {
-    expect(cycleActualReturnUgx(333333.33, 2735)).toBe(91166.665755);
+  it("rounds the actual value to whole cents like the database", () => {
+    expect(cycleActualReturnUgx(333333.33, 2735)).toBe(91166.67);
+    expect(cycleActualReturnUgx(125001, 2735)).toBe(34187.77);
+    expect(cycleActualReturnUgx(125000.01, 3000)).toBe(37500);
     expect(cycleActualReturnUgx("125000.00000000", 2735)).toBe(34187.5);
     expect(cycleActualReturnUgx(1_000_000, 0)).toBe(0);
   });

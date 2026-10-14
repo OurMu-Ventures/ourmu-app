@@ -224,8 +224,15 @@ describe("Maturity choices on a recorded actual return", () => {
         principalUgx={1_000_000}
         returnUgx={273_500}
         returnBasis="actual"
+        actualReturnBps={2735}
       />,
     );
+    expect(
+      document.querySelector('input[name="expectedReturnBasis"]'),
+    ).toHaveValue("actual");
+    expect(
+      document.querySelector('input[name="expectedActualReturnBps"]'),
+    ).toHaveValue("2735");
     expect(
       screen.getByText(/Actual payout UGX 1,273,500.00/),
     ).toBeVisible();
