@@ -13,7 +13,7 @@ export default async function AdminPage() {
     { count: awaitingActivation },
     { count: active },
     { count: failed },
-    { data: closures },
+    { data: closures, error: closuresError },
     { data: cycle },
     { data: reserved },
     { data: oldestPending, error: oldestPendingError },
@@ -38,7 +38,9 @@ export default async function AdminPage() {
       .in("status", ["failed", "dead"]),
     admin
       .from("account_closure_requests")
-      .select("id,user_id,reason,requested_at,profiles(legal_name,email)")
+      .select(
+        "id,user_id,reason,requested_at,profiles!account_closure_requests_user_id_fkey(legal_name,email)",
+      )
       .eq("status", "requested"),
     admin
       .from("investment_cycles")
@@ -142,7 +144,14 @@ export default async function AdminPage() {
       <NewsletterReadingAnalytics />
       <section style={{ marginTop: "2rem" }}>
         <h2>Closure requests</h2>
-        {(closures ?? []).map((item) => {
+        {closuresError ? (
+          <p role="alert" className="notice">
+            Closure requests could not be loaded. Refresh the page to try again.
+          </p>
+        ) : closures?.length === 0 ? (
+          <p className="muted">No pending closure requests.</p>
+        ) : null}
+        {(!closuresError ? (closures ?? []) : []).map((item) => {
           const owner = item.profiles as unknown as
             { legal_name: string } | { legal_name: string }[] | null;
           return (

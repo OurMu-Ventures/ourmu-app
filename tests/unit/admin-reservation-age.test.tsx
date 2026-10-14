@@ -9,6 +9,13 @@ const state = vi.hoisted(() => ({
   oldest: null as { requested_at: string } | null,
   calls: [] as Array<{ method: string; args: unknown[] }>,
   error: false,
+  closureError: false,
+  closures: [] as Array<{
+    id: string;
+    user_id: string;
+    reason: string | null;
+    profiles: { legal_name: string; email: string };
+  }>,
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/actions/admin", () => ({ resolveClosure: vi.fn() }));
@@ -18,11 +25,12 @@ vi.mock("@/components/SubmitButton", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
-    from: () => {
+    from: (table: string) => {
       let selection = "";
       const query = {
         select: (value: string) => {
           selection = value;
+          state.calls.push({ method: "select", args: [table, value] });
           return query;
         },
         eq: (...args: unknown[]) => {
@@ -46,7 +54,16 @@ vi.mock("@/lib/supabase/admin", () => ({
               : null,
         }),
         then: (resolve: (result: unknown) => unknown) =>
-          Promise.resolve({ data: [], count: 0 }).then(resolve),
+          Promise.resolve(
+            table === "account_closure_requests"
+              ? {
+                  data: state.closureError ? null : state.closures,
+                  error: state.closureError
+                    ? { code: "PGRST201", message: "Ambiguous relationship" }
+                    : null,
+                }
+              : { data: [], count: 0 },
+          ).then(resolve),
       };
       return query;
     },
@@ -59,6 +76,8 @@ beforeEach(() => {
   state.oldest = null;
   state.calls = [];
   state.error = false;
+  state.closureError = false;
+  state.closures = [];
 });
 afterEach(() => vi.useRealTimers());
 describe("pending reservation aging", () => {
@@ -90,5 +109,41 @@ describe("pending reservation aging", () => {
     await expect(AdminPage()).rejects.toThrow(
       "Unable to load the oldest pending reservation",
     );
+  });
+});
+
+describe("admin closure requests", () => {
+  it("loads the requester relationship explicitly and renders the pending request", async () => {
+    state.closures = [
+      {
+        id: "test-closure",
+        user_id: "test-partner",
+        reason: null,
+        profiles: { legal_name: "Test Partner", email: "partner@example.test" },
+      },
+    ];
+    const html = renderToStaticMarkup(await AdminPage());
+    expect(state.calls).toContainEqual({
+      method: "select",
+      args: [
+        "account_closure_requests",
+        "id,user_id,reason,requested_at,profiles!account_closure_requests_user_id_fkey(legal_name,email)",
+      ],
+    });
+    expect(html).toContain("Test Partner");
+    expect(html).toContain("No reason provided");
+    expect(html).toContain('value="test-closure"');
+    expect(html).toContain("Decline and restore access");
+  });
+  it("shows a load failure instead of an empty closure list", async () => {
+    state.closureError = true;
+    const html = renderToStaticMarkup(await AdminPage());
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Closure requests could not be loaded");
+    expect(html).not.toContain("No pending closure requests.");
+  });
+  it("shows an empty state only after a successful query", async () => {
+    const html = renderToStaticMarkup(await AdminPage());
+    expect(html).toContain("No pending closure requests.");
   });
 });
