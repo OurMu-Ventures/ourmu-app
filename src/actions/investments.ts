@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import { ugx } from "@/lib/format";
@@ -16,6 +17,57 @@ import {
   investmentRequestSchemaForLimit,
   type ActionState,
 } from "@/lib/validation";
+
+const renameSchema = z.object({
+  investmentId: z.uuid(),
+  alias: z.string().trim().max(80),
+});
+
+export async function renameInvestment(input: {
+  investmentId: string;
+  alias: string;
+}) {
+  const profile = await requireInvestor();
+  const parsed = renameSchema.safeParse(input);
+  if (!parsed.success)
+    return {
+      ok: false as const,
+      message: "Use a name of at most 80 characters.",
+    };
+
+  const client = await createClient();
+  const { data: visible, error: readError } = await client
+    .from("investments")
+    .select("id")
+    .eq("id", parsed.data.investmentId)
+    .eq("investor_id", profile.id)
+    .maybeSingle();
+  if (readError || !visible)
+    return {
+      ok: false as const,
+      message: "Investment unavailable. Refresh and try again.",
+    };
+
+  const alias = parsed.data.alias || null;
+  const admin = createAdminClient();
+  const { data: updated, error } = await admin
+    .from("investments")
+    .update({ alias })
+    .eq("id", parsed.data.investmentId)
+    .eq("investor_id", profile.id)
+    .select("id")
+    .maybeSingle();
+  if (error || !updated)
+    return {
+      ok: false as const,
+      message: "Could not save the name. Try again.",
+    };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/investments");
+  revalidatePath(`/investments/${parsed.data.investmentId}`);
+  return { ok: true as const, alias };
+}
 
 export async function requestInvestment(
   _: ActionState,

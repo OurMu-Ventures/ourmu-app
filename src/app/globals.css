@@ -641,6 +641,66 @@ th {
   margin: 0;
   font-size: 1.2rem;
 }
+.investment-alias-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.investment-alias-title svg {
+  flex: none;
+  opacity: 0.55;
+}
+.investment-alias-title:hover svg,
+.investment-alias-title:focus-visible svg {
+  opacity: 1;
+}
+.investment-alias-editor form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.investment-alias-editor input {
+  min-width: min(15rem, 70vw);
+  max-width: 100%;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #8eaaa1;
+  border-radius: 0.5rem;
+  font: inherit;
+}
+.investment-alias-editor button {
+  min-height: 2.5rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid #8eaaa1;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+}
+.investment-alias-editor button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.investment-alias-editor .investment-alias-reset {
+  margin-top: 0.2rem;
+  border: 0;
+  background: none;
+  text-decoration: underline;
+}
+.investment-alias-error {
+  margin: 0.2rem 0 0;
+  color: #a43b35;
+  font-size: 0.875rem;
+}
 .invest-amount {
   margin: 0.25rem 0 0;
   font-weight: 700;

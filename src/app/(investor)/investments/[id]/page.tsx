@@ -115,7 +115,9 @@ export default async function InvestmentPage({
   return (
     <>
       <p className="eyebrow">Investment record</p>
-      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investment details</h1>
+      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
+        {data.alias || "Investment details"}
+      </h1>
       <p>
         <span className="badge">
           {data.payout_basis === "reported_paid"

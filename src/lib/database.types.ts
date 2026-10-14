@@ -695,6 +695,7 @@ export type Database = {
       }
       investments: {
         Row: {
+          alias: string | null
           activated_at: string | null
           cancelled_at: string | null
           created_at: string
@@ -725,6 +726,7 @@ export type Database = {
           units: number | null
         }
         Insert: {
+          alias?: string | null
           activated_at?: string | null
           cancelled_at?: string | null
           created_at?: string
@@ -755,6 +757,7 @@ export type Database = {
           units?: number | null
         }
         Update: {
+          alias?: string | null
           activated_at?: string | null
           cancelled_at?: string | null
           created_at?: string

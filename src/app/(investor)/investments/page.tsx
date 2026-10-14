@@ -5,7 +5,11 @@ import { InvestmentCard } from "@/components/InvestmentCard";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { requireInvestor } from "@/lib/auth";
-import { canChooseMaturity, investmentPeriod } from "@/lib/investments";
+import {
+  canChooseMaturity,
+  investmentPeriod,
+  investmentTitle,
+} from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentsPage() {
@@ -48,12 +52,16 @@ export default async function InvestmentsPage() {
             item,
             item.maturity_instructions?.status,
           );
+          const defaultTitle =
+            investmentPeriod(termStart, item.maturity_date) ?? cycleName;
           return (
             <InvestmentCard
               key={item.id}
               item={{
-                name:
-                  investmentPeriod(termStart, item.maturity_date) ?? cycleName,
+                investmentId: item.id,
+                alias: item.alias,
+                defaultTitle,
+                name: investmentTitle(item.alias, defaultTitle),
                 status: item.status,
                 statusLabel:
                   item.payout_basis === "reported_paid"

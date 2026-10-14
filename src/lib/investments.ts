@@ -38,6 +38,13 @@ export function investmentPeriod(
   return `${start} - ${maturity}`;
 }
 
+export function investmentTitle(
+  alias: string | null | undefined,
+  defaultTitle: string,
+): string {
+  return alias?.trim() || defaultTitle;
+}
+
 // Paid records and completed instructions are history, even when status remains matured.
 export function canChooseMaturity(
   investment: {

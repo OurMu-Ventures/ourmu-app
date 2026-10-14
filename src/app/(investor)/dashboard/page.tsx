@@ -8,7 +8,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { date, dateTime } from "@/lib/format";
-import { canChooseMaturity, investmentPeriod } from "@/lib/investments";
+import {
+  canChooseMaturity,
+  investmentPeriod,
+  investmentTitle,
+} from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -138,10 +142,18 @@ export default async function DashboardPage() {
               <InvestmentCard
                 key={item.id}
                 item={{
-                  name:
+                  investmentId: item.id,
+                  alias: item.alias,
+                  defaultTitle:
                     investmentPeriod(itemCycle?.opens_at, item.maturity_date) ??
                     itemCycle?.name ??
                     "OURMU placement",
+                  name: investmentTitle(
+                    item.alias,
+                    investmentPeriod(itemCycle?.opens_at, item.maturity_date) ??
+                      itemCycle?.name ??
+                      "OURMU placement",
+                  ),
                   status: item.status,
                   statusLabel: paid
                     ? "Reported paid"
