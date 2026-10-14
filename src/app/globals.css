@@ -1028,3 +1028,39 @@ th {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
   gap: 1rem;
 }
+
+.maturity-confirmation-dialog {
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: clamp(1rem, 4vw, 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--ink);
+  border-radius: 1rem;
+  background: var(--paper, #f7f3e8);
+  color: var(--ink);
+}
+.maturity-confirmation-dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+.maturity-confirmation-amounts {
+  display: grid;
+  gap: 0.75rem;
+}
+.maturity-confirmation-amounts div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+.maturity-confirmation-amounts dd {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.maturity-confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}

@@ -140,7 +140,9 @@ describe("MaturityFulfillmentForm", () => {
     const { container } = render(
       <MaturityFulfillmentForm
         instructionId="00000000-0000-4000-8000-000000000002"
-        needsPayout={false}
+        partnerName="Test Partner"
+        principalUgx={1000000}
+        choice="reinvest_all"
         actualReturn={{ kind: "cycle", actualRoiUgx: 273500, actualReturnBps: 2735 }}
       />,
     );
@@ -156,7 +158,9 @@ describe("MaturityFulfillmentForm", () => {
     render(
       <MaturityFulfillmentForm
         instructionId="00000000-0000-4000-8000-000000000002"
-        needsPayout={false}
+        partnerName="Test Partner"
+        principalUgx={1000000}
+        choice="reinvest_all"
         actualReturn={{ kind: "legacy" }}
       />,
     );

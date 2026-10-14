@@ -2,7 +2,7 @@
 
 import { DEFAULT_INVESTMENT_LIMIT_UGX } from "@/lib/investment-limits";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -23,6 +23,9 @@ import {
   PAKA_PAKA_EXPLANATION,
   customWithdrawalError,
   maturitySplits,
+  safeFulfilledSplits,
+  UNAVAILABLE_MATURITY_AMOUNTS,
+  type CustomMaturityBasis,
   type MaturityChoice,
 } from "@/lib/maturity";
 import { initialActionState } from "@/lib/validation";
@@ -408,82 +411,269 @@ export type FulfillmentReturn =
 
 export function MaturityFulfillmentForm({
   instructionId,
-  needsPayout,
+  partnerName,
+  principalUgx,
+  choice,
+  customBasis,
+  targetCycleName,
   actualReturn,
 }: {
   instructionId: string;
-  needsPayout: boolean;
+  partnerName: string;
+  principalUgx: number;
+  choice: MaturityChoice;
+  customBasis?: CustomMaturityBasis;
+  targetCycleName?: string;
   actualReturn: FulfillmentReturn;
 }) {
-  const [state, action] = useActionState(
-    fulfillMaturityInstruction,
+  const dialog = useRef<HTMLDialogElement>(null);
+  const reviewButton = useRef<HTMLButtonElement>(null);
+  const restoreReviewFocus = useRef(false);
+  const titleId = useId();
+  const descriptionId = useId();
+  const [legacyRoi, setLegacyRoi] = useState("");
+  const [preview, setPreview] = useState<{
+    roi: string;
+    payoutUgx: number;
+    reinvestUgx: number;
+    payoutReference: string;
+    destinationVerified: string;
+  } | null>(null);
+  const [previewError, setPreviewError] = useState("");
+  const [state, action, pending] = useActionState(
+    async (previous: typeof initialActionState, formData: FormData) => {
+      const result = await fulfillMaturityInstruction(previous, formData);
+      dialog.current?.close();
+      setPreview(null);
+      return result;
+    },
     initialActionState,
   );
+  const roi =
+    actualReturn.kind === "cycle"
+      ? String(actualReturn.actualRoiUgx)
+      : legacyRoi;
+  const split =
+    roi.trim() === ""
+      ? null
+      : safeFulfilledSplits(principalUgx, Number(roi), choice, customBasis);
+  const needsPayout = split ? split.payoutUgx > 0 : choice !== "reinvest_all";
+
+  useEffect(() => {
+    if (preview && dialog.current && !dialog.current.open) {
+      restoreReviewFocus.current = true;
+      dialog.current.showModal();
+      dialog.current.querySelector<HTMLButtonElement>("button")?.focus();
+    } else if (!preview && !pending && restoreReviewFocus.current) {
+      reviewButton.current?.focus();
+      restoreReviewFocus.current = false;
+    }
+  }, [preview, pending]);
+
+  function cancelReview() {
+    if (pending) return;
+    dialog.current?.close();
+    setPreview(null);
+  }
+
   return (
-    <form className="form" action={action}>
-      <input type="hidden" name="instructionId" value={instructionId} />
-      <div className="form-grid">
-        {actualReturn.kind === "cycle" ? (
-          <p>
+    <>
+      <form
+        className="form"
+        method="post"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!event.currentTarget.reportValidity()) return;
+          if (!split) {
+            setPreviewError(UNAVAILABLE_MATURITY_AMOUNTS);
+            return;
+          }
+          const data = new FormData(event.currentTarget);
+          if (
+            needsPayout &&
+            !String(data.get("payoutReference") ?? "").trim()
+          ) {
+            setPreviewError(
+              "Enter the external payout reference before reviewing completion.",
+            );
+            return;
+          }
+          setPreviewError("");
+          setPreview({
+            roi,
+            ...split,
+            payoutReference: String(data.get("payoutReference") ?? "").trim(),
+            destinationVerified: String(data.get("destinationVerified") ?? ""),
+          });
+        }}
+      >
+        <input type="hidden" name="instructionId" value={instructionId} />
+        <div className="form-grid">
+          {actualReturn.kind === "cycle" ? (
+            <p>
+              <input
+                type="hidden"
+                name="actualRoiUgx"
+                value={actualReturn.actualRoiUgx}
+              />
+              Actual ROI <strong>{ugx(actualReturn.actualRoiUgx)}</strong>
+              <br />
+              <small className="muted">
+                From the cycle&apos;s recorded actual return of{" "}
+                {formatBpsPercent(actualReturn.actualReturnBps)}. It cannot be
+                edited per investment.
+              </small>
+            </p>
+          ) : (
+            <label>
+              Actual ROI (UGX)
+              <input
+                name="actualRoiUgx"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={legacyRoi}
+                onChange={(event) => setLegacyRoi(event.target.value)}
+              />
+              <small className="muted">
+                Legacy per-investment settlement: this cycle started settling
+                before cycle-wide returns. If the amount differs from the
+                projection, the partner must confirm the new amounts before
+                anything moves.
+              </small>
+            </label>
+          )}
+          {needsPayout && (
+            <label>
+              External payout reference
+              <input name="payoutReference" autoComplete="off" required />
+            </label>
+          )}
+        </div>
+        {needsPayout && (
+          <label className="checkbox">
             <input
-              type="hidden"
-              name="actualRoiUgx"
-              value={actualReturn.actualRoiUgx}
-            />
-            Actual ROI <strong>{ugx(actualReturn.actualRoiUgx)}</strong>
-            <br />
-            <small className="muted">
-              From the cycle&apos;s recorded actual return of{" "}
-              {formatBpsPercent(actualReturn.actualReturnBps)}. It cannot be
-              edited per investment.
-            </small>
-          </p>
-        ) : (
-          <label>
-            Actual ROI (UGX)
-            <input
-              name="actualRoiUgx"
-              type="number"
-              min="0"
-              step="0.01"
+              name="destinationVerified"
+              type="checkbox"
+              value="yes"
               required
             />
-            <small className="muted">
-              Legacy per-investment settlement: this cycle started settling
-              before cycle-wide returns. If the amount differs from the
-              projection, the partner must confirm the new amounts before
-              anything moves.
-            </small>
+            <span>
+              I have opened the revealed payout destination below and verified
+              it matches the external transfer.
+            </span>
           </label>
         )}
-        {needsPayout && (
-          <label>
-            External payout reference
-            <input name="payoutReference" autoComplete="off" required />
-          </label>
+        <button
+          ref={reviewButton}
+          type="submit"
+          className="button"
+          disabled={pending}
+        >
+          Review completion
+        </button>
+        {previewError && (
+          <p role="alert" className="notice">
+            {previewError}
+          </p>
         )}
-      </div>
-      {needsPayout && (
-        <label className="checkbox">
-          <input
-            name="destinationVerified"
-            type="checkbox"
-            value="yes"
-            required
-          />
-          <span>
-            I have opened the revealed payout destination below and verified it
-            matches the external transfer.
-          </span>
-        </label>
+      </form>
+      {preview && (
+        <dialog
+          ref={dialog}
+          className="maturity-confirmation-dialog"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+          onKeyDown={(event) => {
+            if (event.key !== "Tab") return;
+            const buttons =
+              event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                "button:not(:disabled)",
+              );
+            const first = buttons[0];
+            const last = buttons[buttons.length - 1];
+            if (!first) event.preventDefault();
+            else if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+            }
+          }}
+          onCancel={(event) => {
+            event.preventDefault();
+            cancelReview();
+          }}
+        >
+          <form className="form" action={action}>
+            <h2 id={titleId}>Confirm instruction completion</h2>
+            <p id={descriptionId}>
+              Review the amounts for <strong>{partnerName}</strong> before
+              completing this instruction. This records completion; it does not
+              send money.
+            </p>
+            <dl className="maturity-confirmation-amounts">
+              <div>
+                <dt>Partner</dt>
+                <dd>{partnerName}</dd>
+              </div>
+              <div>
+                <dt>Payout</dt>
+                <dd>{ugx(preview.payoutUgx)}</dd>
+              </div>
+              <div>
+                <dt>Reinvestment</dt>
+                <dd>{ugx(preview.reinvestUgx)}</dd>
+              </div>
+              {preview.reinvestUgx > 0 && (
+                <div>
+                  <dt>Reinvestment cycle</dt>
+                  <dd>{targetCycleName ?? "Unavailable"}</dd>
+                </div>
+              )}
+              {preview.payoutUgx > 0 && (
+                <div>
+                  <dt>External payout reference</dt>
+                  <dd>{preview.payoutReference}</dd>
+                </div>
+              )}
+            </dl>
+            <p className="muted">
+              If revised amounts need partner confirmation or an instruction
+              needs resolution, completion will wait until those checks are
+              satisfied.
+            </p>
+            <input type="hidden" name="instructionId" value={instructionId} />
+            <input type="hidden" name="actualRoiUgx" value={preview.roi} />
+            <input
+              type="hidden"
+              name="payoutReference"
+              value={preview.payoutReference}
+            />
+            <input
+              type="hidden"
+              name="destinationVerified"
+              value={preview.destinationVerified}
+            />
+            <input type="hidden" name="confirmation" value="yes" />
+            <div className="maturity-confirmation-actions">
+              <button
+                type="button"
+                className="button-secondary"
+                disabled={pending}
+                onClick={cancelReview}
+              >
+                Cancel
+              </button>
+              <ActionButton>Confirm completion</ActionButton>
+            </div>
+          </form>
+        </dialog>
       )}
-      <label>
-        Type FULFILL
-        <input name="confirmation" autoComplete="off" required />
-      </label>
-      <ActionButton>Fulfill instruction</ActionButton>
       <StateMessage state={state} />
-    </form>
+    </>
   );
 }
 

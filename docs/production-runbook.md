@@ -75,6 +75,8 @@ original expiration, provided they have not been revoked.
 
 ## Admin payout destination setup
 
+When completing a maturity instruction, select **Review completion** to see the partner, payout, reinvestment, destination cycle, and external payout reference. Select **Cancel** to return to the form, or **Confirm completion** to submit. Payout references and verified destinations remain required whenever the actual payout is positive. Completion records an external payment; it does not send money. Revised amounts still require partner confirmation before settlement.
+
 Apply migration `20261005134923_admin_maturity_payout_destination.sql` before deploying the admin form. The runtime must have the existing payout encryption master key and Supabase service-role configuration.
 
 For a requested maturity instruction with a withdrawal amount and no saved destination, open Admin → Maturities and expand **Set up a verified payout destination**. Enter the provider and account holder, select the partner’s phone on file for mobile money or enter the verified account reference, choose the offline verification method, and confirm verification. An active administrator with two-factor authentication can save the encrypted destination without partner login.

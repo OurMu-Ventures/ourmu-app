@@ -160,7 +160,7 @@ export const maturityFulfillmentSchema = z.object({
     .optional(),
   payoutReference: z.string().trim().max(120).optional(),
   destinationVerified: z.union([z.literal("yes"), z.literal("")]).optional(),
-  confirmation: z.literal("FULFILL"),
+  confirmation: z.literal("yes"),
 });
 
 export const maturityConfirmSchema = z.object({ instructionId: z.uuid() });
