@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/actions/investments", () => ({
+  renameInvestment: vi.fn(),
+  renameInvestmentForm: vi.fn(),
+}));
 
 import {
   InvestmentCard,
@@ -13,6 +18,9 @@ afterEach(() => {
 });
 
 const baseItem: InvestmentCardData = {
+  investmentId: "00000000-0000-4000-8000-000000000001",
+  alias: null,
+  defaultTitle: "Cycle One",
   name: "Cycle One",
   status: "active",
   statusLabel: "Active",
@@ -132,5 +140,43 @@ describe("InvestmentCard computed-metric hints", () => {
     expect(
       screen.queryByRole("button", { name: /maturity date/i }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("InvestmentCard return basis", () => {
+  it("labels actual returns, including revisable ones before maturity", () => {
+    render(
+      <InvestmentCard
+        item={{
+          ...baseItem,
+          returnBasis: "actual",
+          returnRevisable: true,
+          profitUgx: 68375,
+          payoutUgx: 318375,
+        }}
+      />,
+    );
+    expect(screen.getByText("UGX 68,375.00")).toBeVisible();
+    expect(
+      screen.getByText("Actual · may be revised until maturity"),
+    ).toBeVisible();
+  });
+
+  it("shows a pending actual return on matured projections", () => {
+    render(
+      <InvestmentCard
+        item={{ ...baseItem, status: "matured", returnPending: true }}
+      />,
+    );
+    expect(screen.getByText("Actual return pending")).toBeVisible();
+  });
+
+  it("marks plain projections and leaves paid history unlabelled", () => {
+    const { unmount } = render(<InvestmentCard item={baseItem} />);
+    expect(screen.getByText("Projected")).toBeVisible();
+    unmount();
+    render(<InvestmentCard item={{ ...baseItem, isPaid: true }} />);
+    expect(screen.queryByText("Projected")).toBeNull();
+    expect(screen.queryByText("Actual return")).toBeNull();
   });
 });

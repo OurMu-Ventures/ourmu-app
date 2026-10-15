@@ -7,6 +7,10 @@ import {
 } from "@/components/maturity-forms";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireAdmin } from "@/lib/auth";
+import {
+  cycleActualReturnUgx,
+  formatBpsPercent,
+} from "@/lib/actual-returns";
 import { dateTime, ugx } from "@/lib/format";
 import {
   safeFulfilledSplits,
@@ -87,7 +91,7 @@ export default async function AdminMaturitiesPage({
   // The filtered empty embed lets History include legacy reported-paid
   // instructions even when their instruction status was never fulfilled.
   let query = admin.from("maturity_instructions").select(
-    "*,profiles!maturity_instructions_investor_id_fkey(legal_name,email),investments!maturity_instructions_investment_id_fkey!inner(principal_ugx,projected_return_ugx,maturity_date,payout_basis),paid_investment:investments!maturity_instructions_investment_id_fkey(),investment_cycles!maturity_instructions_target_cycle_id_fkey(name),payout_destinations!maturity_instructions_payout_destination_id_fkey(channel,provider_label,account_name,account_last_four,account_ref_ciphertext,account_ref_iv,account_ref_auth_tag,key_version)",
+    "*,profiles!maturity_instructions_investor_id_fkey(legal_name,email),investments!maturity_instructions_investment_id_fkey!inner(principal_ugx,projected_return_ugx,maturity_date,payout_basis,source_cycle:investment_cycles(name,actual_return_bps,legacy_settlement)),paid_investment:investments!maturity_instructions_investment_id_fkey(),investment_cycles!maturity_instructions_target_cycle_id_fkey(name),payout_destinations!maturity_instructions_payout_destination_id_fkey(channel,provider_label,account_name,account_last_four,account_ref_ciphertext,account_ref_iv,account_ref_auth_tag,key_version)",
     { count: "exact" },
   );
   if (tab === "history") {
@@ -131,9 +135,11 @@ export default async function AdminMaturitiesPage({
         Maturity instructions
       </h1>
       <p className="notice">
-        Review each partner choice, record the actual ROI from the fund, verify
-        the revealed payout destination against the external transfer, and
-        approve reinvestments. Instruction status (requested, processing,
+        Review each partner choice, verify the revealed payout destination
+        against the external transfer, and approve reinvestments. Settlement
+        uses the actual return recorded for the source cycle on the Cycles
+        page and stays blocked until it exists; cycles settled before
+        cycle-wide returns keep per-investment ROI entry. Instruction status (requested, processing,
         fulfilled) is separate from the investment&apos;s matured status.
         Revisions lock once processing begins. A changed actual ROI needs
         partner confirmation before anything moves, and held instructions are
@@ -175,6 +181,22 @@ export default async function AdminMaturitiesPage({
             item.choice,
             item.requested_withdrawal_ugx,
           );
+          const sourceCycle = source
+            ? Array.isArray(source.source_cycle)
+              ? source.source_cycle[0]
+              : source.source_cycle
+            : null;
+          const cycleRoi =
+            source && sourceCycle?.actual_return_bps != null
+              ? cycleActualReturnUgx(
+                  source.principal_ugx,
+                  sourceCycle.actual_return_bps,
+                )
+              : null;
+          const actualReturnPending =
+            !alreadyPaid &&
+            sourceCycle?.actual_return_bps == null &&
+            !sourceCycle?.legacy_settlement;
           const awaitingConfirmation =
             item.proposed_actual_roi_ugx != null &&
             item.confirmed_actual_roi_ugx !== item.proposed_actual_roi_ugx;
@@ -191,8 +213,10 @@ export default async function AdminMaturitiesPage({
                     {maturityChoiceLabel(item.choice)}
                   </h2>
                   <p>
-                    Principal {ugx(source?.principal_ugx ?? 0)} · projected
-                    payout {ugx(item.projected_payout_ugx)} · projected
+                    Principal {ugx(source?.principal_ugx ?? 0)} ·{" "}
+                    {item.amount_basis === "actual" ? "actual" : "projected"}{" "}
+                    payout {ugx(item.projected_payout_ugx)} ·{" "}
+                    {item.amount_basis === "actual" ? "actual" : "projected"}{" "}
                     reinvestment {ugx(item.projected_reinvest_ugx)} · requested{" "}
                     {dateTime(item.created_at)}
                     {target ? ` · target ${target.name}` : ""}
@@ -211,6 +235,27 @@ export default async function AdminMaturitiesPage({
                 </span>
               </div>
               {instructionTerms && <p className="muted">{instructionTerms}</p>}
+              {!alreadyPaid && (
+                <p className="muted">
+                  Amounts above are on the{" "}
+                  {item.amount_basis === "actual"
+                    ? `actual return (${formatBpsPercent(item.basis_actual_return_bps ?? 0)})`
+                    : "projection"}{" "}
+                  the partner accepted.{" "}
+                  {cycleRoi != null && sourceCycle?.actual_return_bps != null
+                    ? `Cycle actual return ${formatBpsPercent(sourceCycle.actual_return_bps)}: actual ROI ${ugx(cycleRoi)}.`
+                    : sourceCycle?.legacy_settlement
+                      ? "Legacy per-investment settlement cycle."
+                      : ""}
+                </p>
+              )}
+              {actualReturnPending && (
+                <p className="notice actual-return-required">
+                  <strong>Actual return pending</strong> for{" "}
+                  {sourceCycle?.name ?? "the source cycle"}. Record it on the
+                  Cycles page; fulfillment is blocked until then.
+                </p>
+              )}
               {!alreadyPaid &&
                 item.proposed_actual_roi_ugx != null &&
                 source &&
@@ -299,10 +344,46 @@ export default async function AdminMaturitiesPage({
                 )}
               {!alreadyPaid &&
                 item.status === "processing" &&
-                !item.needs_resolution && (
+                !item.needs_resolution &&
+                !actualReturnPending &&
+                !awaitingConfirmation &&
+                source && (
                   <MaturityFulfillmentForm
                     instructionId={item.id}
-                    needsPayout={Number(item.projected_payout_ugx) > 0}
+                    partnerName={partner?.legal_name ?? "Unknown partner"}
+                    principalUgx={Number(source.principal_ugx)}
+                    choice={item.choice}
+                    targetCycleName={target?.name}
+                    acceptedAmounts={{
+                      payoutUgx: Number(item.projected_payout_ugx),
+                      reinvestUgx: Number(item.projected_reinvest_ugx),
+                      proposedRoiUgx: item.proposed_actual_roi_ugx,
+                      confirmedRoiUgx: item.confirmed_actual_roi_ugx,
+                      acceptedOnCurrentRate: item.amount_basis === "actual" &&
+                        sourceCycle?.actual_return_bps != null &&
+                        item.basis_actual_return_bps === sourceCycle.actual_return_bps,
+                    }}
+                    customBasis={
+                      item.requested_withdrawal_ugx == null
+                        ? undefined
+                        : {
+                            requestedWithdrawalUgx: Number(item.requested_withdrawal_ugx),
+                            projectedPayoutUgx: Number(item.projected_payout_ugx),
+                            projectedReinvestUgx: Number(item.projected_reinvest_ugx),
+                            projectedTotalUgx:
+                              Number(item.projected_payout_ugx) +
+                              Number(item.projected_reinvest_ugx),
+                          }
+                    }
+                    actualReturn={
+                      cycleRoi != null && sourceCycle?.actual_return_bps != null
+                        ? {
+                            kind: "cycle",
+                            actualRoiUgx: cycleRoi,
+                            actualReturnBps: sourceCycle.actual_return_bps,
+                          }
+                        : { kind: "legacy" }
+                    }
                   />
                 )}
               {!alreadyPaid &&

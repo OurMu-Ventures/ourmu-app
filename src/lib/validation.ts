@@ -151,14 +151,17 @@ export function maturityInstructionValidationMessage(
 
 export const maturityFulfillmentSchema = z.object({
   instructionId: z.uuid(),
+  // Optional: cycles with a recorded actual return derive it server-side.
   actualRoiUgx: z
     .string()
     .trim()
-    .regex(/^\d+(?:\.\d{1,2})?$/)
-    .refine((value) => Number(value) >= 0),
+    .regex(/^\d+(?:\.\d{1,8})?$/)
+    .refine((value) => Number(value) >= 0)
+    .optional(),
   payoutReference: z.string().trim().max(120).optional(),
   destinationVerified: z.union([z.literal("yes"), z.literal("")]).optional(),
-  confirmation: z.literal("FULFILL"),
+  confirmation: z.literal("yes"),
+  intent: z.enum(["propose", "complete"]),
 });
 
 export const maturityConfirmSchema = z.object({ instructionId: z.uuid() });

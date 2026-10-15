@@ -1,19 +1,45 @@
+import Link from "next/link";
 import { resolveClosure } from "@/actions/admin";
 import { NewsletterReadingAnalytics } from "@/components/NewsletterReadingAnalytics";
 import { SubmitButton } from "@/components/SubmitButton";
+import { kampalaDate } from "@/lib/actual-returns";
 import { requireAdmin } from "@/lib/auth";
 import { ugx, units } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function AdminPage() {
-  await requireAdmin();
+  const profile = await requireAdmin();
   const admin = createAdminClient();
+  // Cycles at or within a day of maturity without a recorded actual return.
+  const [year, month, day] = kampalaDate().split("-").map(Number);
+  const tomorrow = new Date(Date.UTC(year, month - 1, day + 1))
+    .toISOString()
+    .slice(0, 10);
+  const { data: returnCandidates } = await admin
+    .from("investment_cycles")
+    .select("id,name")
+    .is("actual_return_bps", null)
+    .eq("legacy_settlement", false)
+    .neq("status", "draft")
+    .lte("maturity_date", tomorrow);
+  const returnsRequired = (
+    await Promise.all(
+      (returnCandidates ?? []).map(async (item) => {
+        const { data } = await admin.rpc("preview_cycle_actual_return", {
+          p_admin_id: profile.id,
+          p_admin_aal2: true,
+          p_cycle_id: item.id,
+        });
+        return (data as { required?: boolean } | null)?.required ? item : null;
+      }),
+    )
+  ).filter((item) => item !== null);
   const [
     { count: pending },
     { count: awaitingActivation },
     { count: active },
     { count: failed },
-    { data: closures },
+    { data: closures, error: closuresError },
     { data: cycle },
     { data: reserved },
     { data: oldestPending, error: oldestPendingError },
@@ -38,7 +64,9 @@ export default async function AdminPage() {
       .in("status", ["failed", "dead"]),
     admin
       .from("account_closure_requests")
-      .select("id,user_id,reason,requested_at,profiles(legal_name,email)")
+      .select(
+        "id,user_id,reason,requested_at,profiles!account_closure_requests_user_id_fkey(legal_name,email)",
+      )
       .eq("status", "requested"),
     admin
       .from("investment_cycles")
@@ -89,6 +117,14 @@ export default async function AdminPage() {
     <>
       <p className="eyebrow">Operations</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Admin overview</h1>
+      {returnsRequired.length > 0 && (
+        <div className="notice actual-return-required" role="alert">
+          <strong>Actual return required</strong> for{" "}
+          {returnsRequired.map((item) => item.name).join(", ")}. Settlement is
+          blocked until it is recorded.{" "}
+          <Link href="/admin/cycles">Record it on the Cycles page</Link>.
+        </div>
+      )}
       <div className="grid">
         <article className="card">
           <p className="muted">Pending applications</p>
@@ -142,7 +178,14 @@ export default async function AdminPage() {
       <NewsletterReadingAnalytics />
       <section style={{ marginTop: "2rem" }}>
         <h2>Closure requests</h2>
-        {(closures ?? []).map((item) => {
+        {closuresError ? (
+          <p role="alert" className="notice">
+            Closure requests could not be loaded. Refresh the page to try again.
+          </p>
+        ) : closures?.length === 0 ? (
+          <p className="muted">No pending closure requests.</p>
+        ) : null}
+        {(!closuresError ? (closures ?? []) : []).map((item) => {
           const owner = item.profiles as unknown as
             { legal_name: string } | { legal_name: string }[] | null;
           return (

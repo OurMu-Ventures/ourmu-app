@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cancelInvestment } from "@/actions/investments";
 import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
+import { DownloadReceiptButton } from "@/components/DownloadReceiptButton";
 import {
   MaturityConfirmAmountsForm,
   MaturityInstructionForm,
@@ -11,7 +12,11 @@ import {
 import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
-import { bpsToPercent, date, ugx } from "@/lib/format";
+import {
+  formatBpsPercent,
+  investmentReturnView,
+} from "@/lib/actual-returns";
+import { date, ugx } from "@/lib/format";
 import {
   safeFulfilledSplits,
   UNAVAILABLE_MATURITY_AMOUNTS,
@@ -33,7 +38,7 @@ export default async function InvestmentPage({
   const { data } = await supabase
     .from("investments")
     .select(
-      "*,investment_agreements(id,pdf_status),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status),investment_cycles(name,opens_at)",
+      "*,investment_agreements(id,pdf_status),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status),investment_cycles(name,opens_at,actual_return_bps,legacy_settlement)",
     )
     .eq("id", id)
     .eq("investor_id", profile.id)
@@ -84,6 +89,8 @@ export default async function InvestmentPage({
         .eq("id", instruction.target_cycle_id)
         .maybeSingle()
     : { data: null };
+  const instructionBasis =
+    instruction?.amount_basis === "actual" ? "actual" : "projected";
   const instructionTerms = instruction
     ? maturityInstructionTerms(
         instruction.choice,
@@ -104,6 +111,15 @@ export default async function InvestmentPage({
         agreement_title: assignedVersion?.title ?? "Participation agreement",
       }
     : null;
+  const sourceCycle = Array.isArray(data.investment_cycles)
+    ? data.investment_cycles[0]
+    : data.investment_cycles;
+  const returns = investmentReturnView(data, sourceCycle);
+  const projectedRate = formatBpsPercent(data.projected_return_bps ?? 3000);
+  const actualRate =
+    returns.actualReturnBps == null
+      ? null
+      : formatBpsPercent(returns.actualReturnBps);
   const isCancellable = data.status === "reserved";
   const isExpired = data.status === "expired";
   const period = investmentPeriod(
@@ -115,7 +131,9 @@ export default async function InvestmentPage({
   return (
     <>
       <p className="eyebrow">Investment record</p>
-      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investment details</h1>
+      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
+        {data.alias || "Investment details"}
+      </h1>
       <p>
         <span className="badge">
           {data.payout_basis === "reported_paid"
@@ -130,25 +148,45 @@ export default async function InvestmentPage({
         </article>
         <article className="card">
           <p className="muted">
-            {data.payout_basis === "reported_paid"
+            {returns.basis === "paid"
               ? "Reported return paid"
-              : "Projected return"}
+              : returns.basis === "actual"
+                ? `Actual return (${actualRate})`
+                : `Projected return (${projectedRate})`}
           </p>
-          <p className="stat">
-            {ugx(data.reported_return_ugx ?? data.projected_return_ugx)}
-          </p>
+          <p className="stat">{ugx(returns.profitUgx)}</p>
+          {returns.basis === "actual" && (
+            <p className="muted">
+              Projected {ugx(returns.projectedProfitUgx)} ({projectedRate})
+            </p>
+          )}
+          {returns.pending && (
+            <p className="badge">Actual return pending</p>
+          )}
         </article>
         <article className="card">
           <p className="muted">
-            {data.payout_basis === "reported_paid"
+            {returns.basis === "paid"
               ? "Reported payout"
-              : "Projected value"}
+              : returns.basis === "actual"
+                ? "Actual value"
+                : "Projected value"}
           </p>
-          <p className="stat">
-            {ugx(data.reported_payout_ugx ?? data.projected_value_ugx)}
-          </p>
+          <p className="stat">{ugx(returns.valueUgx)}</p>
+          {returns.basis === "actual" && (
+            <p className="muted">
+              Projected {ugx(returns.projectedValueUgx)}
+            </p>
+          )}
         </article>
       </div>
+      {returns.revisable && (
+        <p className="notice">
+          The actual return of {actualRate} for this cycle has been published
+          and may still be revised until maturity on{" "}
+          {date(data.maturity_date)}.
+        </p>
+      )}
       <div className="card" style={{ marginTop: "1rem" }}>
         {period && (
           <p>
@@ -181,7 +219,9 @@ export default async function InvestmentPage({
             </Link>
           </Button>
         )}
-        {receipt ? (
+        {data.status === "active" ? (
+          <DownloadReceiptButton investmentId={data.id} />
+        ) : receipt ? (
           receipt.pdf_status === "ready" ? (
             <Button asChild variant="secondary">
               <Link href={`/receipts/${receipt.id}`}>
@@ -199,8 +239,6 @@ export default async function InvestmentPage({
               Receipt {receipt.receipt_number} is generating…
             </p>
           )
-        ) : data.status === "active" ? (
-          <p className="muted">Receipt generation pending…</p>
         ) : null}
         {isCancellable && (
           <div style={{ marginTop: "1rem" }}>
@@ -226,15 +264,32 @@ export default async function InvestmentPage({
         <div className="card" style={{ marginTop: "1rem" }}>
           <p className="eyebrow">Matured investment choices</p>
           <h2>What should happen to this placement?</h2>
-          <p>
-            Projected return{" "}
-            <strong>{bpsToPercent(data.projected_return_bps ?? 3000)}%</strong>{" "}
-            ({ugx(data.projected_return_ugx)}) on {ugx(data.principal_ugx)}{" "}
-            principal. Payouts are scheduled for{" "}
-            <strong>{date(maturityPayoutDateIso(data.maturity_date))}</strong>.
-            The amount actually paid follows the return recorded by the fund,
-            which may differ from this projection.
-          </p>
+          {returns.basis === "actual" ? (
+            <p>
+              Actual return <strong>{actualRate}</strong> (
+              {ugx(returns.profitUgx)}) on {ugx(data.principal_ugx)} principal,
+              against a projected {projectedRate} (
+              {ugx(returns.projectedProfitUgx)}). Payouts are scheduled for{" "}
+              <strong>{date(maturityPayoutDateIso(data.maturity_date))}</strong>
+              .
+            </p>
+          ) : (
+            <p>
+              Projected return <strong>{projectedRate}</strong> (
+              {ugx(data.projected_return_ugx)}) on {ugx(data.principal_ugx)}{" "}
+              principal. Payouts are scheduled for{" "}
+              <strong>{date(maturityPayoutDateIso(data.maturity_date))}</strong>
+              . The amount actually paid follows the return recorded by the
+              fund, which may differ from this projection.
+            </p>
+          )}
+          {returns.pending && (
+            <p className="notice">
+              <strong>Actual return pending.</strong> You can record your
+              choice now on the projected figures; you will confirm any revised
+              amounts before anything is paid or reinvested.
+            </p>
+          )}
           {instructionTerms && <p className="muted">{instructionTerms}</p>}
           {instruction?.status === "requested" && (
             <>
@@ -242,9 +297,9 @@ export default async function InvestmentPage({
                 <h3>Your recorded maturity choice</h3>
                 <p>
                   <strong>{maturityChoiceLabel(instruction.choice)}</strong>{" "}
-                  (projected payout {ugx(instruction.projected_payout_ugx)} ·
-                  projected reinvestment{" "}
-                  {ugx(instruction.projected_reinvest_ugx)}
+                  ({instructionBasis} payout{" "}
+                  {ugx(instruction.projected_payout_ugx)} · {instructionBasis}{" "}
+                  reinvestment {ugx(instruction.projected_reinvest_ugx)}
                   {recordedCycle
                     ? ` · assigned cycle ${recordedCycle.name} (matures ${date(recordedCycle.maturity_date)})`
                     : ""}
@@ -273,7 +328,9 @@ export default async function InvestmentPage({
                 )}
                 investmentId={data.id}
                 principalUgx={Number(data.principal_ugx)}
-                projectedReturnUgx={Number(data.projected_return_ugx)}
+                returnUgx={returns.profitUgx}
+                returnBasis={returns.basis === "actual" ? "actual" : "projected"}
+                actualReturnBps={returns.actualReturnBps}
                 savedDestinations={(destinations ?? []) as SavedDestination[]}
                 assignedCycle={assignedCycle}
                 existingChoice={instruction?.choice}

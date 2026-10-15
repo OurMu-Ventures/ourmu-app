@@ -21,7 +21,8 @@
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "public:scan": "node scripts/public-release-scan.mjs",
     "release:check": "node scripts/release-check.mjs",
-    "db:test:limit-races": "node scripts/test-partner-limit-concurrency.mjs"
+    "db:test:limit-races": "node scripts/test-partner-limit-concurrency.mjs",
+    "db:test:actual-return-races": "node scripts/test-cycle-actual-return-races.mjs"
   },
   "engines": {
     "node": "24.x",

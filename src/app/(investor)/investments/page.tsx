@@ -4,8 +4,13 @@ import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
 import { InvestmentCard } from "@/components/InvestmentCard";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
+import { investmentReturnView } from "@/lib/actual-returns";
 import { requireInvestor } from "@/lib/auth";
-import { canChooseMaturity, investmentPeriod } from "@/lib/investments";
+import {
+  canChooseMaturity,
+  investmentPeriod,
+  investmentTitle,
+} from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentsPage() {
@@ -14,7 +19,7 @@ export default async function InvestmentsPage() {
   const { data } = await supabase
     .from("investments")
     .select(
-      "*,investment_cycles(name,opens_at),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
+      "*,investment_cycles(name,opens_at,actual_return_bps,legacy_settlement),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
     )
     .eq("investor_id", profile.id)
     .order("requested_at", { ascending: false });
@@ -33,10 +38,10 @@ export default async function InvestmentsPage() {
       </div>
       <div className="cycle-list">
         {(data ?? []).map((item) => {
-          const payout =
-            item.payout_basis === "reported_paid"
-              ? (item.reported_payout_ugx ?? item.projected_value_ugx)
-              : item.projected_value_ugx;
+          const cycle = Array.isArray(item.investment_cycles)
+            ? item.investment_cycles[0]
+            : item.investment_cycles;
+          const returns = investmentReturnView(item, cycle);
           const isCancellable = item.status === "reserved";
           const cycleName = Array.isArray(item.investment_cycles)
             ? (item.investment_cycles[0]?.name ?? "OURMU placement")
@@ -48,12 +53,16 @@ export default async function InvestmentsPage() {
             item,
             item.maturity_instructions?.status,
           );
+          const defaultTitle =
+            investmentPeriod(termStart, item.maturity_date) ?? cycleName;
           return (
             <InvestmentCard
               key={item.id}
               item={{
-                name:
-                  investmentPeriod(termStart, item.maturity_date) ?? cycleName,
+                investmentId: item.id,
+                alias: item.alias,
+                defaultTitle,
+                name: investmentTitle(item.alias, defaultTitle),
                 status: item.status,
                 statusLabel:
                   item.payout_basis === "reported_paid"
@@ -61,8 +70,11 @@ export default async function InvestmentsPage() {
                     : item.status,
                 principalUgx: item.principal_ugx,
                 isPaid: item.payout_basis === "reported_paid",
-                profitUgx: Number(payout ?? 0) - Number(item.principal_ugx),
-                payoutUgx: payout ?? 0,
+                returnBasis: returns.basis,
+                returnPending: returns.pending,
+                returnRevisable: returns.revisable,
+                profitUgx: returns.valueUgx - Number(item.principal_ugx),
+                payoutUgx: returns.valueUgx,
                 maturityDate: item.maturity_date,
                 startIso: item.requested_at,
                 detailHref: `/investments/${item.id}`,

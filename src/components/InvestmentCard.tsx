@@ -1,17 +1,28 @@
 import Link from "next/link";
 
 import { InfoHint } from "@/components/InfoHint";
+import { InvestmentAlias } from "@/components/InvestmentAlias";
 import { buttonVariants } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
+import type { ReturnBasis } from "@/lib/actual-returns";
 import { date, ugx } from "@/lib/format";
 import { maturityProgress } from "@/lib/investments";
 
 export type InvestmentCardData = {
+  investmentId: string;
+  alias: string | null;
+  defaultTitle: string;
   name: string;
   status: string;
   statusLabel: string;
   principalUgx: number | string;
   isPaid?: boolean;
+  // Defaults to "paid" when isPaid, otherwise "projected".
+  returnBasis?: ReturnBasis;
+  // Matured without a recorded cycle return.
+  returnPending?: boolean;
+  // Actual return published before maturity; may still be revised.
+  returnRevisable?: boolean;
   profitUgx: number | string;
   payoutUgx: number | string;
   maturityDate: string | null;
@@ -36,12 +47,28 @@ export function InvestmentCard({
     item.status,
   );
   const isPaid = item.isPaid ?? false;
+  const basis: ReturnBasis =
+    item.returnBasis ?? (isPaid ? "paid" : "projected");
+  const basisNote =
+    basis === "actual"
+      ? item.returnRevisable
+        ? "Actual · may be revised until maturity"
+        : "Actual return"
+      : basis === "projected"
+        ? item.returnPending
+          ? "Actual return pending"
+          : "Projected"
+        : null;
   const detailAction = Boolean(item.detailAction) && !isPaid;
   return (
     <article className="card invest-card">
       <div className="invest-head">
         <div>
-          <h3>{item.name}</h3>
+          <InvestmentAlias
+            investmentId={item.investmentId}
+            alias={item.alias}
+            defaultTitle={item.defaultTitle}
+          />
           <p className="invest-amount">
             <span>
               {ugx(item.principalUgx)}{" "}
@@ -61,13 +88,16 @@ export function InvestmentCard({
             <InfoHint
               label="How profit is calculated"
               text={
-                isPaid
+                basis === "paid"
                   ? "Total payout minus principal, using the recorded paid amount."
-                  : "Total payout minus principal, using this placement's projected rate. This is a projection, not a guarantee."
+                  : basis === "actual"
+                    ? "Principal multiplied by the actual return recorded for this cycle."
+                    : "Total payout minus principal, using this placement's projected rate. This is a projection, not a guarantee."
               }
             />
           </span>
           <strong className="invest-profit">{ugx(item.profitUgx)}</strong>
+          {basisNote && <small className="muted">{basisNote}</small>}
         </p>
         <p>
           <span className="invest-stat-label">
@@ -75,9 +105,11 @@ export function InvestmentCard({
             <InfoHint
               label="How total at maturity is calculated"
               text={
-                isPaid
+                basis === "paid"
                   ? "The recorded payout for this paid placement."
-                  : "Principal plus projected profit. This is a projection, not a guarantee."
+                  : basis === "actual"
+                    ? "Principal plus the actual profit recorded for this cycle."
+                    : "Principal plus projected profit. This is a projection, not a guarantee."
               }
             />
           </span>
