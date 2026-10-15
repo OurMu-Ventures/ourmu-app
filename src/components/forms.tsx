@@ -545,9 +545,10 @@ export function ActivationForm({
         Verified bank payment date and time (Africa/Kampala)
         <input name="receivedAt" type="datetime-local" step="1" required />
         <small className="muted">
-          Enter the timestamp verified on the bank statement. Payments must
-          match the reserved cycle and are never moved to another cycle
-          automatically.
+          Enter the actual payment timestamp in Uganda time (UTC+3), even if you
+          are abroad. This field does not convert your computer’s local time.
+          Convert the statement timestamp to Uganda time first. Payments must
+          match the reserved cycle and are never moved automatically.
         </small>
       </label>
       <label>
