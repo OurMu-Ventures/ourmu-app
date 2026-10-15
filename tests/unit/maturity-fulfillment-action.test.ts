@@ -30,6 +30,7 @@ function submission(confirmation?: string) {
   const data = new FormData();
   data.set("instructionId", "00000000-0000-4000-8000-000000000002");
   data.set("actualRoiUgx", "300000");
+  data.set("intent", "complete");
   data.set("payoutReference", "TRANSFER-123");
   data.set("destinationVerified", "yes");
   if (confirmation !== undefined) data.set("confirmation", confirmation);
@@ -43,6 +44,14 @@ beforeEach(() => {
 });
 
 describe("completion confirmation action", () => {
+  it("requires an explicit proposal or completion intent", async () => {
+    const data = submission("yes");
+    data.delete("intent");
+    expect(
+      (await fulfillMaturityInstruction({ ok: false, message: "" }, data)).ok,
+    ).toBe(false);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
   it.each([undefined, "", "FULFILL"])(
     "rejects unconfirmed submissions (%s)",
     async (confirmation) => {
@@ -115,6 +124,38 @@ describe("completion confirmation action", () => {
       submission("yes"),
     );
     expect(result.message).toContain("pending partner confirmation");
+    expect(result.message).toContain("Nothing was paid or reinvested");
+  });
+
+  it("reports an unchanged pending proposal without promising another notification", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: {
+        pending_partner_confirmation: true,
+        already_pending_partner_confirmation: true,
+      },
+      error: null,
+    });
+    const result = await fulfillMaturityInstruction(
+      { ok: false, message: "" },
+      submission("yes"),
+    );
+    expect(result.message).toContain("already awaiting partner confirmation");
+    expect(result.message).toContain("No additional notification was sent");
+  });
+
+  it("submits proposal intent without authorizing completion", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: { already_accepted: true },
+      error: null,
+    });
+    const data = submission("yes");
+    data.set("intent", "propose");
+    const result = await fulfillMaturityInstruction(
+      { ok: false, message: "" },
+      data,
+    );
+    expect(mocks.rpc.mock.calls[0][1].p_confirmation).toBe("PROPOSE");
+    expect(result.message).toContain("already accepted");
     expect(result.message).toContain("Nothing was paid or reinvested");
   });
 });

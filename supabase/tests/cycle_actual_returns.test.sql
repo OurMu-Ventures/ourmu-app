@@ -228,8 +228,14 @@ select is((select principal_ugx::numeric(28,2) from public.investments where id=
 
 -- Projection-based choices keep the revised-amount confirmation -----------------------------------
 select is(pg_temp.fulfill('12')->>'pending_partner_confirmation','true','projection-based choice needs partner confirmation');
+select is(pg_temp.fulfill('12')->>'already_pending_partner_confirmation','true','repeated proposal waits without resending');
+select is(pg_temp.fulfill('12')->>'already_pending_partner_confirmation','true','further stale submissions remain read-only');
+select is((select count(*) from public.jobs where entity_id=pg_temp.i('12') and payload->>'template'='maturity_action_needed'),1::bigint,'repeated proposals queue only one action-needed email');
+select is((select count(*) from public.audit_events where entity_id=pg_temp.mi('12') and action='maturity_instruction.amounts_proposed'),1::bigint,'repeated proposals create only one proposal audit event');
 select is((select proposed_actual_roi_ugx::numeric(28,2) from public.maturity_instructions where id=pg_temp.mi('12')),341875.00::numeric,'proposal uses the cycle rate');
 select lives_ok($$select public.confirm_maturity_amounts('ca000000-0000-4000-8000-000000000002',pg_temp.mi('12'),gen_random_uuid())$$,'partner confirms revised amounts');
+select is((public.fulfill_maturity_instruction('ca000000-0000-4000-8000-000000000001',pg_temp.mi('12'),null,'ACTUAL-REF','PROPOSE',true,gen_random_uuid(),true)->>'already_accepted'),'true','stale proposal dialog cannot complete a confirmed instruction');
+select is((select status::text from public.maturity_instructions where id=pg_temp.mi('12')),'processing','proposal-only call leaves confirmed instruction unfulfilled');
 select is(pg_temp.fulfill('12')->>'fulfilled','true','confirmed projection-based choice fulfilled');
 select is((select actual_payout_ugx::numeric(28,2) from public.maturity_instructions where id=pg_temp.mi('12')),1591875.00::numeric,'paid on the actual return');
 
@@ -239,6 +245,18 @@ select is((select amount_basis||':'||projected_reinvest_ugx::numeric(28,2) from 
 select throws_ok($$select pg_temp.record(pg_temp.c('04'),2735,p_revision=>1)$$,'23514',null,'settled cycles cannot be re-recorded');
 
 -- Investors see the recorded rate immediately -----------------------------------------------------
+reset role;
+select pg_temp.investment('18','06',1000000,'matured');
+set local role service_role;
+select pg_temp.submit('18','withdraw_all');
+select pg_temp.begin('18');
+select is(pg_temp.fulfill('18',200000)->>'pending_partner_confirmation','true','legacy revised ROI is proposed');
+select is(pg_temp.fulfill('18',200000)->>'already_pending_partner_confirmation','true','legacy unchanged proposal does not resend');
+select is(pg_temp.fulfill('18',250000)->>'pending_partner_confirmation','true','legacy changed ROI can still be proposed');
+select is((select count(*) from public.jobs where entity_id=pg_temp.i('18') and payload->>'template'='maturity_action_needed'),2::bigint,'only distinct legacy proposals notify');
+select lives_ok($$select public.confirm_maturity_amounts('ca000000-0000-4000-8000-000000000002',pg_temp.mi('18'),gen_random_uuid())$$,'partner confirms changed legacy ROI');
+select is(pg_temp.fulfill('18',250000)->>'fulfilled','true','confirmed legacy proposal still fulfills');
+
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"ca000000-0000-4000-8000-000000000002","role":"authenticated"}',true);

@@ -75,7 +75,9 @@ original expiration, provided they have not been revoked.
 
 ## Admin payout destination setup
 
-When completing a maturity instruction, select **Review completion** to see the partner, payout, reinvestment, destination cycle, and external payout reference. Select **Cancel** to return to the form, or **Confirm completion** to submit. Payout references and verified destinations remain required whenever the actual payout is positive. Completion records an external payment; it does not send money. Revised amounts still require partner confirmation before settlement.
+When completing a maturity instruction, select **Review completion** to see the partner, payout, reinvestment, destination cycle, and external payout reference. Select **Cancel** to return to the form, or **Confirm completion** to submit. If the actual return differs from the amounts already accepted, the form instead offers **Review revised amounts** and **Send revised amounts to partner**. The completion form is hidden while confirmation is pending and returns once the partner confirms. Payout references and verified destinations remain required whenever the actual payout is positive. Completion records an external payment; it does not send money.
+
+Apply `20261015001106_idempotent_maturity_amount_proposals.sql` before deploying this follow-up. Repeated submissions of the same pending return are read-only: they return the pending status without another email or proposal audit event. A genuinely changed return still requires a new proposal and partner confirmation. Sending revised amounts never settles the instruction, including when the partner has confirmed from another tab while the dialog was open; the admin must review completion separately.
 
 Apply migration `20261005134923_admin_maturity_payout_destination.sql` before deploying the admin form. The runtime must have the existing payout encryption master key and Supabase service-role configuration.
 

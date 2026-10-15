@@ -24,6 +24,7 @@ const base = {
   instructionId: "00000000-0000-4000-8000-000000000002",
   partnerName: "Example Partner",
   principalUgx: 1_000_000,
+  acceptedAmounts: { payoutUgx: 1_300_000, reinvestUgx: 0 },
   choice: "withdraw_all" as const,
   actualReturn: {
     kind: "cycle" as const,
@@ -63,7 +64,9 @@ function reviewPayout() {
     target: { value: "TRANSFER-123" },
   });
   fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.click(screen.getByRole("button", { name: "Review completion" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: /Review (completion|revised amounts)/ }),
+  );
 }
 
 describe("maturity completion review", () => {
@@ -167,6 +170,59 @@ describe("maturity completion review", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getAllByText("UGX 600,000.00")).toHaveLength(2);
     expect(within(dialog).getByText("October 2026")).toBeVisible();
+  });
+
+  it("explicitly reviews and sends revised amounts rather than claiming completion", async () => {
+    render(
+      <MaturityFulfillmentForm
+        {...base}
+        actualReturn={{
+          kind: "cycle",
+          actualRoiUgx: 200000,
+          actualReturnBps: 2000,
+        }}
+      />,
+    );
+    reviewPayout();
+    const dialog = screen.getByRole("dialog", {
+      name: "Review revised amounts for partner",
+    });
+    expect(
+      within(dialog).getByText(/will not complete the payout or reinvestment/),
+    ).toBeVisible();
+    expect(
+      within(dialog).queryByRole("button", { name: "Confirm completion" }),
+    ).toBeNull();
+    expect(within(dialog).getByText("UGX 1,200,000.00")).toBeVisible();
+    await act(async () =>
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name: "Send revised amounts to partner",
+        }),
+      ),
+    );
+    expect(fulfillMaturityInstruction).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(fulfillMaturityInstruction).mock.calls[0][1].get("intent"),
+    ).toBe("propose");
+  });
+
+  it("offers completion after the partner confirms the actual amounts", () => {
+    render(
+      <MaturityFulfillmentForm
+        {...base}
+        acceptedAmounts={{
+          payoutUgx: 1400000,
+          reinvestUgx: 0,
+          proposedRoiUgx: 300000,
+          confirmedRoiUgx: 300000,
+        }}
+      />,
+    );
+    reviewPayout();
+    expect(
+      screen.getByRole("button", { name: "Confirm completion" }),
+    ).toBeVisible();
   });
 
   it("reviews reinvestment without asking for a payout reference", () => {
