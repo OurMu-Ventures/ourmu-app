@@ -310,6 +310,7 @@ export async function fulfillMaturityInstruction(
     payoutReference: formData.get("payoutReference") ?? "",
     destinationVerified: formData.get("destinationVerified") ?? "",
     confirmation: formData.get("confirmation"),
+    intent: formData.get("intent"),
   });
   if (!parsed.success)
     return {
@@ -330,7 +331,7 @@ export async function fulfillMaturityInstruction(
       ? Number(parsed.data.actualRoiUgx)
       : null) as unknown as number,
     p_payout_reference: parsed.data.payoutReference?.trim() || "",
-    p_confirmation: "FULFILL",
+    p_confirmation: parsed.data.intent === "propose" ? "PROPOSE" : "FULFILL",
     p_admin_aal2: aal?.currentLevel === "aal2",
     p_request_id: requestId(),
     p_destination_verified: parsed.data.destinationVerified === "yes",
@@ -346,6 +347,8 @@ export async function fulfillMaturityInstruction(
     held?: boolean;
     reason?: string;
     pending_partner_confirmation?: boolean;
+    already_pending_partner_confirmation?: boolean;
+    already_accepted?: boolean;
   } | null;
   if (outcome?.held)
     return {
@@ -355,8 +358,14 @@ export async function fulfillMaturityInstruction(
   if (outcome?.pending_partner_confirmation)
     return {
       ok: true,
-      message:
-        "The actual return differs from the projection, so the new amounts are pending partner confirmation. Nothing was paid or reinvested yet.",
+      message: outcome.already_pending_partner_confirmation
+        ? "These amounts are already awaiting partner confirmation. No additional notification was sent. Nothing was paid or reinvested."
+        : "The actual return differs from the projection, so the new amounts are pending partner confirmation. Nothing was paid or reinvested yet.",
+    };
+  if (outcome?.already_accepted)
+    return {
+      ok: true,
+      message: "These amounts are already accepted. Review completion to finish the instruction. Nothing was paid or reinvested.",
     };
   return { ok: true, message: "Maturity instruction fulfilled atomically." };
 }

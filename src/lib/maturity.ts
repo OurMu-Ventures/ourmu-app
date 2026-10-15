@@ -101,6 +101,41 @@ export type CustomMaturityBasis = {
   projectedReinvestUgx?: number;
 };
 
+export type MaturityAmountAcceptance = {
+  payoutUgx: number;
+  reinvestUgx: number;
+  acceptedOnCurrentRate?: boolean;
+  proposedRoiUgx?: number | null;
+  confirmedRoiUgx?: number | null;
+};
+
+// Mirrors the amount-confirmation branch in fulfill_maturity_instruction.
+// Equal projections can settle directly; a changed return needs acceptance.
+export function requiresMaturityAmountConfirmation(
+  principalUgx: number,
+  actualRoiUgx: number,
+  acceptance: MaturityAmountAcceptance,
+): boolean {
+  try {
+    const roi = moneyUnits(actualRoiUgx);
+    if (acceptance.proposedRoiUgx != null)
+      return (
+        moneyUnits(acceptance.proposedRoiUgx) !== roi ||
+        acceptance.confirmedRoiUgx == null ||
+        moneyUnits(acceptance.confirmedRoiUgx) !== roi
+      );
+    if (acceptance.acceptedOnCurrentRate) return false;
+    return (
+      moneyUnits(acceptance.payoutUgx) +
+        moneyUnits(acceptance.reinvestUgx) -
+        moneyUnits(principalUgx) !==
+      roi
+    );
+  } catch {
+    return true;
+  }
+}
+
 export function maturityInstructionTerms(
   choice: MaturityChoice,
   requestedWithdrawalUgx?: number | null,

@@ -346,6 +346,7 @@ export default async function AdminMaturitiesPage({
                 item.status === "processing" &&
                 !item.needs_resolution &&
                 !actualReturnPending &&
+                !awaitingConfirmation &&
                 source && (
                   <MaturityFulfillmentForm
                     instructionId={item.id}
@@ -353,6 +354,15 @@ export default async function AdminMaturitiesPage({
                     principalUgx={Number(source.principal_ugx)}
                     choice={item.choice}
                     targetCycleName={target?.name}
+                    acceptedAmounts={{
+                      payoutUgx: Number(item.projected_payout_ugx),
+                      reinvestUgx: Number(item.projected_reinvest_ugx),
+                      proposedRoiUgx: item.proposed_actual_roi_ugx,
+                      confirmedRoiUgx: item.confirmed_actual_roi_ugx,
+                      acceptedOnCurrentRate: item.amount_basis === "actual" &&
+                        sourceCycle?.actual_return_bps != null &&
+                        item.basis_actual_return_bps === sourceCycle.actual_return_bps,
+                    }}
                     customBasis={
                       item.requested_withdrawal_ugx == null
                         ? undefined

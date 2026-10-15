@@ -24,8 +24,10 @@ import {
   customWithdrawalError,
   maturitySplits,
   safeFulfilledSplits,
+  requiresMaturityAmountConfirmation,
   UNAVAILABLE_MATURITY_AMOUNTS,
   type CustomMaturityBasis,
+  type MaturityAmountAcceptance,
   type MaturityChoice,
 } from "@/lib/maturity";
 import { initialActionState } from "@/lib/validation";
@@ -416,6 +418,7 @@ export function MaturityFulfillmentForm({
   choice,
   customBasis,
   targetCycleName,
+  acceptedAmounts,
   actualReturn,
 }: {
   instructionId: string;
@@ -424,6 +427,7 @@ export function MaturityFulfillmentForm({
   choice: MaturityChoice;
   customBasis?: CustomMaturityBasis;
   targetCycleName?: string;
+  acceptedAmounts: MaturityAmountAcceptance;
   actualReturn: FulfillmentReturn;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -438,6 +442,7 @@ export function MaturityFulfillmentForm({
     reinvestUgx: number;
     payoutReference: string;
     destinationVerified: string;
+    requiresPartnerConfirmation: boolean;
   } | null>(null);
   const [previewError, setPreviewError] = useState("");
   const [state, action, pending] = useActionState(
@@ -458,6 +463,11 @@ export function MaturityFulfillmentForm({
       ? null
       : safeFulfilledSplits(principalUgx, Number(roi), choice, customBasis);
   const needsPayout = split ? split.payoutUgx > 0 : choice !== "reinvest_all";
+  const requiresPartnerConfirmation = requiresMaturityAmountConfirmation(
+    principalUgx,
+    Number(roi),
+    acceptedAmounts,
+  );
 
   useEffect(() => {
     if (preview && dialog.current && !dialog.current.open) {
@@ -504,6 +514,7 @@ export function MaturityFulfillmentForm({
             ...split,
             payoutReference: String(data.get("payoutReference") ?? "").trim(),
             destinationVerified: String(data.get("destinationVerified") ?? ""),
+            requiresPartnerConfirmation,
           });
         }}
       >
@@ -571,7 +582,9 @@ export function MaturityFulfillmentForm({
           className="button"
           disabled={pending}
         >
-          Review completion
+          {requiresPartnerConfirmation
+            ? "Review revised amounts"
+            : "Review completion"}
         </button>
         {previewError && (
           <p role="alert" className="notice">
@@ -608,11 +621,25 @@ export function MaturityFulfillmentForm({
           }}
         >
           <form className="form" action={action}>
-            <h2 id={titleId}>Confirm instruction completion</h2>
+            <h2 id={titleId}>
+              {preview.requiresPartnerConfirmation
+                ? "Review revised amounts for partner"
+                : "Confirm instruction completion"}
+            </h2>
             <p id={descriptionId}>
-              Review the amounts for <strong>{partnerName}</strong> before
-              completing this instruction. This records completion; it does not
-              send money.
+              {preview.requiresPartnerConfirmation ? (
+                <>
+                  Send these revised amounts to <strong>{partnerName}</strong>{" "}
+                  for confirmation. This will not complete the payout or
+                  reinvestment.
+                </>
+              ) : (
+                <>
+                  Review the amounts for <strong>{partnerName}</strong> before
+                  completing this instruction. This records completion; it does
+                  not send money.
+                </>
+              )}
             </p>
             <dl className="maturity-confirmation-amounts">
               <div>
@@ -641,9 +668,9 @@ export function MaturityFulfillmentForm({
               )}
             </dl>
             <p className="muted">
-              If revised amounts need partner confirmation or an instruction
-              needs resolution, completion will wait until those checks are
-              satisfied.
+              {preview.requiresPartnerConfirmation
+                ? "After the partner confirms, return here to complete the instruction."
+                : "If the instruction needs resolution, completion will wait until those checks are satisfied."}
             </p>
             <input type="hidden" name="instructionId" value={instructionId} />
             <input type="hidden" name="actualRoiUgx" value={preview.roi} />
@@ -658,6 +685,13 @@ export function MaturityFulfillmentForm({
               value={preview.destinationVerified}
             />
             <input type="hidden" name="confirmation" value="yes" />
+            <input
+              type="hidden"
+              name="intent"
+              value={
+                preview.requiresPartnerConfirmation ? "propose" : "complete"
+              }
+            />
             <div className="maturity-confirmation-actions">
               <button
                 type="button"
@@ -667,7 +701,11 @@ export function MaturityFulfillmentForm({
               >
                 Cancel
               </button>
-              <ActionButton>Confirm completion</ActionButton>
+              <ActionButton>
+                {preview.requiresPartnerConfirmation
+                  ? "Send revised amounts to partner"
+                  : "Confirm completion"}
+              </ActionButton>
             </div>
           </form>
         </dialog>

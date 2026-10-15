@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   payoutBasis: "reported_paid",
   status: "requested",
   calls: [] as unknown[][],
   error: null as { message: string } | null,
+  proposedRoi: null as number | null,
+  confirmedRoi: null as number | null,
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({
@@ -44,10 +46,13 @@ vi.mock("@/lib/supabase/admin", () => ({
               created_at: "2026-10-01T12:00:00Z",
               projected_payout_ugx: 0,
               projected_reinvest_ugx: 325000,
+              proposed_actual_roi_ugx: state.proposedRoi,
+              confirmed_actual_roi_ugx: state.confirmedRoi,
               profiles: { legal_name: "Partner" },
               investments: {
                 principal_ugx: 250000,
                 payout_basis: state.payoutBasis,
+                source_cycle: { actual_return_bps: 3000, legacy_settlement: false },
               },
               investment_cycles: null,
               payout_destinations: null,
@@ -61,6 +66,32 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 import AdminMaturitiesPage from "@/app/(admin)/admin/(console)/maturities/page";
+
+beforeEach(() => {
+  state.proposedRoi = null;
+  state.confirmedRoi = null;
+});
+
+describe("pending partner confirmation", () => {
+  it("hides completion while the proposal is awaiting confirmation", async () => {
+    state.payoutBasis = "projected";
+    state.status = "processing";
+    state.proposedRoi = 75000;
+    const html = renderToStaticMarkup(await AdminMaturitiesPage({}));
+    expect(html).toContain("Awaiting partner confirmation");
+    expect(html).not.toContain("Fulfill instruction");
+  });
+
+  it("restores completion once the partner confirms", async () => {
+    state.payoutBasis = "projected";
+    state.status = "processing";
+    state.proposedRoi = 75000;
+    state.confirmedRoi = 75000;
+    const html = renderToStaticMarkup(await AdminMaturitiesPage({}));
+    expect(html).not.toContain("Awaiting partner confirmation");
+    expect(html).toContain("Fulfill instruction");
+  });
+});
 
 describe("paid records in the admin maturity queue", () => {
   it.each(["requested", "processing"])(

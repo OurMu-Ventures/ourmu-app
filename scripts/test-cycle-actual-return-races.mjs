@@ -97,6 +97,26 @@ try {
   assert.equal(outcome.pending_partner_confirmation, true, fulfillment);
   assert.equal(Number(outcome.proposed_actual_roi_ugx), 250000, "fulfillment used the committed cycle rate");
   console.log("PASS: fulfillment serializes behind a late entry and settles on the committed rate");
+
+  // In this disposable database, clear the proposal to race two first
+  // submissions. The earlier proposal remains in the audit/email counts.
+  await successful(`update public.maturity_instructions
+    set proposed_actual_roi_ugx=null, confirmed_actual_roi_ugx=null
+    where investment_id='${pastInvestment}';`);
+  const propose = `select public.fulfill_maturity_instruction('${admin}',
+    (select id from public.maturity_instructions where investment_id='${pastInvestment}'),
+    null,'RACE-REF','FULFILL',true,gen_random_uuid(),true);`;
+  const firstProposal = query(`begin; set application_name='maturity-proposal-race'; ${propose} select pg_sleep(1); commit;`);
+  await waitForSleep("maturity-proposal-race");
+  const repeatedProposal = JSON.parse((await successful(propose)).trim());
+  assert.equal((await firstProposal).code, 0, "first proposal commits");
+  assert.equal(repeatedProposal.already_pending_partner_confirmation, true);
+  assert.equal((await successful(`select count(*) from public.jobs where entity_id='${pastInvestment}'
+    and payload->>'template'='maturity_action_needed';`)).trim(), "2", "one new email across both competing calls");
+  assert.equal((await successful(`select count(*) from public.audit_events
+    where entity_id=(select id from public.maturity_instructions where investment_id='${pastInvestment}')
+    and action='maturity_instruction.amounts_proposed';`)).trim(), "2", "one new audit event across both competing calls");
+  console.log("PASS: concurrent identical proposals notify and audit only once");
 } finally {
   const dropped = await run(["dropdb", "-U", "supabase_admin", database]);
   assert.equal(dropped.code, 0, dropped.output);
