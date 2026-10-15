@@ -23,13 +23,28 @@ export default async function AdminActivationsPage({
   const activationResult = activatedId.success
     ? await admin
         .from("investments")
-        .select("id,principal_ugx,profiles(legal_name),investment_cycles(name)")
+        .select(
+          "id,principal_ugx,activated_at,profiles(legal_name),investment_cycles(name)",
+        )
         .eq("id", activatedId.data)
         .eq("status", "active")
         .eq("record_origin", "portal")
         .maybeSingle()
     : null;
-  const activated = activationResult?.error ? null : activationResult?.data;
+  const activeInvestment = activationResult?.error
+    ? null
+    : activationResult?.data;
+  const activatedAt = activeInvestment?.activated_at
+    ? Date.parse(activeInvestment.activated_at)
+    : NaN;
+  // eslint-disable-next-line react-hooks/purity -- time-bound server-rendered confirmation
+  const activationAge = Date.now() - activatedAt;
+  const activated =
+    Number.isFinite(activationAge) &&
+    activationAge >= 0 &&
+    activationAge <= 5 * 60_000
+      ? activeInvestment
+      : null;
   const rawPage = typeof params.page === "string" ? params.page : "";
   const parsedPage = Number(rawPage);
   const page =
@@ -83,7 +98,7 @@ export default async function AdminActivationsPage({
           <Link href="/admin/activations">Dismiss</Link>
         </div>
       )}
-      {activatedId.success && !activated && (
+      {activatedId.success && !activeInvestment && (
         <p className="notice" role="alert">
           Activation status could not be confirmed. Check Investments before
           trying again.

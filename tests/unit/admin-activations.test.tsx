@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   requireAdmin: vi.fn(async () => ({ id: "admin-1" })),
@@ -98,6 +98,7 @@ function reservation(id: string, overrides: Record<string, unknown> = {}) {
   return {
     id,
     status: "reserved",
+    activated_at: "2026-10-15T13:59:00Z",
     record_origin: "portal",
     payout_basis: "projected",
     principal_ugx: 250000,
@@ -111,7 +112,10 @@ function reservation(id: string, overrides: Record<string, unknown> = {}) {
   };
 }
 
+afterEach(() => vi.restoreAllMocks());
+
 beforeEach(() => {
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-15T14:00:00Z"));
   state.rows = [];
   state.calls = [];
   state.error = false;
@@ -246,5 +250,42 @@ describe("activation success confirmation", () => {
     expect(
       state.calls.some((call) => call.method === "eq" && call.args[0] === "id"),
     ).toBe(false);
+  });
+});
+
+describe("activation confirmation freshness", () => {
+  const id = "aaea827d-83cf-407a-a3f4-8a7e91af181f";
+  it.each([
+    null,
+    "not-a-date",
+    "2026-10-15T14:01:00Z",
+    "2026-10-15T13:54:59Z",
+    "2026-01-01T00:00:00Z",
+  ])(
+    "does not show success for stale or invalid activated_at %s",
+    async (activated_at) => {
+      state.rows = [reservation(id, { status: "active", activated_at })];
+      const html = renderToStaticMarkup(
+        await AdminActivationsPage({
+          searchParams: Promise.resolve({ activated: id }),
+        }),
+      );
+      expect(html).not.toContain("Investment activated successfully.");
+      expect(html).not.toContain("Activation status could not be confirmed");
+    },
+  );
+  it("includes the five-minute boundary", async () => {
+    state.rows = [
+      reservation(id, {
+        status: "active",
+        activated_at: "2026-10-15T13:55:00Z",
+      }),
+    ];
+    const html = renderToStaticMarkup(
+      await AdminActivationsPage({
+        searchParams: Promise.resolve({ activated: id }),
+      }),
+    );
+    expect(html).toContain("Investment activated successfully.");
   });
 });

@@ -36,6 +36,9 @@ const rules: Record<string, string> = {
     "This activation would exceed the partner’s limit for this cycle. Review their other investments and reservations with staff.",
 };
 
+// Contract tests compare this set with the latest migration-defined function.
+export const ACTIVATION_DATABASE_MESSAGES = Object.freeze(Object.keys(rules));
+
 export function activationErrorMessage(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
   const { message, code } = error as { message?: unknown; code?: unknown };
