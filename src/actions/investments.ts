@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import {
@@ -219,11 +220,9 @@ export async function activateInvestment(
   revalidatePath("/admin/activations");
   revalidatePath("/admin/investments");
   revalidatePath("/admin");
-  return {
-    ok: true,
-    message:
-      "Investment activated atomically; agreement and email jobs are queued.",
-  };
+  redirect(
+    `/admin/activations?activated=${parsed.data.investmentId}#activation-success`,
+  );
 }
 
 export async function expireInvestment(

@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  }),
+}));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/lib/auth", () => ({
   requireInvestor: vi.fn(),
@@ -102,7 +107,9 @@ describe("activation error reporting action", () => {
     log.mockRestore();
   });
   it("leaves the successful activation path intact", async () => {
-    expect((await activateInvestment(initial, form())).ok).toBe(true);
+    await expect(activateInvestment(initial, form())).rejects.toThrow(
+      "NEXT_REDIRECT:/admin/activations?activated=aaea827d-83cf-407a-a3f4-8a7e91af181f#activation-success",
+    );
     expect(revalidatePath).toHaveBeenCalledWith("/admin/activations");
   });
 });

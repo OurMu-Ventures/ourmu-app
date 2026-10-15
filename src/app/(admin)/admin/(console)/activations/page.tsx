@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { z } from "zod";
 
 import { ActivationForm, ExpireReservationForm } from "@/components/forms";
 import { requireAdmin } from "@/lib/auth";
@@ -10,11 +11,25 @@ const PAGE_SIZE = 25;
 export default async function AdminActivationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string | string[] }>;
+  searchParams: Promise<{
+    page?: string | string[];
+    activated?: string | string[];
+  }>;
 }) {
   await requireAdmin();
   const admin = createAdminClient();
   const params = await searchParams;
+  const activatedId = z.uuid().safeParse(params.activated);
+  const activationResult = activatedId.success
+    ? await admin
+        .from("investments")
+        .select("id,principal_ugx,profiles(legal_name),investment_cycles(name)")
+        .eq("id", activatedId.data)
+        .eq("status", "active")
+        .eq("record_origin", "portal")
+        .maybeSingle()
+    : null;
+  const activated = activationResult?.error ? null : activationResult?.data;
   const rawPage = typeof params.page === "string" ? params.page : "";
   const parsedPage = Number(rawPage);
   const page =
@@ -44,6 +59,36 @@ export default async function AdminActivationsPage({
     <>
       <p className="eyebrow">Pending investment reservations</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Activations</h1>
+      {activated && (
+        <div
+          id="activation-success"
+          className="success"
+          role="status"
+          tabIndex={-1}
+        >
+          <strong>Investment activated successfully.</strong>
+          <p>
+            {activated.profiles?.legal_name ?? "Partner"} ·{" "}
+            {ugx(activated.principal_ugx)} ·{" "}
+            {activated.investment_cycles?.name ?? "Investment cycle"}
+          </p>
+          <p>
+            The investment is now active and has been removed from the pending
+            queue. Receipt and agreement downloads will appear under Investments
+            when ready.
+          </p>
+          <Link className="button-secondary" href="/admin/investments">
+            View investments
+          </Link>{" "}
+          <Link href="/admin/activations">Dismiss</Link>
+        </div>
+      )}
+      {activatedId.success && !activated && (
+        <p className="notice" role="alert">
+          Activation status could not be confirmed. Check Investments before
+          trying again.
+        </p>
+      )}
       <p className="notice">
         Compare bank statements independently before activating a reservation.
         Confirm the exact amount, a unique bank reference, the verified payment

@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   requireAdmin: vi.fn(async () => ({ id: "admin-1" })),
   rows: [] as Array<Record<string, unknown>>,
   error: false,
+  confirmationError: false,
   calls: [] as Array<{ method: string; args: unknown[] }>,
 }));
 vi.mock("server-only", () => ({}));
@@ -60,6 +61,12 @@ vi.mock("@/lib/supabase/admin", () => ({
           orders.push(field);
           return record("order", field, options);
         },
+        maybeSingle: async () => ({
+          data:
+            state.rows.find((row) => filters.every((filter) => filter(row))) ??
+            null,
+          error: state.confirmationError ? { message: "Unavailable" } : null,
+        }),
         range: async (from: number, to: number) => {
           record("range", from, to);
           const rows = state.rows
@@ -108,6 +115,7 @@ beforeEach(() => {
   state.rows = [];
   state.calls = [];
   state.error = false;
+  state.confirmationError = false;
   state.requireAdmin.mockReset().mockResolvedValue({ id: "admin-1" });
 });
 
@@ -183,5 +191,60 @@ describe("admin activation queue", () => {
       AdminActivationsPage({ searchParams: Promise.resolve({}) }),
     ).rejects.toThrow("Admin required");
     expect(state.calls).toHaveLength(0);
+  });
+});
+
+describe("activation success confirmation", () => {
+  const activatedId = "aaea827d-83cf-407a-a3f4-8a7e91af181f";
+  it("shows the activated partner and amount even after its card leaves the pending queue", async () => {
+    state.rows = [
+      reservation(activatedId, { status: "active", principal_ugx: 1250000 }),
+    ];
+    const html = renderToStaticMarkup(
+      await AdminActivationsPage({
+        searchParams: Promise.resolve({ activated: activatedId }),
+      }),
+    );
+    expect(html).toContain("Investment activated successfully.");
+    expect(html).toContain(`Partner ${activatedId}`);
+    expect(html).toContain("1,250,000");
+    expect(html).toContain("Cycle One");
+    expect(html).toContain('id="activation-success"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain("View investments");
+    expect(html).toContain("No investments awaiting activation.");
+    expect(html).not.toContain("data-investment=");
+  });
+  it("does not claim success for a reservation still pending", async () => {
+    state.rows = [reservation(activatedId)];
+    const html = renderToStaticMarkup(
+      await AdminActivationsPage({
+        searchParams: Promise.resolve({ activated: activatedId }),
+      }),
+    );
+    expect(html).not.toContain("Investment activated successfully.");
+    expect(html).toContain("Activation status could not be confirmed");
+  });
+  it("does not claim success when confirmation cannot be loaded", async () => {
+    state.rows = [reservation(activatedId, { status: "active" })];
+    state.confirmationError = true;
+    const html = renderToStaticMarkup(
+      await AdminActivationsPage({
+        searchParams: Promise.resolve({ activated: activatedId }),
+      }),
+    );
+    expect(html).not.toContain("Investment activated successfully.");
+    expect(html).toContain("Check Investments before trying again.");
+  });
+  it("ignores invalid activation identifiers", async () => {
+    const html = renderToStaticMarkup(
+      await AdminActivationsPage({
+        searchParams: Promise.resolve({ activated: "untrusted" }),
+      }),
+    );
+    expect(html).not.toContain("Investment activated successfully.");
+    expect(
+      state.calls.some((call) => call.method === "eq" && call.args[0] === "id"),
+    ).toBe(false);
   });
 });
