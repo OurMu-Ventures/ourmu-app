@@ -524,12 +524,27 @@ export function ActivationForm({
     activateInvestment,
     initialActionState,
   );
+  const [values, setValues] = useState({
+    bankReference: "",
+    receivedAmountUgx: String(expectedAmount),
+    receivedAt: "",
+    receivedDate: "",
+    confirmation: "",
+  });
+  const changeValue = (name: keyof typeof values, value: string) =>
+    setValues((previous) => ({ ...previous, [name]: value }));
   return (
     <form className="form" action={action}>
       <input type="hidden" name="investmentId" value={investmentId} />
       <label>
         Bank reference
-        <input name="bankReference" autoComplete="off" required />
+        <input
+          name="bankReference"
+          autoComplete="off"
+          value={values.bankReference}
+          onChange={(event) => changeValue("bankReference", event.target.value)}
+          required
+        />
       </label>
       <label>
         Exact amount received (UGX)
@@ -537,22 +552,39 @@ export function ActivationForm({
           name="receivedAmountUgx"
           type="number"
           step="0.00000001"
-          defaultValue={expectedAmount}
+          value={values.receivedAmountUgx}
+          onChange={(event) =>
+            changeValue("receivedAmountUgx", event.target.value)
+          }
           required
         />
       </label>
       <label>
         Verified bank payment date and time (Africa/Kampala)
-        <input name="receivedAt" type="datetime-local" step="1" required />
+        <input
+          name="receivedAt"
+          type="datetime-local"
+          step="1"
+          value={values.receivedAt}
+          onChange={(event) => changeValue("receivedAt", event.target.value)}
+          required
+        />
         <small className="muted">
-          Enter the timestamp verified on the bank statement. Payments must
-          match the reserved cycle and are never moved to another cycle
-          automatically.
+          Enter the actual payment timestamp in Uganda time (UTC+3), even if you
+          are abroad. This field does not convert your computer’s local time.
+          Convert the statement timestamp to Uganda time first. Payments must
+          match the reserved cycle and are never moved automatically.
         </small>
       </label>
       <label>
         Received date
-        <input name="receivedDate" type="date" required />
+        <input
+          name="receivedDate"
+          type="date"
+          value={values.receivedDate}
+          onChange={(event) => changeValue("receivedDate", event.target.value)}
+          required
+        />
         <small className="muted">
           Kept for historical receipts and reporting; must match the Kampala
           date of the verified timestamp above.
@@ -560,7 +592,13 @@ export function ActivationForm({
       </label>
       <label>
         Type ACTIVATE
-        <input name="confirmation" autoComplete="off" required />
+        <input
+          name="confirmation"
+          autoComplete="off"
+          value={values.confirmation}
+          onChange={(event) => changeValue("confirmation", event.target.value)}
+          required
+        />
       </label>
       <ActionButton>Activate investment</ActionButton>
       <StateMessage state={state} />

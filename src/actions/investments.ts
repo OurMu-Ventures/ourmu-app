@@ -2,8 +2,13 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import {
+  activationErrorMessage,
+  activationErrorCode,
+} from "@/lib/activation-errors";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import { ugx } from "@/lib/format";
 import { requireAdmin, requireInvestor } from "@/lib/auth";
@@ -185,6 +190,7 @@ export async function activateInvestment(
   const { data: aal } =
     await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const admin = createAdminClient();
+  const activationRequestId = requestId();
   const { error } = await admin.rpc("activate_investment", {
     p_admin_id: profile.id,
     p_investment_id: parsed.data.investmentId,
@@ -193,25 +199,30 @@ export async function activateInvestment(
     p_received_date: parsed.data.receivedDate,
     p_confirmation: parsed.data.confirmation,
     p_admin_aal2: aal?.currentLevel === "aal2",
-    p_request_id: requestId(),
+    p_request_id: activationRequestId,
     p_received_at: receivedAtIso as unknown as string,
   });
-  if (error)
+  if (error) {
+    const reason = activationErrorMessage(error);
+    console.error("investment.activation_failed", {
+      requestId: activationRequestId,
+      investmentId: parsed.data.investmentId,
+      code: activationErrorCode(error),
+      recognized: reason !== null,
+    });
     return {
       ok: false,
-      message: publicError(
-        error,
-        "Activation failed. No records were changed.",
-      ),
+      message: reason
+        ? `${reason} No records were changed.`
+        : `Activation could not be completed. No records were changed. Contact support with reference ${activationRequestId}.`,
     };
+  }
   revalidatePath("/admin/activations");
   revalidatePath("/admin/investments");
   revalidatePath("/admin");
-  return {
-    ok: true,
-    message:
-      "Investment activated atomically; agreement and email jobs are queued.",
-  };
+  redirect(
+    `/admin/activations?activated=${parsed.data.investmentId}#activation-success`,
+  );
 }
 
 export async function expireInvestment(
