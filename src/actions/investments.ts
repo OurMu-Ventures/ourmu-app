@@ -12,7 +12,6 @@ import {
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import { ugx } from "@/lib/format";
 import { requireAdmin, requireInvestor } from "@/lib/auth";
-import { kampalaLocalToIso } from "@/lib/cycle-assignment";
 import { publicError, requestId, toBytea } from "@/lib/db";
 import { fingerprintRequestValue } from "@/lib/security/crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -169,22 +168,13 @@ export async function activateInvestment(
     bankReference: formData.get("bankReference"),
     receivedAmountUgx: formData.get("receivedAmountUgx"),
     receivedDate: formData.get("receivedDate"),
-    receivedAt: formData.get("receivedAt") ?? undefined,
     confirmation: formData.get("confirmation"),
   });
   if (!parsed.success)
     return {
       ok: false,
       message:
-        "Check the bank receipt details, including the verified payment date and time (Africa/Kampala), and type ACTIVATE exactly.",
-    };
-  const receivedAtIso = parsed.data.receivedAt
-    ? kampalaLocalToIso(parsed.data.receivedAt)
-    : null;
-  if (parsed.data.receivedAt && !receivedAtIso)
-    return {
-      ok: false,
-      message: "Enter a valid verified payment date and time.",
+        "Check the bank receipt details, including the payment received date (Uganda calendar date), and type ACTIVATE exactly.",
     };
   const supabase = await createClient();
   const { data: aal } =
@@ -200,7 +190,6 @@ export async function activateInvestment(
     p_confirmation: parsed.data.confirmation,
     p_admin_aal2: aal?.currentLevel === "aal2",
     p_request_id: activationRequestId,
-    p_received_at: receivedAtIso as unknown as string,
   });
   if (error) {
     const reason = activationErrorMessage(error);

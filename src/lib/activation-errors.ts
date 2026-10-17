@@ -1,5 +1,15 @@
 // Only recognized database rules become public text. Never return raw SQL errors.
 const rules: Record<string, string> = {
+  "valid payment received date is required":
+    "Enter a valid payment received date using Uganda’s calendar date.",
+  "payment date predates the reservation date; held for staff resolution":
+    "The payment date is before the reservation date in Uganda. Ask staff to reconcile it; do not change the actual payment date to bypass this check.",
+  "no eligible cycle is available for this payment date":
+    "No investment cycle covers this payment date. Ask staff to review the payment record and cycle dates.",
+  "multiple eligible cycles match this payment date; held for staff resolution":
+    "More than one cycle covers this payment date. Ask staff to reconcile the cycle boundaries before activation.",
+  "payment date resolves to a different cycle; held for staff resolution without moving funds":
+    "The payment date belongs to a different investment cycle. Ask staff to reconcile the cycle before activation.",
   "active administrator AAL2 required":
     "Complete administrator two-factor authentication, then try again.",
   "typed confirmation is invalid":
@@ -14,8 +24,6 @@ const rules: Record<string, string> = {
     "This is an imported investment, not a pending portal reservation. Review it under Investments.",
   "cancelled reservations cannot be revived; create a new reservation":
     "This reservation was cancelled. Create a new reservation instead of activating it.",
-  "verified bank payment date and time (Africa/Kampala) is required":
-    "Enter the verified payment date and time in Uganda time (Africa/Kampala).",
   "payment timestamp cannot be in the future":
     "The payment time is in the future. Check the date, time, and Uganda time zone against the payment record.",
   "received date must match the Kampala date of the verified payment timestamp":
