@@ -106,10 +106,10 @@ export default async function AdminActivationsPage({
       )}
       <p className="notice">
         Compare bank statements independently before activating a reservation.
-        Confirm the exact amount, a unique bank reference, the verified payment
-        date and time (Africa/Kampala), and the received date, then type
-        ACTIVATE. Reservations stay pending until activated, manually expired,
-        or cancelled. Payments must match the reserved cycle. Check for received
+        Confirm the exact amount, a unique bank reference, and the payment
+        received date using Uganda’s calendar date, then type ACTIVATE.
+        Reservations stay pending until activated, manually expired, or
+        cancelled. Payments must match the reserved cycle. Check for received
         funds before expiring a reservation.
       </p>
       <p className="muted" aria-live="polite">

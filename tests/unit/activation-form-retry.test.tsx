@@ -25,7 +25,7 @@ describe("activation form retries", () => {
   it("keeps all payment values and allows correction after server validation fails", async () => {
     vi.mocked(activateInvestment).mockResolvedValue({
       ok: false,
-      message: "The received date must match the payment time.",
+      message: "The payment date is before the reservation date.",
     });
     render(
       <ActivationForm
@@ -33,14 +33,13 @@ describe("activation form retries", () => {
         expectedAmount={1250000}
       />,
     );
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
     const reference = screen.getByLabelText("Bank reference");
     const amount = screen.getByLabelText("Exact amount received (UGX)");
-    const time = screen.getByLabelText(/Verified bank payment date and time/);
-    const date = screen.getByLabelText(/Received date/);
+    const date = screen.getByLabelText(/Payment received date/);
     const confirmation = screen.getByLabelText("Type ACTIVATE");
     fireEvent.change(reference, { target: { value: "REAL-REF-123" } });
     fireEvent.change(amount, { target: { value: "1200000" } });
-    fireEvent.change(time, { target: { value: "2026-10-15T13:00" } });
     fireEvent.change(date, { target: { value: "2026-10-14" } });
     fireEvent.change(confirmation, { target: { value: "ACTIVATE" } });
     fireEvent.submit(
@@ -48,10 +47,9 @@ describe("activation form retries", () => {
         .getByRole("button", { name: "Activate investment" })
         .closest("form")!,
     );
-    await screen.findByText("The received date must match the payment time.");
+    await screen.findByText("The payment date is before the reservation date.");
     expect(reference).toHaveValue("REAL-REF-123");
     expect(amount).toHaveValue(1200000);
-    expect(time).toHaveValue("2026-10-15T13:00");
     expect(date).toHaveValue("2026-10-14");
     expect(confirmation).toHaveValue("ACTIVATE");
     fireEvent.change(date, { target: { value: "2026-10-15" } });
