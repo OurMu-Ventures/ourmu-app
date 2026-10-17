@@ -57,15 +57,6 @@ export const activationSchema = z.object({
     .regex(/^\d+(?:\.\d{1,8})?$/)
     .refine((value) => Number(value) > 0),
   receivedDate: z.iso.date(),
-  // Verified bank payment timestamp in Africa/Kampala (datetime-local input).
-  // Optional for legacy callers; required for auto_cycle_v1 reservations.
-  receivedAt: z
-    .string()
-    .trim()
-    .min(10)
-    .max(40)
-    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/)
-    .optional(),
   confirmation: z.literal("ACTIVATE"),
 });
 
@@ -101,9 +92,7 @@ export const maturityInstructionSchema = z
     // assigns the cycle open at submission time; stale previews must be
     // reviewed and re-accepted.
     targetCycleId: z.union([z.uuid(), z.literal("")]).optional(),
-    expectedAgreementVersionId: z
-      .union([z.uuid(), z.literal("")])
-      .optional(),
+    expectedAgreementVersionId: z.union([z.uuid(), z.literal("")]).optional(),
     agreementAccepted: z.union([z.literal("yes"), z.literal("")]).optional(),
   })
   .superRefine((input, ctx) => {

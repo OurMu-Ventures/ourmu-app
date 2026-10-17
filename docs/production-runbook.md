@@ -110,3 +110,13 @@ order by c.maturity_date;
 ```
 
 Any row with open investments needs a rate before its payout date. Run `npm run db:test:actual-return-races` against the local stack to recheck save and fulfillment locking after changes to these functions.
+
+## Date-only investment activation
+
+Apply `20261017145052_date_only_investment_activation.sql` before deploying the date-only admin form. The RPC keeps its existing signature and supports older callers that still supply a verified timestamp, so the migration can precede the app deployment.
+
+Admins enter the actual payment received date using Uganda’s calendar date. New clients omit the optional payment timestamp. The bank receipt stores the verified date and leaves `received_at` null; the investment and audit retain the actual system activation timestamp. No synthetic payment time is recorded.
+
+For automatic-cycle reservations, a payment may occur on the same Uganda date as the reservation, regardless of its time. Earlier calendar dates and future dates are rejected. A payment date must intersect exactly one portal cycle and match the reservation’s cycle. Midnight closes are exclusive; end-of-day closes include that date. If two cycles intersect the same day, staff must reconcile the boundaries; the system never guesses or moves the investment. Amount, administrator two-factor authentication, capacity, partner limits, cancellation and duplicate-payment checks remain enforced.
+
+Existing timestamp-based receipt and audit data is unchanged. Deployment rollback can restore the previous app while keeping this backward-compatible migration in place.

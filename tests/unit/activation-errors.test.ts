@@ -20,8 +20,8 @@ describe("activation error messages", () => {
       "Uganda calendar date",
     ],
     [
-      "verified bank payment date and time (Africa/Kampala) is required",
-      "Uganda time",
+      "valid payment received date is required",
+      "Uganda’s calendar date",
     ],
     ["active administrator AAL2 required", "two-factor"],
     ["cycle capacity exceeded; held for staff resolution", "capacity"],

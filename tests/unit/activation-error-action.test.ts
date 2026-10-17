@@ -37,7 +37,6 @@ function form() {
   data.set("bankReference", "TEST-REFERENCE");
   data.set("receivedAmountUgx", "1250000");
   data.set("receivedDate", "2026-10-15");
-  data.set("receivedAt", "2026-10-15T13:00");
   return data;
 }
 beforeEach(() => {
@@ -93,9 +92,10 @@ describe("activation error reporting action", () => {
       expect.objectContaining({
         p_request_id: "request-1",
         p_received_amount_ugx: 1250000,
-        p_received_at: "2026-10-15T10:00:00.000Z",
+        p_received_date: "2026-10-15",
       }),
     );
+    expect(rpc.mock.calls[0][1]).not.toHaveProperty("p_received_at");
     expect(log).toHaveBeenCalledWith(
       "investment.activation_failed",
       expect.objectContaining({

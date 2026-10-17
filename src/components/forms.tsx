@@ -527,7 +527,6 @@ export function ActivationForm({
   const [values, setValues] = useState({
     bankReference: "",
     receivedAmountUgx: String(expectedAmount),
-    receivedAt: "",
     receivedDate: "",
     confirmation: "",
   });
@@ -560,24 +559,7 @@ export function ActivationForm({
         />
       </label>
       <label>
-        Verified bank payment date and time (Africa/Kampala)
-        <input
-          name="receivedAt"
-          type="datetime-local"
-          step="1"
-          value={values.receivedAt}
-          onChange={(event) => changeValue("receivedAt", event.target.value)}
-          required
-        />
-        <small className="muted">
-          Enter the actual payment timestamp in Uganda time (UTC+3), even if you
-          are abroad. This field does not convert your computer’s local time.
-          Convert the statement timestamp to Uganda time first. Payments must
-          match the reserved cycle and are never moved automatically.
-        </small>
-      </label>
-      <label>
-        Received date
+        Payment received date (Uganda)
         <input
           name="receivedDate"
           type="date"
@@ -586,8 +568,8 @@ export function ActivationForm({
           required
         />
         <small className="muted">
-          Kept for historical receipts and reporting; must match the Kampala
-          date of the verified timestamp above.
+          Use the date the payment was received, as shown on the payment record,
+          using Uganda’s calendar date. No time entry is needed.
         </small>
       </label>
       <label>

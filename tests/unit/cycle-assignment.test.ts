@@ -29,7 +29,7 @@ describe("automatic cycle assignment helpers", () => {
       "2026-09-30T21:00:01.000Z",
     );
   });
-  it("accepts the verified payment timestamp in the activation form", () => {
+  it("ignores retired timestamp form values", () => {
     const parsed = activationSchema.safeParse({
       investmentId: "f7213635-be92-5ebe-b501-b39276a45bf1",
       bankReference: "REF-1",
@@ -39,9 +39,10 @@ describe("automatic cycle assignment helpers", () => {
       confirmation: "ACTIVATE",
     });
     expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data).not.toHaveProperty("receivedAt");
   });
 
-  it("keeps the activation timestamp optional for legacy callers", () => {
+  it("accepts activation with only a payment date", () => {
     const parsed = activationSchema.safeParse({
       investmentId: "f7213635-be92-5ebe-b501-b39276a45bf1",
       bankReference: "REF-1",
