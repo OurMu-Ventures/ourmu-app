@@ -1064,3 +1064,33 @@ th {
   justify-content: flex-end;
   gap: 0.75rem;
 }
+
+/* Enrollment views use underlined navigation, distinct from decision actions. */
+.applications-workspace { min-width: 0; }
+.applications-heading h1 { font-size: clamp(2.2rem, 5vw, 4rem); }
+.application-invite { margin-bottom: 1.5rem; max-width: 40rem; }
+.application-views { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; border-bottom: 1px solid var(--line, #deddd3); margin: 1.5rem 0 1rem; }
+.application-views a { display: inline-flex; align-items: center; gap: .4rem; min-height: 48px; padding: .5rem 0; border-bottom: 3px solid transparent; text-decoration: none; }
+.application-views a[aria-current="page"] { border-bottom-color: var(--ink); font-weight: 700; }
+.application-card { margin: 1rem 0; overflow-wrap: anywhere; }
+.application-card h2 { font-size: 1.3rem; }
+.application-card .page-head { margin-bottom: .5rem; }
+.application-card summary { cursor: pointer; padding: .75rem 0; font-weight: 700; min-height: 48px; }
+.application-card summary:focus-visible, .application-views a:focus-visible { outline: 3px solid var(--gold); outline-offset: 4px; }
+.application-details { display: grid; gap: .75rem; margin: 1rem 0 1.5rem; }
+.application-details dt { font-size: .85rem; color: var(--muted); }
+.application-details dd { margin: .2rem 0 0; }
+.application-actions, .application-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+.application-pagination { justify-content: space-between; margin: 1.5rem 0; }
+.application-pagination a { min-height: 48px; display: inline-flex; align-items: center; gap: .5rem; }
+@media (max-width: 639px) {
+  .applications-heading { align-items: stretch; }
+  .application-actions { flex-direction: column; align-items: stretch; }
+}
+
+.application-decision-actions { display: grid; gap: .75rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) { .application-decision-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 639px) {
+  .application-views { gap: .5rem; font-size: .875rem; }
+  .application-views a { gap: .25rem; }
+}

@@ -66,13 +66,14 @@ export async function createInvitation(
       .from("application_invitations")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", data.id);
+    revalidatePath("/admin/applications");
     return {
       ok: false,
       message:
         "Email delivery failed. The unused link was revoked; reissue when email is configured.",
     };
   }
-  revalidatePath("/admin/invitations");
+  revalidatePath("/admin/applications");
   return {
     ok: true,
     message: manualDelivery
@@ -84,7 +85,9 @@ export async function createInvitation(
   };
 }
 
-export async function revokeInvitation(formData: FormData) {
+export async function revokeInvitation(
+  formData: FormData,
+): Promise<ActionState> {
   const adminProfile = await requireAdmin();
   const invitationId = String(formData.get("invitationId") ?? "");
   const admin = createAdminClient();
@@ -93,7 +96,11 @@ export async function revokeInvitation(formData: FormData) {
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", invitationId)
     .is("used_at", null);
-  if (error) throw new Error("Invitation revocation failed");
+  if (error)
+    return {
+      ok: false,
+      message: "Invitation revocation failed. Please try again.",
+    };
   await audit({
     actorId: adminProfile.id,
     action: "invitation.revoked",
@@ -101,10 +108,13 @@ export async function revokeInvitation(formData: FormData) {
     entityId: invitationId,
     requestId: requestId(),
   });
-  revalidatePath("/admin/invitations");
+  revalidatePath("/admin/applications");
+  return { ok: true, message: "Invitation revoked." };
 }
 
-export async function reissueInvitation(formData: FormData) {
+export async function reissueInvitation(
+  formData: FormData,
+): Promise<ActionState> {
   const adminProfile = await requireAdmin();
   const invitationId = String(formData.get("invitationId") ?? "");
   const admin = createAdminClient();
@@ -114,15 +124,22 @@ export async function reissueInvitation(formData: FormData) {
     .eq("id", invitationId)
     .single();
   if (!prior || prior.used_at)
-    throw new Error("Only unused invitations can be reissued");
+    return { ok: false, message: "Only unused invitations can be reissued." };
 
   const token = newInviteToken();
   const now = new Date().toISOString();
-  await admin
+  const { error: revokeError } = await admin
     .from("application_invitations")
     .update({ revoked_at: now })
     .eq("id", prior.id)
     .is("used_at", null);
+  if (revokeError)
+    return {
+      ok: false,
+      message:
+        "The previous invitation could not be revoked. Please try again.",
+    };
+  revalidatePath("/admin/applications");
   const { data: replacement, error } = await admin
     .from("application_invitations")
     .insert({
@@ -134,7 +151,11 @@ export async function reissueInvitation(formData: FormData) {
     })
     .select("id")
     .single();
-  if (error || !replacement) throw new Error("Invitation reissue failed");
+  if (error || !replacement)
+    return {
+      ok: false,
+      message: "Invitation reissue failed. Please try again.",
+    };
 
   try {
     await sendTransactionalEmail({
@@ -147,9 +168,11 @@ export async function reissueInvitation(formData: FormData) {
       .from("application_invitations")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", replacement.id);
-    throw new Error(
-      "The replacement was revoked because email delivery failed",
-    );
+    return {
+      ok: false,
+      message:
+        "The replacement was revoked because email delivery failed. Please reissue when email delivery is available.",
+    };
   }
   await audit({
     actorId: adminProfile.id,
@@ -159,7 +182,11 @@ export async function reissueInvitation(formData: FormData) {
     requestId: requestId(),
     metadata: { supersedes_id: prior.id },
   });
-  revalidatePath("/admin/invitations");
+  revalidatePath("/admin/applications");
+  return {
+    ok: true,
+    message: "Invitation reissued. The new link expires after seven days.",
+  };
 }
 
 export async function submitApplication(

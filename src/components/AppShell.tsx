@@ -15,11 +15,6 @@ const adminLinks: ShellLink[] = [
   { href: "/admin/activations", label: "Activations", status: "Opening activations" },
   { href: "/admin/maturities?tab=withdrawals", label: "Withdrawals", status: "Opening withdrawals" },
   {
-    href: "/admin/invitations",
-    label: "Invitations",
-    status: "Opening invitations",
-  },
-  {
     href: "/admin/applications",
     label: "Applications",
     status: "Opening applications",

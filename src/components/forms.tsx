@@ -13,7 +13,7 @@ import {
   saveMaturityEmailSettings,
   updateCycle,
 } from "@/actions/admin";
-import { createInvitation, submitApplication } from "@/actions/applications";
+import { submitApplication } from "@/actions/applications";
 import { requestMagicLink, signInTestAccount } from "@/actions/auth";
 import {
   activateInvestment,
@@ -151,20 +151,6 @@ export function ApplicationForm({
         </span>
       </label>
       <ActionButton>Submit private application</ActionButton>
-      <StateMessage state={state} />
-    </form>
-  );
-}
-
-export function InvitationForm() {
-  const [state, action] = useActionState(createInvitation, initialActionState);
-  return (
-    <form className="form" action={action}>
-      <label>
-        Invited email
-        <input name="email" type="email" required />
-      </label>
-      <ActionButton>Issue seven-day invitation</ActionButton>
       <StateMessage state={state} />
     </form>
   );

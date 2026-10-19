@@ -1,44 +1,84 @@
-import { ApplicationDecisionForm } from "@/components/ApplicationDecisionForm";
+import { ApplicationsWorkspace } from "@/components/ApplicationsWorkspace";
 import { requireAdmin } from "@/lib/auth";
-import { date, dateTime } from "@/lib/format";
+import {
+  APPLICATION_PAGE_SIZE,
+  applicationPage,
+  applicationView,
+} from "@/lib/application-views";
 import { createAdminClient } from "@/lib/supabase/admin";
-export default async function ApplicationsPage() {
+
+export default async function ApplicationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string | string[]; page?: string | string[] }>;
+}) {
   await requireAdmin();
+  const params = await searchParams;
+  const tab = applicationView(params?.tab);
+  const requestedPage = applicationPage(params?.page);
   const admin = createAdminClient();
-  const { data } = await admin
+  const pendingQuery = admin
     .from("investor_applications")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(100);
+    .select("id", { count: "exact", head: true })
+    .eq("status", "submitted");
+  function listQuery(page: number) {
+    const start = (page - 1) * APPLICATION_PAGE_SIZE;
+    if (tab === "invitations") {
+      return admin
+        .from("application_invitations")
+        .select("id,invited_email,created_at,expires_at,used_at,revoked_at", {
+          count: "exact",
+        })
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(start, start + APPLICATION_PAGE_SIZE - 1);
+    }
+    let query = admin
+      .from("investor_applications")
+      .select(
+        "id,legal_name,email,phone,date_of_birth,address,district,country,created_at,reviewed_at,status",
+        { count: "exact" },
+      );
+    query =
+      tab === "review"
+        ? query.eq("status", "submitted")
+        : query.in("status", ["approved", "rejected", "abandoned"]);
+    return query
+      .order("created_at", { ascending: tab === "review" })
+      .order("id")
+      .range(start, start + APPLICATION_PAGE_SIZE - 1);
+  }
+  const [pending, initial] = await Promise.all([
+    pendingQuery,
+    listQuery(requestedPage),
+  ]);
+  // Keep the client workspace mounted (and its confirmation visible) when the
+  // final review on a page is completed and that page no longer exists.
+  const page = initial.error
+    ? requestedPage
+    : Math.min(
+        requestedPage,
+        Math.max(1, Math.ceil((initial.count ?? 0) / APPLICATION_PAGE_SIZE)),
+      );
+  const result = page === requestedPage ? initial : await listQuery(page);
   return (
-    <>
-      <p className="eyebrow">Offline KYC decisions</p>
-      <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Applications</h1>
-      {(data ?? []).map((item) => (
-        <article
-          className="card"
-          style={{ marginBottom: "1rem" }}
-          key={item.id}
-        >
-          <div className="page-head">
-            <div>
-              <h2>{item.legal_name}</h2>
-              <p>
-                {item.email} · {item.phone}
-                <br />
-                {item.address}, {item.district}, {item.country}
-                <br />
-                Born {date(item.date_of_birth)} · submitted{" "}
-                {dateTime(item.created_at)}
-              </p>
-            </div>
-            <span className="badge">{item.status}</span>
-          </div>
-          {item.status === "submitted" && (
-            <ApplicationDecisionForm applicationId={item.id} />
-          )}
-        </article>
-      ))}
-    </>
+    <ApplicationsWorkspace
+      tab={tab}
+      page={page}
+      count={result.count ?? 0}
+      pendingCount={pending.error ? null : (pending.count ?? 0)}
+      applications={
+        tab !== "invitations"
+          ? (result.data ?? []).filter((item) => "legal_name" in item)
+          : []
+      }
+      invitations={
+        tab === "invitations"
+          ? (result.data ?? []).filter((item) => "invited_email" in item)
+          : []
+      }
+      loadError={Boolean(result.error)}
+      now={new Date().getTime()}
+    />
   );
 }
