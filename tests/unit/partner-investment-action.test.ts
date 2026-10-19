@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -21,6 +21,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 import { requestInvestment } from "@/actions/investments";
 import { requireInvestor } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
 
 const rpc = vi.fn();
 beforeEach(() => {
@@ -29,7 +30,9 @@ beforeEach(() => {
     typeof createAdminClient
   >);
   rpc.mockResolvedValue({ error: null });
+  vi.spyOn(console, "error").mockImplementation(() => {});
 });
+afterEach(() => vi.restoreAllMocks());
 function form(amount: string) {
   const data = new FormData();
   data.set("cycleId", "a1b2c3d4-e5f6-47a8-9123-abcdef123456");
@@ -87,5 +90,89 @@ describe("authenticated investment limit validation", () => {
       (await requestInvestment({ ok: false, message: "" }, form("60000000")))
         .ok,
     ).toBe(false);
+  });
+});
+
+describe("reservation error reporting", () => {
+  it.each([
+    ["next of kin is required", "next-of-kin details in Profile"],
+    ["investor is not eligible", "active and KYC verified"],
+    ["cycle capacity exceeded", "insufficient remaining capacity"],
+    ["investor cycle limit exceeded", "pending reservations"],
+    [
+      "the displayed cycle changed; review the refreshed terms and accept again",
+      "investment cycle changed",
+    ],
+    [
+      "the agreement changed; review the refreshed terms and accept again",
+      "participation agreement changed",
+    ],
+    [
+      "no eligible cycle is available for this timestamp",
+      "No investment cycle",
+    ],
+    ["approved agreement is required", "Contact support"],
+  ])("explains structured database error: %s", async (message, expected) => {
+    profile(null);
+    rpc.mockResolvedValue({
+      error: { code: "23514", message, details: "private" },
+    });
+    const result = await requestInvestment(
+      { ok: false, message: "" },
+      form("125000"),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain(expected);
+    expect(result.message).toContain("No reservation was created.");
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      "investment.reservation_failed",
+      {
+        requestId: "request-1",
+        code: "23514",
+        recognized: true,
+      },
+    );
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
+      "private",
+    );
+  });
+
+  it("keeps unknown errors private and supplies a matching support reference", async () => {
+    profile(null);
+    rpc.mockResolvedValue({
+      error: {
+        code: "XX000",
+        message: "next of kin is required: secret SQL detail",
+        details: "private",
+      },
+    });
+    const result = await requestInvestment(
+      { ok: false, message: "" },
+      form("125000"),
+    );
+    expect(result).toEqual({
+      ok: false,
+      message:
+        "The reservation could not be created. Contact support with reference request-1.",
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "request_investment",
+      expect.objectContaining({
+        p_request_id: "request-1",
+      }),
+    );
+    expect(console.error).toHaveBeenCalledWith(
+      "investment.reservation_failed",
+      {
+        requestId: "request-1",
+        code: "XX000",
+        recognized: false,
+      },
+    );
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
+      "secret",
+    );
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
