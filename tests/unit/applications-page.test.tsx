@@ -11,6 +11,8 @@ const state = vi.hoisted(() => ({
   count: 26,
   pendingCount: 45,
   fail: false,
+  outOfRange: false,
+  rangeStart: 0,
 }));
 vi.mock("@/lib/auth", () => ({ requireAdmin: vi.fn() }));
 vi.mock("@/components/ApplicationsWorkspace", () => ({
@@ -42,13 +44,21 @@ vi.mock("@/lib/supabase/admin", () => ({
         },
         range: (...args: unknown[]) => {
           state.calls.push(["range", ...args]);
+          state.rangeStart = args[0] as number;
           return query;
         },
         then: (resolve: (result: unknown) => unknown) =>
           Promise.resolve({
             data: [],
             count: head ? state.pendingCount : state.count,
-            error: state.fail ? { message: "failure" } : null,
+            error: state.fail
+              ? { message: "failure" }
+              : state.outOfRange && !head && state.rangeStart >= state.count
+                ? {
+                    code: "PGRST103",
+                    message: "Requested range not satisfiable",
+                  }
+                : null,
           }).then(resolve),
       };
       return query;
@@ -64,6 +74,8 @@ beforeEach(() => {
   state.count = 26;
   state.pendingCount = 45;
   state.fail = false;
+  state.outOfRange = false;
+  state.rangeStart = 0;
   vi.clearAllMocks();
 });
 describe("applications data and routing", () => {
@@ -101,6 +113,7 @@ describe("applications data and routing", () => {
   });
   it("filters history and corrects a page emptied by a completed review", async () => {
     state.count = 25;
+    state.outOfRange = true;
     const page = await ApplicationsPage({
       searchParams: Promise.resolve({ tab: "history", page: "2" }),
     });
@@ -111,6 +124,19 @@ describe("applications data and routing", () => {
     ]);
     expect(state.calls).toContainEqual(["range", 0, 24]);
     expect(page.props.page).toBe(1);
+    expect(page.props.loadError).toBe(false);
+  });
+  it("recovers a stale high page URL by fetching the actual final page", async () => {
+    state.count = 76;
+    state.outOfRange = true;
+    const page = await ApplicationsPage({
+      searchParams: Promise.resolve({ tab: "invitations", page: "9" }),
+    });
+    expect(state.calls).toContainEqual(["range", 200, 224]);
+    expect(state.calls).toContainEqual(["range", 0, 24]);
+    expect(state.calls).toContainEqual(["range", 75, 99]);
+    expect(page.props.page).toBe(4);
+    expect(page.props.loadError).toBe(false);
   });
   it("reports query failures instead of empty success", async () => {
     state.fail = true;

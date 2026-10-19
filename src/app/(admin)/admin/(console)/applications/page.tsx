@@ -54,13 +54,24 @@ export default async function ApplicationsPage({
   ]);
   // Keep the client workspace mounted (and its confirmation visible) when the
   // final review on a page is completed and that page no longer exists.
-  const page = initial.error
+  // PostgREST returns PGRST103 (HTTP 416) for an offset beyond the final
+  // page, without a count. Re-query page one to recover the current count.
+  const first =
+    initial.error?.code === "PGRST103" && requestedPage > 1
+      ? await listQuery(1)
+      : initial;
+  const page = first.error
     ? requestedPage
     : Math.min(
         requestedPage,
-        Math.max(1, Math.ceil((initial.count ?? 0) / APPLICATION_PAGE_SIZE)),
+        Math.max(1, Math.ceil((first.count ?? 0) / APPLICATION_PAGE_SIZE)),
       );
-  const result = page === requestedPage ? initial : await listQuery(page);
+  const result =
+    page === requestedPage
+      ? initial
+      : page === 1 && first !== initial
+        ? first
+        : await listQuery(page);
   return (
     <ApplicationsWorkspace
       tab={tab}

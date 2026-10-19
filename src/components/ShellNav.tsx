@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   BadgeCheck,
+  CalendarClock,
   CircleCheck,
   Briefcase,
   History,
@@ -45,6 +46,7 @@ const icons: Record<string, LucideIcon> = {
   "/admin": LayoutDashboard,
   "/admin/activations": CircleCheck,
   "/admin/maturities?tab=withdrawals": Wallet,
+  "/admin/maturities": CalendarClock,
   "/admin/applications": Inbox,
   "/admin/partners": Users,
   "/admin/imports": Upload,
@@ -83,17 +85,25 @@ export function ShellNav({
   const current =
     links.find((link) => {
       const [path, query] = link.href.split("?");
-      return query && pathname === path && [...new URLSearchParams(query)].every(([key, value]) => {
-        const actual = searchParams.get(key);
-        // The server defaults unknown or absent maturity tabs to withdrawals.
-        const selected = path === "/admin/maturities" && key === "tab"
-          ? (actual === "history" || actual === "reinvestments" ? actual : "withdrawals")
-          : actual;
-        return selected === value;
-      });
+      return (
+        query &&
+        pathname === path &&
+        [...new URLSearchParams(query)].every(([key, value]) => {
+          const actual = searchParams.get(key);
+          // The server defaults unknown or absent maturity tabs to withdrawals.
+          const selected =
+            path === "/admin/maturities" && key === "tab"
+              ? actual === "history" || actual === "reinvestments"
+                ? actual
+                : "withdrawals"
+              : actual;
+          return selected === value;
+        })
+      );
     }) ??
     links.find((link) => pathname === link.href) ??
-    links.filter((link) => !link.href.includes("?"))
+    links
+      .filter((link) => !link.href.includes("?"))
       .sort((a, b) => b.href.length - a.href.length)
       .find((link) => pathname.startsWith(`${link.href}/`));
 
@@ -110,12 +120,12 @@ export function ShellNav({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [open ]);
+  }, [open]);
 
   useEffect(() => {
     if (wasOpen.current && !open) toggleRef.current?.focus();
     wasOpen.current = open;
-  }, [open ]);
+  }, [open]);
 
   return (
     <>
@@ -131,9 +141,7 @@ export function ShellNav({
         >
           {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
         </button>
-        <span className="shell-bar-current">
-          {current?.label ?? label}
-        </span>
+        <span className="shell-bar-current">{current?.label ?? label}</span>
       </div>
       {open && (
         <button

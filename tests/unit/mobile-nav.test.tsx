@@ -46,34 +46,64 @@ describe("ShellNav", () => {
     expect(adminLinks[0]).toHaveTextContent("Admin overview");
     expect(adminLinks[1]).toHaveTextContent("Activations");
     expect(adminLinks[1]).toHaveAttribute("href", "/admin/activations");
-    expect(adminLinks[2]).toHaveAttribute("href", "/admin/maturities?tab=withdrawals");
+    expect(adminLinks[2]).toHaveAttribute(
+      "href",
+      "/admin/maturities?tab=withdrawals",
+    );
+    expect(
+      screen
+        .getByRole("link", { name: "Maturities" })
+        .querySelector("svg.nav-icon"),
+    ).toBeInTheDocument();
     unmount();
     render(<AppShell>Partner content</AppShell>);
-    expect(screen.queryByRole("link", { name: "Activations" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Activations" }),
+    ).not.toBeInTheDocument();
   });
 
-  it.each(["withdrawals", "reinvestments", "history"])("highlights one admin sidebar entry for %s", (tab) => {
-    route.pathname = "/admin/maturities";
-    route.query = `tab=${tab}&page=2`;
-    render(<AppShell admin>Admin content</AppShell>);
-    const active = screen.getAllByRole("link").filter((link) => link.getAttribute("aria-current") === "page");
-    expect(active).toHaveLength(1);
-    expect(active[0]).toHaveTextContent(tab === "withdrawals" ? "Withdrawals" : "Maturities");
-  });
+  it.each(["withdrawals", "reinvestments", "history"])(
+    "highlights one admin sidebar entry for %s",
+    (tab) => {
+      route.pathname = "/admin/maturities";
+      route.query = `tab=${tab}&page=2`;
+      render(<AppShell admin>Admin content</AppShell>);
+      const active = screen
+        .getAllByRole("link")
+        .filter((link) => link.getAttribute("aria-current") === "page");
+      expect(active).toHaveLength(1);
+      expect(active[0]).toHaveTextContent(
+        tab === "withdrawals" ? "Withdrawals" : "Maturities",
+      );
+    },
+  );
 
-  it.each(["", "tab=unknown"])("highlights Withdrawals for default tab query %s", (query) => {
-    route.pathname = "/admin/maturities";
-    route.query = query;
-    render(<AppShell admin>Admin content</AppShell>);
-    expect(screen.getByRole("link", { name: "Withdrawals" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Maturities" })).not.toHaveAttribute("aria-current");
-  });
+  it.each(["", "tab=unknown"])(
+    "highlights Withdrawals for default tab query %s",
+    (query) => {
+      route.pathname = "/admin/maturities";
+      route.query = query;
+      render(<AppShell admin>Admin content</AppShell>);
+      expect(screen.getByRole("link", { name: "Withdrawals" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      expect(
+        screen.getByRole("link", { name: "Maturities" }),
+      ).not.toHaveAttribute("aria-current");
+    },
+  );
 
   it("uses the base section for nested maturity routes", () => {
     route.pathname = "/admin/maturities/instruction";
     render(<AppShell admin>Admin content</AppShell>);
-    expect(screen.getByRole("link", { name: "Maturities" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Withdrawals" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Maturities" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(
+      screen.getByRole("link", { name: "Withdrawals" }),
+    ).not.toHaveAttribute("aria-current");
   });
 
   it("marks the current page and labels the section bar", () => {
