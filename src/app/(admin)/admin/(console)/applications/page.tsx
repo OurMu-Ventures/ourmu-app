@@ -1,4 +1,4 @@
-import { DecisionForm, Tabs } from "@/components/forms";
+import { ApplicationDecisionForm } from "@/components/ApplicationDecisionForm";
 import { requireAdmin } from "@/lib/auth";
 import { date, dateTime } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -35,10 +35,7 @@ export default async function ApplicationsPage() {
             <span className="badge">{item.status}</span>
           </div>
           {item.status === "submitted" && (
-            <Tabs labels={["Approve", "Reject"]}>
-              <DecisionForm applicationId={item.id} decision="approve" />
-              <DecisionForm applicationId={item.id} decision="reject" />
-            </Tabs>
+            <ApplicationDecisionForm applicationId={item.id} />
           )}
         </article>
       ))}

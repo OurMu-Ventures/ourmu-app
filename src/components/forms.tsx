@@ -13,12 +13,7 @@ import {
   saveMaturityEmailSettings,
   updateCycle,
 } from "@/actions/admin";
-import {
-  approveApplication,
-  createInvitation,
-  rejectApplication,
-  submitApplication,
-} from "@/actions/applications";
+import { createInvitation, submitApplication } from "@/actions/applications";
 import { requestMagicLink, signInTestAccount } from "@/actions/auth";
 import {
   activateInvestment,
@@ -170,37 +165,6 @@ export function InvitationForm() {
         <input name="email" type="email" required />
       </label>
       <ActionButton>Issue seven-day invitation</ActionButton>
-      <StateMessage state={state} />
-    </form>
-  );
-}
-
-export function DecisionForm({
-  applicationId,
-  decision,
-}: {
-  applicationId: string;
-  decision: "approve" | "reject";
-}) {
-  const handler =
-    decision === "approve" ? approveApplication : rejectApplication;
-  const [state, action] = useActionState(handler, initialActionState);
-  return (
-    <form className="form" action={action}>
-      <input type="hidden" name="applicationId" value={applicationId} />
-      <label>
-        Offline verification reference
-        <input name="verificationReference" required />
-      </label>
-      <label>
-        Non-sensitive notes
-        <textarea name="notes" />
-      </label>
-      <ActionButton danger={decision === "reject"}>
-        {decision === "approve"
-          ? "Approve and send magic link"
-          : "Reject and erase NIN"}
-      </ActionButton>
       <StateMessage state={state} />
     </form>
   );
