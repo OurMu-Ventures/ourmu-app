@@ -10,6 +10,7 @@ import {
   activationErrorCode,
 } from "@/lib/activation-errors";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
+import { reservationErrorMessage } from "@/lib/reservation-errors";
 import { ugx } from "@/lib/format";
 import { requireAdmin, requireInvestor } from "@/lib/auth";
 import { publicError, requestId, toBytea } from "@/lib/db";
@@ -116,11 +117,20 @@ export async function requestInvestment(
     p_ip_fingerprint: toBytea(fingerprintRequestValue("ip", ip)),
     p_expected_agreement_version_id: parsed.data.agreementVersionId as string,
   });
-  if (error)
+  if (error) {
+    const reason = reservationErrorMessage(error);
+    console.error("investment.reservation_failed", {
+      requestId: requestUuid,
+      code: activationErrorCode(error),
+      recognized: reason !== null,
+    });
     return {
       ok: false,
-      message: publicError(error, "The reservation could not be created."),
+      message: reason
+        ? `${reason} No reservation was created.`
+        : `The reservation could not be created. Contact support with reference ${requestUuid}.`,
     };
+  }
   revalidatePath("/dashboard");
   revalidatePath("/investments");
   return {
