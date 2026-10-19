@@ -5,13 +5,13 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   BadgeCheck,
+  CalendarClock,
   CircleCheck,
   Briefcase,
   History,
   Inbox,
   LayoutDashboard,
   LogOut,
-  Mail,
   Menu,
   Newspaper,
   RefreshCw,
@@ -46,7 +46,7 @@ const icons: Record<string, LucideIcon> = {
   "/admin": LayoutDashboard,
   "/admin/activations": CircleCheck,
   "/admin/maturities?tab=withdrawals": Wallet,
-  "/admin/invitations": Mail,
+  "/admin/maturities": CalendarClock,
   "/admin/applications": Inbox,
   "/admin/partners": Users,
   "/admin/imports": Upload,

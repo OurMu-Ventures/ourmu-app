@@ -47,6 +47,7 @@ describe("ShellNav", () => {
     expect(adminLinks[1]).toHaveTextContent("Activations");
     expect(adminLinks[1]).toHaveAttribute("href", "/admin/activations");
     expect(adminLinks[2]).toHaveAttribute("href", "/admin/maturities?tab=withdrawals");
+    expect(screen.getByRole("link", { name: "Maturities" }).querySelector("svg.nav-icon")).toBeInTheDocument();
     unmount();
     render(<AppShell>Partner content</AppShell>);
     expect(screen.queryByRole("link", { name: "Activations" })).not.toBeInTheDocument();

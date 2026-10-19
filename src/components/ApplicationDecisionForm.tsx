@@ -20,10 +20,19 @@ async function reviewApplication(state: ActionState, formData: FormData) {
 
 export function ApplicationDecisionForm({
   applicationId,
+  onSuccess,
 }: {
   applicationId: string;
+  onSuccess?: (state: ActionState) => void;
 }) {
-  const [state, action] = useActionState(reviewApplication, initialActionState);
+  const [state, action] = useActionState(
+    async (previous: ActionState, data: FormData) => {
+      const result = await reviewApplication(previous, data);
+      if (result.ok) onSuccess?.(result);
+      return result;
+    },
+    initialActionState,
+  );
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const helpId = useId();
@@ -54,7 +63,7 @@ export function ApplicationDecisionForm({
         />
       </label>
       <StateMessage state={state} />
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="application-decision-actions">
         <PendingButton name="decision" value="approve" pendingLabel="Working…">
           Approve and send magic link
         </PendingButton>

@@ -129,6 +129,7 @@ export default async function AdminPage() {
         <article className="card">
           <p className="muted">Pending applications</p>
           <p className="stat">{pending ?? 0}</p>
+          <Link href="/admin/applications?tab=review">Review applications</Link>
         </article>
         <article className="card">
           <p className="muted">Awaiting activation</p>
