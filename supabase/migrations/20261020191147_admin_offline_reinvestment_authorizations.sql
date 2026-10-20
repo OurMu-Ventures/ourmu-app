@@ -483,4 +483,211 @@ $$;
 create trigger claim_offline_receipt after update of investor_id on public.investments for each row execute function private.claim_offline_receipt();
 revoke all on function private.claim_offline_receipt() from public,anon,authenticated;
 grant execute on function private.claim_offline_receipt() to service_role;
+
+-- Shared settlement readers must recognize offline authority too. Pending
+-- evidence remains in financial totals; only completed settlement excludes
+-- the source, matching the existing portal-instruction behavior.
+create or replace function private.cycle_settlement_started(p_cycle_id uuid)
+returns boolean language sql stable set search_path = '' as $$
+  select exists (
+    select 1 from public.maturity_instructions mi
+    join public.investments i on i.id = mi.investment_id
+    where i.cycle_id = p_cycle_id and mi.status = 'fulfilled'
+  ) or exists (
+    select 1 from public.offline_reinvestment_authorizations a
+    join public.investments i on i.id = a.investment_id
+    where i.cycle_id = p_cycle_id and a.status = 'fulfilled'
+  );
+$$;
+
+-- Included: funded (active) and unpaid matured investments, imported ones
+-- too. Excluded: reservations, expired/cancelled, reported-paid history and
+-- already-fulfilled maturities. Test placements are counted separately and
+-- kept out of financial totals.
+create or replace function private.cycle_return_totals(p_cycle_id uuid, p_actual_return_bps integer)
+returns table (
+  investment_count bigint,
+  test_investment_count bigint,
+  principal_ugx numeric(28,8),
+  projected_profit_ugx numeric(28,8),
+  actual_profit_ugx numeric(28,8),
+  total_value_ugx numeric(28,8)
+) language sql stable set search_path = '' as $$
+  with included as (
+    select i.principal_ugx, i.projected_return_ugx, i.is_test,
+      case when p_actual_return_bps is null then null
+        else private.cycle_actual_return_ugx(i.principal_ugx, p_actual_return_bps) end as actual_ugx
+    from public.investments i
+    where i.cycle_id = p_cycle_id
+      and i.status in ('active', 'matured')
+      and i.payout_basis <> 'reported_paid'
+      and not exists (
+        select 1 from public.maturity_instructions mi
+        where mi.investment_id = i.id and mi.status = 'fulfilled'
+      )
+      and not exists (
+        select 1 from public.offline_reinvestment_authorizations a
+        where a.investment_id = i.id and a.status = 'fulfilled'
+      )
+  )
+  select
+    count(*) filter (where not is_test),
+    count(*) filter (where is_test),
+    coalesce(sum(principal_ugx) filter (where not is_test), 0)::numeric(28,8),
+    coalesce(sum(projected_return_ugx) filter (where not is_test), 0)::numeric(28,8),
+    case when p_actual_return_bps is null then null
+      else coalesce(sum(actual_ugx) filter (where not is_test), 0) end::numeric(28,8),
+    case when p_actual_return_bps is null then null
+      else coalesce(sum(principal_ugx + actual_ugx) filter (where not is_test), 0) end::numeric(28,8)
+  from included;
+$$;
+
+
+-- Never reinterpret a recorded or fulfilled offline authorization as an
+-- unanswered maturity after a later verified legacy-account claim. Revoked
+-- authority releases the source back to the normal unanswered workflow.
+CREATE OR REPLACE FUNCTION public.run_maintenance(p_request_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+declare
+  v_expired integer;
+  v_matured integer;
+  v_anonymized integer;
+  v_maturity_emails integer := 0;
+  v_auto_reinvested integer := 0;
+  v_pending_followup integer := 0;
+  v_awaiting_actual_return integer := 0;
+  v_gate_enabled boolean := false;
+  v_open_cycle public.investment_cycles%rowtype;
+  v_auth_id uuid;
+  v_auth_at timestamptz;
+  r record;
+begin
+  -- Expiry is an explicit administrator action.
+  v_expired := 0;
+
+  create temporary table if not exists pg_temp.newly_matured (id uuid, record_origin public.record_origin, investor_id uuid)
+    on commit drop;
+  truncate table pg_temp.newly_matured;
+  with changed as (
+    update public.investments set status = 'matured', matured_at = now()
+    where status = 'active' and maturity_date <= current_date
+    returning id, record_origin, investor_id
+  ) insert into pg_temp.newly_matured select * from changed;
+  select count(*) into v_matured from pg_temp.newly_matured;
+
+  with queued as (
+    insert into public.jobs (kind, entity_type, entity_id, payload)
+    select 'send_email', 'investment', m.id, jsonb_build_object('template', 'maturity_notice')
+    from pg_temp.newly_matured m
+    where m.investor_id is not null
+    returning id
+  ) select count(*) into v_maturity_emails from queued;
+
+  select enabled into v_gate_enabled from public.maturity_policy_gates
+  where name = 'current_agreement_auto_reinvest';
+  begin
+    -- Same resolver as interactive submissions, keyed to creation time.
+    v_open_cycle.id := null;
+    select * into v_open_cycle from public.investment_cycles
+    where id = private.resolve_portal_cycle(now());
+    if v_open_cycle.status <> 'open' or v_open_cycle.record_origin <> 'portal'
+      or v_open_cycle.agreement_version_id is null or v_open_cycle.capacity_ugx is null then
+      v_open_cycle.id := null;
+    end if;
+  exception when others then
+    v_open_cycle.id := null;
+  end;
+
+  for r in
+    select i.id, i.investor_id, i.principal_ugx, i.projected_return_ugx,
+      c.actual_return_bps, c.legacy_settlement
+    from public.investments i
+    join public.investment_cycles c on c.id = i.cycle_id
+    where i.status = 'matured' and i.payout_basis <> 'reported_paid'
+      and i.investor_id is not null
+      and public.maturity_payout_date(i.maturity_date) <= current_date
+      and not exists (
+        select 1 from public.maturity_instructions mi where mi.investment_id = i.id
+      )
+      and not exists (
+        select 1 from public.offline_reinvestment_authorizations a
+        where a.investment_id = i.id and a.status <> 'revoked'
+      )
+  loop
+    v_auth_id := null;
+    v_auth_at := null;
+    -- Automatic reinvestment waits for the cycle's actual return. Cycles
+    -- settled under the per-investment workflow keep projected amounts.
+    if r.actual_return_bps is null and not r.legacy_settlement then
+      v_awaiting_actual_return := v_awaiting_actual_return + 1;
+    elsif v_gate_enabled and v_open_cycle.id is not null then
+      select a.id, a.authorized_at into v_auth_id, v_auth_at
+      from public.maturity_reinvest_authorizations a
+      where a.investor_id = r.investor_id and a.revoked_at is null
+      order by a.authorized_at desc
+      limit 1;
+    end if;
+    if v_auth_id is not null then
+      -- The standing authorization is the partner's own prior acceptance of
+      -- reinvestment terms. Only its id travels with the instruction; the
+      -- evidence itself is re-verified live at fulfillment, so a revoked
+      -- authorization (or a disabled gate) can never complete.
+      insert into public.maturity_instructions (
+        investment_id, investor_id, choice, projected_payout_ugx, projected_reinvest_ugx,
+        target_cycle_id, target_agreement_version_id, agreement_accepted,
+        destination_confirmed, standing_authorization_id, request_id, policy_version,
+        amount_basis, basis_actual_return_bps
+      ) values (
+        r.id, r.investor_id, 'reinvest_all', 0,
+        r.principal_ugx + case when r.actual_return_bps is null then r.projected_return_ugx
+          else private.cycle_actual_return_ugx(r.principal_ugx, r.actual_return_bps) end,
+        v_open_cycle.id, v_open_cycle.agreement_version_id, true, false,
+        v_auth_id, gen_random_uuid(), 'auto_cycle_v1',
+        case when r.actual_return_bps is null then 'projected' else 'actual' end,
+        r.actual_return_bps
+      );
+      insert into public.audit_events (action, entity_type, entity_id, request_id, metadata)
+      values ('maturity.auto_instruction_created', 'investment', r.id, p_request_id,
+        jsonb_build_object('choice', 'reinvest_all', 'target_cycle_id', v_open_cycle.id,
+          'assignment_basis', 'instruction_creation_time', 'applicable_timestamp', now(),
+          'policy_version', 'auto_cycle_v1',
+          'amount_basis', case when r.actual_return_bps is null then 'projected' else 'actual' end));
+      insert into public.jobs (kind, entity_type, entity_id, payload)
+      values ('send_email', 'investment', r.id,
+        jsonb_build_object('template', 'maturity_choice_confirmed'));
+      v_auto_reinvested := v_auto_reinvested + 1;
+    elsif not exists (
+      select 1 from public.audit_events a
+      where a.action = 'maturity.pending_followup' and a.entity_id = r.id
+        and a.created_at > now() - interval '7 days'
+    ) then
+      insert into public.audit_events (action, entity_type, entity_id, request_id)
+      values ('maturity.pending_followup', 'investment', r.id, p_request_id);
+      v_pending_followup := v_pending_followup + 1;
+    end if;
+  end loop;
+
+  update private.investor_identities ii set nin_ciphertext = null, nin_iv = null, nin_auth_tag = null,
+    nin_fingerprint = null, erased_at = now()
+  from public.investor_applications a where ii.application_id = a.id and a.status = 'rejected' and ii.erased_at is null;
+  with changed as (
+    update public.investor_applications set legal_name = 'Anonymized applicant', email = 'anonymized+' || id || '@invalid.local',
+      phone = '', address = '', district = '', kyc_notes = null, anonymized_at = now()
+    where anonymized_at is null and status in ('rejected', 'abandoned') and created_at <= now() - interval '30 days'
+    returning id
+  ) select count(*) into v_anonymized from changed;
+  insert into public.audit_events (action, entity_type, request_id, metadata)
+  values ('maintenance.completed', 'system', p_request_id,
+    jsonb_build_object('expired', v_expired, 'matured', v_matured, 'anonymized', v_anonymized,
+      'maturity_emails', v_maturity_emails, 'auto_reinvested', v_auto_reinvested,
+      'pending_followup', v_pending_followup, 'awaiting_actual_return', v_awaiting_actual_return));
+  return jsonb_build_object('expired', v_expired, 'matured', v_matured, 'anonymized', v_anonymized,
+    'maturity_emails', v_maturity_emails, 'auto_reinvested', v_auto_reinvested,
+    'pending_followup', v_pending_followup, 'awaiting_actual_return', v_awaiting_actual_return);
+end;
+$function$;
+
 commit;

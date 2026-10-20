@@ -36,6 +36,8 @@ select throws_ok($$select pg_temp.record_authority(p_ref=>'')$$,'22023','Dated o
 select throws_ok($$select pg_temp.record_authority(p_verified=>false)$$,'22023','Confirm identity, prior settlement checks, and offline agreement acceptance','identity attestation is required by database');
 select lives_ok($$select pg_temp.record_authority()$$,'record specific offline authority without login');
 select is((select count(*) from public.offline_reinvestment_authorizations),1::bigint,'one authority recorded');
+select is((select investment_count from private.cycle_return_totals('e1000000-0000-4000-8000-000000000006',3000)),6::bigint,'pending offline authority remains in unsettled totals');
+select ok(not private.cycle_settlement_started('e1000000-0000-4000-8000-000000000006'),'recording authority does not start financial settlement');
 select lives_ok($$select pg_temp.record_authority()$$,'record retry is idempotent');
 select is((select count(*) from public.audit_events where action='offline_reinvestment.authorized'),1::bigint,'record retry does not duplicate audit');
 select is((select count(*) from public.investments where offline_authorization_id is not null),0::bigint,'recording never activates an investment');
@@ -84,15 +86,31 @@ select is((select count(*) from public.investment_receipts where offline_authori
 select ok((select offline_settlement_id is not null from public.investments where id='e2000000-0000-4000-8000-000000000001'),'source carries a settlement marker for portfolio and reporting');
 select ok((select investor_id is null and source='reinvestment' from public.investment_receipts where offline_authorization_id is not null),'receipt does not invent a login');
 select is((select count(*) from public.audit_events where action='offline_reinvestment.fulfilled'),1::bigint,'completion audited exactly once');
+select ok(private.cycle_settlement_started('e1000000-0000-4000-8000-000000000006'),'offline completion is recognized by shared settlement detection');
+select is((select investment_count from private.cycle_return_totals('e1000000-0000-4000-8000-000000000006',3000)),5::bigint,'offline completion removes exactly one source from unsettled totals');
+select is((select principal_ugx from private.cycle_return_totals('e1000000-0000-4000-8000-000000000006',3000)),650000::numeric,'unsettled principal excludes the offline-settled source');
+select is((select total_value_ugx from private.cycle_return_totals('e1000000-0000-4000-8000-000000000006',3000)),845000::numeric,'unsettled actual value excludes the offline-settled source');
 select is((select count(*) from public.jobs where kind='send_email'),0::bigint,'no email sent to a placeholder');
 select throws_ok($$select public.revoke_offline_reinvestment('e1000000-0000-4000-8000-000000000001',true,gen_random_uuid(),(select id from public.offline_reinvestment_authorizations where status='fulfilled'),'Try to undo completed investment')$$,'23514','Completed reinvestment cannot be revoked','completed financial records cannot be revoked');
 reset role;
 select is((select count(*) from auth.users),2::bigint,'no auth account created');
+-- Keep a second pending offline authority to test maintenance after claiming.
+update public.investment_cycles set status='open' where id='e1000000-0000-4000-8000-000000000007';
+select lives_ok($$select pg_temp.record_authority(3)$$,'record pending offline authority before claiming');
 -- Later legitimate claiming attaches investments and existing receipt to owner.
 insert into auth.users(id,email) values('e1000000-0000-4000-8000-000000000008','claimed-offline@test.local');
 select lives_ok($$select public.link_legacy_partner('e1000000-0000-4000-8000-000000000001','e1000000-0000-4000-8000-000000000005','e1000000-0000-4000-8000-000000000008','claimed-offline@test.local','+256700000005','LINK PARTNER',true,gen_random_uuid())$$,'later real account claim succeeds');
 select is((select investor_id from public.investment_receipts where offline_authorization_id is not null),'e1000000-0000-4000-8000-000000000008'::uuid,'existing offline receipt follows verified account claim');
 select throws_ok($$insert into public.maturity_instructions(investment_id,investor_id,choice,projected_payout_ugx,projected_reinvest_ugx,request_id) values('e2000000-0000-4000-8000-000000000001','e1000000-0000-4000-8000-000000000008','reinvest_all',0,169000,gen_random_uuid())$$,'23514','This investment already has an offline reinvestment authorization','portal cannot settle the same source again');
+-- A claimed partner with standing terms must not abort the maintenance run.
+select public.accept_standing_reinvest_terms('e1000000-0000-4000-8000-000000000008','e1000000-0000-4000-8000-000000000003','fixture',decode('01','hex'),gen_random_uuid());
+update public.maturity_policy_gates set enabled=true where name='current_agreement_auto_reinvest';
+set local role service_role;
+select lives_ok($$select public.run_maintenance(gen_random_uuid())$$,'maintenance completes after offline partner claims account and accepts standing terms');
+select is((select count(*) from public.maturity_instructions where investment_id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000003')),0::bigint,'maintenance skips fulfilled and pending offline sources');
+select is((select count(*) from public.maturity_instructions where investment_id='e2000000-0000-4000-8000-000000000002'),1::bigint,'revoked offline authority releases the source to automatic instruction creation');
+select is((select count(*) from public.audit_events where action='maintenance.completed'),1::bigint,'maintenance transaction and its completion audit persist');
+reset role;
 select set_config('request.jwt.claims','{"sub":"e1000000-0000-4000-8000-000000000008","role":"authenticated"}',true);
 set local role authenticated;
 select is((select count(*) from public.investments where offline_authorization_id is not null),1::bigint,'claimed partner can read the resulting hybrid investment');
