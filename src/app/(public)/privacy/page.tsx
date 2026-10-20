@@ -1,4 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+
+import { Button } from "@/components/ui/button";
+import { LinkStatus } from "@/components/ui/link-status";
 
 import { LEGAL_CONTENT_VERSION } from "@/content/legal";
 
@@ -9,6 +13,14 @@ export default function PrivacyPage() {
     <main id="main" className="narrow legal">
       <p className="eyebrow">Version {LEGAL_CONTENT_VERSION}</p>
       <h1>Privacy policy</h1>
+      <aside aria-label="Partner sign-in">
+        <p>Looking for your partner portal?</p>
+        <Button asChild>
+          <Link href="/login">
+            Partner login <LinkStatus label="Opening partner login" />
+          </Link>
+        </Button>
+      </aside>
       <h2>Who controls your information</h2>
       <p>
         OURMU Ventures Ltd is responsible for personal information collected

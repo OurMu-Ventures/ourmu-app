@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { MagicLinkForm } from "@/components/forms";
 import { Button } from "@/components/ui/button";
@@ -27,29 +27,31 @@ function clearFragment() {
 }
 
 export function AuthStartClient() {
-  // Parse the fragment during initial client render (browser-only) so page
-  // load alone never redeems anything; redemption happens only on deliberate
-  // continuation. Scanners that fetch without executing JS cannot consume it.
-  const [status, setStatus] = useState<Status>(() => {
-    if (typeof window === "undefined") return { name: "loading" };
+  // Match the server render, then read the browser-only fragment after mount.
+  // The server's loading state can be reused during hydration, so parsing in
+  // the state initializer can leave the page permanently loading.
+  const [status, setStatus] = useState<Status>({ name: "loading" });
+  const [error, setError] = useState<string | null>(null);
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    // Strict Mode replays effects. Preserve the first result after removing
+    // the fragment rather than treating the second pass as a missing link.
+    if (initialized.current) return;
+    initialized.current = true;
     const decision = extractStartPayloadFromHash(window.location.hash, {
       appOrigin: window.location.origin,
       supabaseOrigin: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
     });
-    if (decision.kind === "confirm") {
-      return { name: "ready", payload: decision.payload };
-    }
-    if (decision.kind === "supabase") {
-      return { name: "supabase", supabaseUrl: decision.supabaseUrl };
-    }
-    return { name: "invalid" };
-  });
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Clear the fragment from the address bar immediately. The token was only
-    // ever in the fragment, never sent to the server on page load.
     clearFragment();
+    const initialStatus: Status =
+      decision.kind === "confirm"
+        ? { name: "ready", payload: decision.payload }
+        : decision.kind === "supabase"
+          ? { name: "supabase", supabaseUrl: decision.supabaseUrl }
+          : { name: "invalid" };
+    // Synchronize the server placeholder with the browser's external URL state.
+    setStatus(initialStatus);
   }, []);
 
   const continueSecurely = async () => {

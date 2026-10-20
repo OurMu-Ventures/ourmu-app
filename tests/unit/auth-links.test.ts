@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -217,6 +218,12 @@ describe("Supabase-origin fail-closed", () => {
 
 describe("production Supabase template (discrete fragment fields)", () => {
   it("documents the exact dashboard template representation", () => {
+    const template = readFileSync(
+      new URL("../../supabase/templates/magic-link.html", import.meta.url),
+      "utf8",
+    );
+    const href = template.match(/href="([^"]*{{ \.TokenHash }}[^"]*)"/)?.[1];
+    expect(href?.replaceAll("&amp;", "&")).toBe(PRODUCTION_MAGIC_LINK_TEMPLATE_HREF);
     expect(PRODUCTION_MAGIC_LINK_TEMPLATE_HREF).toBe(
       "{{ .SiteURL }}/auth/start#token_hash={{ .TokenHash }}&type=email&redirect_to={{ .RedirectTo }}",
     );
