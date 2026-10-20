@@ -159,6 +159,7 @@ export default async function AdminMaturitiesPage({
           tab === "withdrawals" ? "Pending requests with a payout. Mixed withdrawal and reinvestment requests also appear under Reinvestments." :
           "Pending requests with a reinvestment. Mixed requests share the same instruction and processing status with Withdrawals."}
       </p>
+      <p><Link href="/admin/maturities/offline">Offline authorizations for unclaimed imported partners</Link></p>
       {await Promise.all(
         items.map(async (item) => {
           const partner = Array.isArray(item.profiles)

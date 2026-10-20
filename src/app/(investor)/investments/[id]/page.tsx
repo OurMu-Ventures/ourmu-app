@@ -260,6 +260,9 @@ export default async function InvestmentPage({
           </p>
         )}
       </div>
+      {data.offline_settlement_id && (
+        <p className="notice">This matured placement was reinvested under recorded offline authorization. <Link href="/investments">View your investments</Link> for the resulting placement.</p>
+      )}
       {isMatured && (
         <div className="card" style={{ marginTop: "1rem" }}>
           <p className="eyebrow">Matured investment choices</p>

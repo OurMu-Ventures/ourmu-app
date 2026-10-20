@@ -51,12 +51,14 @@ export function canChooseMaturity(
     status: string;
     record_origin: string;
     payout_basis: string;
+    offline_settlement_id?: string | null;
   },
   instructionStatus?: string | null,
 ): boolean {
   return (
     investment.status === "matured" &&
     investment.payout_basis !== "reported_paid" &&
-    instructionStatus !== "fulfilled"
+    instructionStatus !== "fulfilled" &&
+    !investment.offline_settlement_id
   );
 }

@@ -800,6 +800,7 @@ export type Database = {
       }
       investment_receipts: {
         Row: {
+          offline_authorization_id: string | null
           account_description: string
           amount_ugx: number
           bank_receipt_id: string | null
@@ -809,7 +810,7 @@ export type Database = {
           generated_at: string | null
           id: string
           investment_id: string
-          investor_id: string
+          investor_id: string | null
           is_test: boolean
           last_error_code: string | null
           maturity_instruction_id: string | null
@@ -826,6 +827,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          offline_authorization_id?: string | null
           account_description: string
           amount_ugx: number
           bank_receipt_id?: string | null
@@ -835,7 +837,7 @@ export type Database = {
           generated_at?: string | null
           id?: string
           investment_id: string
-          investor_id: string
+          investor_id?: string | null
           is_test?: boolean
           last_error_code?: string | null
           maturity_instruction_id?: string | null
@@ -852,6 +854,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          offline_authorization_id?: string | null
           account_description?: string
           amount_ugx?: number
           bank_receipt_id?: string | null
@@ -861,7 +864,7 @@ export type Database = {
           generated_at?: string | null
           id?: string
           investment_id?: string
-          investor_id?: string
+          investor_id?: string | null
           is_test?: boolean
           last_error_code?: string | null
           maturity_instruction_id?: string | null
@@ -917,6 +920,9 @@ export type Database = {
       }
       investments: {
         Row: {
+          offline_settlement_id: string | null
+          administratively_archived_at: string | null
+          offline_authorization_id: string | null
           activated_at: string | null
           alias: string | null
           cancelled_at: string | null
@@ -948,6 +954,9 @@ export type Database = {
           units: number | null
         }
         Insert: {
+          offline_settlement_id?: string | null
+          administratively_archived_at?: string | null
+          offline_authorization_id?: string | null
           activated_at?: string | null
           alias?: string | null
           cancelled_at?: string | null
@@ -979,6 +988,9 @@ export type Database = {
           units?: number | null
         }
         Update: {
+          offline_settlement_id?: string | null
+          administratively_archived_at?: string | null
+          offline_authorization_id?: string | null
           activated_at?: string | null
           alias?: string | null
           cancelled_at?: string | null
@@ -1693,6 +1705,156 @@ export type Database = {
           },
         ]
       }
+      offline_reinvestment_authorizations: {
+        Row: {
+          target_maturity_date: string
+          target_return_bps: number
+          identity_verified: boolean
+          settlement_checked: boolean
+          agreement_accepted_offline: boolean
+          id: string
+          investment_id: string
+          legacy_partner_id: string
+          target_cycle_id: string
+          agreement_version_id: string
+          agreement_hash: string
+          principal_ugx: number
+          actual_roi_ugx: number
+          amount_ugx: number
+          authorized_on: string
+          method: string
+          evidence_reference: string
+          verification_notes: string
+          recorded_by: string
+          recorded_at: string
+          request_id: string
+          status: string
+          fulfilled_investment_id: string | null
+          fulfilled_by: string | null
+          fulfilled_at: string | null
+          revoked_by: string | null
+          revoked_at: string | null
+          revocation_reason: string | null
+        }
+        Insert: {
+          target_maturity_date: string
+          target_return_bps: number
+          identity_verified: boolean
+          settlement_checked: boolean
+          agreement_accepted_offline: boolean
+          id?: string
+          investment_id: string
+          legacy_partner_id: string
+          target_cycle_id: string
+          agreement_version_id: string
+          agreement_hash: string
+          principal_ugx: number
+          actual_roi_ugx: number
+          amount_ugx: number
+          authorized_on: string
+          method: string
+          evidence_reference: string
+          verification_notes: string
+          recorded_by: string
+          recorded_at?: string
+          request_id: string
+          status?: string
+          fulfilled_investment_id?: string | null
+          fulfilled_by?: string | null
+          fulfilled_at?: string | null
+          revoked_by?: string | null
+          revoked_at?: string | null
+          revocation_reason?: string | null
+        }
+        Update: {
+          target_maturity_date?: string
+          target_return_bps?: number
+          identity_verified?: boolean
+          settlement_checked?: boolean
+          agreement_accepted_offline?: boolean
+          id?: string
+          investment_id?: string
+          legacy_partner_id?: string
+          target_cycle_id?: string
+          agreement_version_id?: string
+          agreement_hash?: string
+          principal_ugx?: number
+          actual_roi_ugx?: number
+          amount_ugx?: number
+          authorized_on?: string
+          method?: string
+          evidence_reference?: string
+          verification_notes?: string
+          recorded_by?: string
+          recorded_at?: string
+          request_id?: string
+          status?: string
+          fulfilled_investment_id?: string | null
+          fulfilled_by?: string | null
+          fulfilled_at?: string | null
+          revoked_by?: string | null
+          revoked_at?: string | null
+          revocation_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offline_reinvestment_authorizations_investment_id_fkey"
+            columns: ["investment_id"]
+            isOneToOne: false
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offline_reinvestment_authorizations_legacy_partner_id_fkey"
+            columns: ["legacy_partner_id"]
+            isOneToOne: false
+            referencedRelation: "legacy_partner_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offline_reinvestment_authorizations_target_cycle_id_fkey"
+            columns: ["target_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "investment_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offline_reinvestment_authorizations_agreement_version_id_fkey"
+            columns: ["agreement_version_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offline_reinvestment_authorizations_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offline_reinvestment_authorizations_fulfilled_by_fkey"
+            columns: ["fulfilled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offline_reinvestment_authorizations_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offline_reinvestment_authorizations_fulfilled_investment_id_fkey"
+            columns: ["fulfilled_investment_id"]
+            isOneToOne: true
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payout_destinations: {
         Row: {
           account_last_four: string
@@ -1897,6 +2059,47 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      record_offline_reinvestment: {
+        Args: {
+          p_target_maturity_date: string
+          p_target_return_bps: number
+          p_identity_verified: boolean
+          p_settlement_checked: boolean
+          p_agreement_accepted: boolean
+          p_admin_id: string
+          p_admin_aal2: boolean
+          p_request_id: string
+          p_investment_id: string
+          p_cycle_id: string
+          p_agreement_hash: string
+          p_amount: number
+          p_authorized_on: string
+          p_method: string
+          p_evidence_reference: string
+          p_verification_notes: string
+        }
+        Returns: string
+      }
+      complete_offline_reinvestment: {
+        Args: {
+          p_admin_id: string
+          p_admin_aal2: boolean
+          p_request_id: string
+          p_authorization_id: string
+          p_confirmation: string
+        }
+        Returns: string
+      }
+      revoke_offline_reinvestment: {
+        Args: {
+          p_admin_id: string
+          p_admin_aal2: boolean
+          p_request_id: string
+          p_authorization_id: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
       accept_partner_import: {
         Args: {
           p_admin_aal2: boolean
