@@ -332,7 +332,7 @@ describe("partner units visibility across pages", () => {
     expect(text).toMatch(/january 2026 - july 2026/i);
   });
 
-  it("new-investment page keeps per-unit pricing in the creation flow", async () => {
+  it("new-investment page shows return and maturity without a per-unit card", async () => {
     mockClient({
       investment_cycles: cycle,
       next_of_kin: { id: "kin-1" },
@@ -342,8 +342,9 @@ describe("partner units visibility across pages", () => {
     const tree = await NewInvestmentPage();
     const text = collectText(tree);
 
-    expect(text).toMatch(/per unit/i);
-    expect(text).toMatch(/125,000/);
+    expect(text).not.toMatch(/per unit/i);
+    expect(text).toMatch(/projected return/i);
+    expect(text).toMatch(/maturity/i);
     expect(text).toMatch(/cycle one/i);
 
     const elements = walk(tree);

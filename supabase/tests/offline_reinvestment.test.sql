@@ -31,7 +31,7 @@ select throws_ok($$select pg_temp.record_authority(p_admin=>'e1000000-0000-4000-
 select throws_ok($$select pg_temp.record_authority(p_aal=>false)$$,'42501','Active administrator two-factor authentication required','AAL1 rejected');
 select throws_ok($$select pg_temp.record_authority(p_amount=>168000)$$,'23514','The recorded actual return and authorized full amount must match','amount mismatch rejected');
 select throws_ok($$select pg_temp.record_authority(p_hash=>repeat('c',64))$$,'23514','The accepted destination agreement is unavailable or changed','stale agreement rejected');
-select throws_ok($$select pg_temp.record_authority(p_date=>current_date+1)$$,'22023','Dated offline evidence and verification notes are required','future authorization rejected');
+select throws_ok($$select pg_temp.record_authority(p_date=>(now() at time zone 'Africa/Kampala')::date+1)$$,'22023','Dated offline evidence and verification notes are required','future authorization rejected');
 select throws_ok($$select pg_temp.record_authority(p_ref=>'')$$,'22023','Dated offline evidence and verification notes are required','missing evidence rejected');
 select throws_ok($$select pg_temp.record_authority(p_verified=>false)$$,'22023','Confirm identity, prior settlement checks, and offline agreement acceptance','identity attestation is required by database');
 select lives_ok($$select pg_temp.record_authority()$$,'record specific offline authority without login');

@@ -1,7 +1,7 @@
 import { InvestmentRequestForm } from "@/components/forms";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import { requireInvestor } from "@/lib/auth";
-import { date, dateTime, ugx } from "@/lib/format";
+import { date, dateTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function NewInvestmentPage() {
@@ -59,10 +59,6 @@ export default async function NewInvestmentPage() {
       <p className="eyebrow">New investment</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>{cycle.name}</h1>
       <div className="grid">
-        <article className="card">
-          <p className="muted">Per unit</p>
-          <p className="stat">{ugx(cycle.unit_price_ugx)}</p>
-        </article>
         <article className="card">
           <p className="muted">Projected return</p>
           <p className="stat">30%</p>
