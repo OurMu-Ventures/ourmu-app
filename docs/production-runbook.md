@@ -57,6 +57,52 @@ delivery, and then revoking the old key.
 
 The canonical pilot URL is `https://partners.ourmu.org`. Keep the legacy `https://ourmu-app.vercel.app/auth/confirm` callback temporarily as a rollback route until acceptance is signed off.
 
+### Magic-link confirmation rollout
+
+The native Supabase Magic Link email must use the versioned HTML in
+`supabase/templates/magic-link.html`. Its button opens `/auth/start` with the
+TokenHash in the URL fragment. Loading the page does not verify the token;
+the partner selects **Continue securely**, and the browser sends the token in
+an HTTPS POST to `/auth/confirm`. This flow does not require the PKCE verifier
+cookie from the browser that requested the email. Ordinary HTTP link scanners
+cannot read the fragment or consume the token by fetching the landing page.
+
+Deploy the app first: this release also fixes the confirmation page staying on
+its server-rendered loading state during hydration.
+
+Merging or deploying the Next.js app does **not** update hosted Supabase email
+templates. Complete this separate rollout after deploying the application:
+
+1. Save the current hosted **Magic Link** subject and HTML for rollback.
+2. In the production Supabase project, open **Authentication → Emails → Magic
+   Link**. Replace the HTML with the complete contents of
+   `supabase/templates/magic-link.html`. Keep the subject
+   `Your Ourmu Ventures sign-in link` and save.
+3. Keep the hosted Site URL at `https://partners.ourmu.org` and keep the approved
+   `/auth/confirm` callback URLs. Preserve SMTP credentials, signup restrictions,
+   rate limits, and the 3600-second OTP expiry. Do not run `supabase config push`
+   to apply this change: `config.toml` contains local development settings,
+   including a localhost Site URL.
+4. Request one fresh link for an approved test account. Verify delivery and that
+   the email button targets `/auth/start#token_hash=...&type=email&redirect_to=...`.
+   Do not put the actual URL or token in logs, screenshots, or tickets. Previously
+   sent emails retain their old links; use only the newest email.
+5. Open it in a different browser or private window. Confirm the page shows
+   **Continue securely**, removes the fragment from the address bar, and does
+   not sign in until the button is selected. Continue and verify the dashboard
+   and a successful sign-in record. Check an expired or used link in a signed-out
+   browser shows **Email me a fresh link**. A repeated click in an already
+   authenticated browser should reopen the portal.
+6. On a phone, open `/privacy` and confirm **Partner login** opens `/login`.
+   Repeat the fresh-email test for the affected partner after the controlled
+   test passes.
+
+For template rollback, restore only the saved Magic Link subject and HTML in
+Supabase. Keep the compatible `/auth/start` and `/auth/confirm` routes available
+for already-issued links. Automated browser tests verify the email link format,
+user-initiated POST, and error recovery with a synthetic token; they do not send
+real email or prove live delivery or token redemption.
+
 ### Application identity RPC rollout
 
 Apply `20261005110403_fix_application_identity_api.sql` before deploying the

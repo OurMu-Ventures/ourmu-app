@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
+import { renderToString } from "react-dom/server";
+import { hydrateRoot } from "react-dom/client";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +31,38 @@ afterEach(() => {
 });
 
 describe("AuthStartClient", () => {
+  it("hydrates the server loading state into a usable link without redeeming it", async () => {
+    setHash("#token_hash=fresh-token&type=email&next=%2Fdashboard");
+    const browserWindow = window;
+    let html: string;
+    vi.stubGlobal("window", undefined);
+    try {
+      html = renderToString(<StrictMode><AuthStartClient /></StrictMode>);
+    } finally {
+      vi.stubGlobal("window", browserWindow);
+    }
+    expect(html).toContain("Checking your secure link");
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.append(container);
+    const onRecoverableError = vi.fn();
+    let root: ReturnType<typeof hydrateRoot>;
+    await act(async () => {
+      root = hydrateRoot(container, <StrictMode><AuthStartClient /></StrictMode>, {
+        onRecoverableError,
+      });
+    });
+    try {
+      expect(await screen.findByRole("button", { name: /continue securely/i })).toBeVisible();
+      expect(window.location.hash).toBe("");
+      expect(fetch).not.toHaveBeenCalled();
+      expect(onRecoverableError).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+
   it("loading the page alone never redeems the link", async () => {
     setHash("#token_hash=fresh-token&type=magiclink&next=%2Fdashboard");
     render(<AuthStartClient />);

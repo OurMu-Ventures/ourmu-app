@@ -7,7 +7,9 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
   use: { baseURL: "http://127.0.0.1:3000", trace: "on-first-retry" },
   webServer: {
-    command: process.env.CI ? "npm run dev" : "npm run dev -- --webpack",
+    // Exercise real hydration without development Fast Refresh interrupting
+    // fragment cleanup or navigation while routes compile in parallel.
+    command: "npm run build && npm run start -- --hostname 127.0.0.1",
     url: "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
   },
