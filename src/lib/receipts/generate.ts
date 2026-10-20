@@ -7,7 +7,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 export type ReceiptRow = {
   id: string;
   investment_id: string;
-  investor_id: string;
+  investor_id: string | null;
   source: "bank_activation" | "reinvestment" | "investment_record";
   receipt_number: string;
   is_test: boolean;
@@ -73,7 +73,7 @@ export async function ensureReceiptPdf(
           : null,
       isTest: receipt.is_test,
     });
-    const path = `${receipt.investor_id}/${receipt.id}.pdf`;
+    const path = `${receipt.investor_id ?? "offline"}/${receipt.id}.pdf`;
     const { error: uploadError } = await admin.storage
       .from("receipts")
       .upload(path, pdf.bytes, {

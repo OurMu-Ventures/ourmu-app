@@ -83,7 +83,7 @@ export async function submitMaturityInstruction(
   const { data: investment } = await admin
     .from("investments")
     .select(
-      "status,record_origin,payout_basis,principal_ugx,projected_return_ugx,investment_cycles(actual_return_bps),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
+      "status,record_origin,payout_basis,offline_settlement_id,principal_ugx,projected_return_ugx,investment_cycles(actual_return_bps),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
     )
     .eq("id", input.investmentId)
     .eq("investor_id", profile.id)
