@@ -421,7 +421,6 @@ export function InvestmentRequestForm({
           min="125000"
           max={limitUgx}
           step="0.01"
-          defaultValue="125000"
           required
         />
         <small className="muted">
