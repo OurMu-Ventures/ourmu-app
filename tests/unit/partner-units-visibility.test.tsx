@@ -110,6 +110,13 @@ function queryFor(data: unknown) {
   const terminal = { data } as { data: unknown } & Record<string, (...args: unknown[]) => unknown>;
   terminal.select = () => terminal;
   terminal.eq = () => terminal;
+  terminal.neq = (field, value) => {
+    if (typeof field === "string" && Array.isArray(selected)) {
+      selected = selected.filter((row) => row[field] !== value);
+      terminal.data = selected;
+    }
+    return terminal;
+  };
   terminal.lte = (field, value) => {
     if (field === "opens_at" && selected && typeof selected === "object" &&
         "opens_at" in selected && String(selected.opens_at) > String(value)) selected = null;
@@ -197,6 +204,49 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+});
+
+describe("cancelled investments in partner portfolios", () => {
+  it.each([
+    ["dashboard", DashboardPage],
+    ["investments list", InvestmentsPage],
+  ])("%s hides cancelled placements while retaining every other status", async (_, page) => {
+    const statuses = ["reserved", "active", "matured", "rejected", "expired", "cancelled"];
+    mockClient({
+      investments: statuses.map((status) => ({ ...placement, id: status, status })),
+      investment_cycles: cycle,
+      next_of_kin: { id: "kin-1" },
+    });
+
+    const elements = walk(await page());
+    expect(cardItems(elements).map((item) => item.investmentId)).toEqual(
+      statuses.filter((status) => status !== "cancelled"),
+    );
+    if (page === DashboardPage) {
+      const summary = elements.find((element) => element.type === PortfolioSummary);
+      expect(summary?.props).toMatchObject({
+        activeCount: 2,
+        maturedCount: 1,
+        principal: 500000,
+        projected: 650000,
+      });
+    }
+  });
+
+  it.each([
+    ["dashboard", DashboardPage, "Your placements will appear here once recorded."],
+    ["investments list", InvestmentsPage, "No investment records yet."],
+  ])("%s shows its empty state when all placements are cancelled", async (_, page, message) => {
+    mockClient({
+      investments: [{ ...placement, status: "cancelled" }],
+      investment_cycles: cycle,
+      next_of_kin: { id: "kin-1" },
+    });
+
+    const tree = await page();
+    expect(cardItems(walk(tree))).toHaveLength(0);
+    expect(collectText(tree)).toContain(message);
+  });
 });
 
 describe("partner units visibility across pages", () => {

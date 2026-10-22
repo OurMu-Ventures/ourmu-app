@@ -22,6 +22,7 @@ export default async function InvestmentsPage() {
       "*,investment_cycles(name,opens_at,actual_return_bps,legacy_settlement),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
     )
     .eq("investor_id", profile.id)
+    .neq("status", "cancelled")
     .order("requested_at", { ascending: false });
   return (
     <>

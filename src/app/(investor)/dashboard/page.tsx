@@ -28,6 +28,7 @@ export default async function DashboardPage() {
           "*,investment_cycles(name,status,maturity_date,opens_at,actual_return_bps,legacy_settlement),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
         )
         .eq("investor_id", profile.id)
+        .neq("status", "cancelled")
         .order("requested_at", { ascending: false }),
       supabase
         .from("investment_cycles")
