@@ -1,12 +1,27 @@
+import Form from "next/form";
 import Link from "next/link";
 
 import { getReceiptDownloadUrl } from "@/actions/receipts";
+import { PartnerSearchForm } from "@/components/PartnerSearchForm";
 import { requireAdmin } from "@/lib/auth";
 import { date, dateTime, ugx, units } from "@/lib/format";
+import {
+  filterPartners,
+  parsePage,
+  parsePartnerFilter,
+  portfolioHref,
+  singleParam,
+  type PartnerRef,
+} from "@/lib/partner-portfolio";
+import {
+  loadPartnerListings,
+  partnerInvestmentFilter,
+  resolvePartner,
+} from "@/lib/partners";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const PAGE_SIZE = 25;
-const PARTNER_OPTION_LIMIT = 25;
+const SEARCH_RESULT_LIMIT = 10;
 
 type SearchParams = Promise<{
   partner?: string | string[];
@@ -15,32 +30,23 @@ type SearchParams = Promise<{
   page?: string | string[];
 }>;
 
-function singleParam(value: string | string[] | undefined) {
-  return typeof value === "string" ? value : "";
-}
-
-function pageNumber(value: string) {
-  const parsed = Number(value);
-  return /^\d+$/.test(value) &&
-    Number.isSafeInteger(parsed) &&
-    parsed > 0 &&
-    parsed <= 1_000_000
-    ? parsed
-    : 1;
-}
-
-function pageHref(
-  partner: string,
-  partnerSearch: string,
-  cycle: string,
-  page: number,
-) {
+function investmentsHref(filters: {
+  partner?: string;
+  partnerSearch?: string;
+  cycle?: string;
+  page?: number;
+}) {
   const params = new URLSearchParams();
-  if (partner) params.set("partner", partner);
-  if (partnerSearch) params.set("partnerSearch", partnerSearch);
-  if (cycle) params.set("cycle", cycle);
-  params.set("page", String(page));
-  return `/admin/investments?${params.toString()}`;
+  if (filters.partner) params.set("partner", filters.partner);
+  if (filters.partnerSearch) params.set("partnerSearch", filters.partnerSearch);
+  if (filters.cycle) params.set("cycle", filters.cycle);
+  if (filters.page) params.set("page", String(filters.page));
+  const search = params.toString();
+  return `/admin/investments${search ? `?${search}` : ""}`;
+}
+
+function single<T>(value: T | T[] | null) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 export default async function AdminInvestmentsPage({
@@ -54,92 +60,38 @@ export default async function AdminInvestmentsPage({
   const partner = singleParam(params.partner);
   const partnerSearch = singleParam(params.partnerSearch).trim().slice(0, 80);
   const cycle = singleParam(params.cycle);
-  const page = pageNumber(singleParam(params.page));
+  const page = parsePage(singleParam(params.page));
+  const partnerRef = partner ? parsePartnerFilter(partner) : null;
+  const from = investmentsHref({
+    partner,
+    partnerSearch,
+    cycle,
+    page: page > 1 ? page : undefined,
+  });
 
-  // Escape LIKE wildcards so a name search stays a literal, bounded lookup.
-  const searchPattern = `%${partnerSearch.replace(/[\\%_]/g, "\\$&")}%`;
-  let profileOptionsQuery = admin
-    .from("profiles")
-    .select("id,legal_name,email")
-    .eq("role", "investor");
-  let legacyOptionsQuery = admin
-    .from("legacy_partner_identities")
-    .select("id,canonical_name,normalized_email,profile_id")
-    .is("profile_id", null);
-  if (partnerSearch) {
-    profileOptionsQuery = profileOptionsQuery.ilike(
-      "legal_name",
-      searchPattern,
-    );
-    legacyOptionsQuery = legacyOptionsQuery.ilike(
-      "canonical_name",
-      searchPattern,
-    );
-  }
-  const [
-    { data: profiles, error: profilesError },
-    { data: legacyIdentities, error: legacyError },
-    { data: cycles, error: cyclesError },
-  ] = await Promise.all([
-    profileOptionsQuery.order("legal_name").limit(PARTNER_OPTION_LIMIT),
-    legacyOptionsQuery.order("canonical_name").limit(PARTNER_OPTION_LIMIT),
-    admin
-      .from("investment_cycles")
-      .select("id,name")
-      .order("opens_at", { ascending: false }),
-  ]);
-  if (profilesError || legacyError || cyclesError) {
-    throw new Error("Unable to load investment filters");
-  }
-
-  let partnerOptions = [
-    ...(profiles ?? []).map((profile) => ({
-      value: `profile:${profile.id}`,
-      label: `${profile.legal_name} (${profile.email})`,
-    })),
-    ...(legacyIdentities ?? []).map((identity) => ({
-      value: `legacy:${identity.id}`,
-      label: `Unclaimed: ${identity.canonical_name}${
-        identity.normalized_email ? ` (${identity.normalized_email})` : ""
-      }`,
-    })),
-  ];
-  let selectedPartner = partnerOptions.find(
-    (option) => option.value === partner,
-  );
-  if (partner && !selectedPartner) {
-    if (partner.startsWith("profile:")) {
-      const { data, error } = await admin
-        .from("profiles")
-        .select("id,legal_name,email")
-        .eq("role", "investor")
-        .eq("id", partner.slice("profile:".length))
-        .maybeSingle();
-      if (error) throw new Error("Unable to load selected partner");
-      if (data)
-        selectedPartner = {
-          value: `profile:${data.id}`,
-          label: `${data.legal_name} (${data.email})`,
-        };
-    } else if (partner.startsWith("legacy:")) {
-      const { data, error } = await admin
-        .from("legacy_partner_identities")
-        .select("id,canonical_name,normalized_email,profile_id")
-        .eq("id", partner.slice("legacy:".length))
-        .is("profile_id", null)
-        .maybeSingle();
-      if (error) throw new Error("Unable to load selected partner");
-      if (data)
-        selectedPartner = {
-          value: `legacy:${data.id}`,
-          label: `Unclaimed: ${data.canonical_name}${data.normalized_email ? ` (${data.normalized_email})` : ""}`,
-        };
-    }
-    if (selectedPartner) partnerOptions = [selectedPartner, ...partnerOptions];
-  }
+  const [{ data: cycles, error: cyclesError }, resolution, listings] =
+    await Promise.all([
+      admin
+        .from("investment_cycles")
+        .select("id,name")
+        .order("opens_at", { ascending: false }),
+      partnerRef ? resolvePartner(admin, partnerRef) : null,
+      partnerSearch ? loadPartnerListings(admin) : null,
+    ]);
+  if (cyclesError) throw new Error("Unable to load investment filters");
+  // A claimed imported identity filters to the profile that owns its records.
+  const selectedPartner =
+    resolution?.status === "claimed"
+      ? await resolvePartner(admin, resolution.profile)
+      : resolution;
+  const selected =
+    selectedPartner?.status === "found" ? selectedPartner.partner : null;
+  const partnerMatches = listings
+    ? filterPartners(listings, partnerSearch)
+    : [];
   const selectedCycle = (cycles ?? []).find((option) => option.id === cycle);
   const invalidFilter =
-    (partner !== "" && !selectedPartner) || (cycle !== "" && !selectedCycle);
+    (partner !== "" && !selected) || (cycle !== "" && !selectedCycle);
 
   const investmentResult = invalidFilter
     ? null
@@ -147,38 +99,16 @@ export default async function AdminInvestmentsPage({
         let query = admin
           .from("investments")
           .select(
-            "id,investor_id,legacy_partner_id,cycle_id,record_origin,status,units,principal_ugx,projected_value_ugx,reported_payout_ugx,requested_at,maturity_date,profiles(legal_name,email),investment_cycles(name),legacy_partner_identities(canonical_name,normalized_email),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status)",
+            "id,investor_id,legacy_partner_id,cycle_id,record_origin,status,units,principal_ugx,projected_value_ugx,reported_payout_ugx,requested_at,maturity_date,profiles(legal_name,email),investment_cycles(name),legacy_partner_identities(canonical_name,normalized_email,profile_id),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status)",
             { count: "exact" },
           );
-        if (partner.startsWith("profile:")) {
-          // selectedPartner was resolved from the database before any raw
-          // PostgREST .or() expression is built. Never interpolate input here.
-          const profileId = selectedPartner!.value.slice("profile:".length);
-          const { data: linkedIdentities, error: linkedError } = await admin
-            .from("legacy_partner_identities")
-            .select("id")
-            .eq("profile_id", profileId);
-          if (linkedError) throw new Error("Unable to load linked partners");
-          const linkedLegacyIds = (linkedIdentities ?? []).map(
-            (identity) => identity.id,
-          );
-          query = linkedLegacyIds.length
-            ? query.or(
-                `investor_id.eq.${profileId},legacy_partner_id.in.(${linkedLegacyIds.join(",")})`,
-              )
-            : query.eq("investor_id", profileId);
-        } else if (partner.startsWith("legacy:")) {
-          query = query.eq(
-            "legacy_partner_id",
-            selectedPartner!.value.slice("legacy:".length),
-          );
-        }
+        if (selected) query = query.or(partnerInvestmentFilter(selected));
         if (cycle) query = query.eq("cycle_id", cycle);
-        const from = (page - 1) * PAGE_SIZE;
+        const start = (page - 1) * PAGE_SIZE;
         return query
           .order("requested_at", { ascending: false })
           .order("id", { ascending: false })
-          .range(from, from + PAGE_SIZE - 1);
+          .range(start, start + PAGE_SIZE - 1);
       })();
   if (investmentResult?.error) throw new Error("Unable to load investments");
   const investments = investmentResult?.data ?? [];
@@ -190,41 +120,92 @@ export default async function AdminInvestmentsPage({
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investments</h1>
       <p className="notice">
         Browse all partner investment records. Review and activate pending
-        reservations on the <Link href="/admin/activations">Activations</Link> page.
+        reservations on the <Link href="/admin/activations">Activations</Link>{" "}
+        page.
       </p>
 
-      <form
+      <section className="card" aria-labelledby="find-portfolio">
+        <h2 id="find-portfolio" style={{ fontSize: "1.4rem" }}>
+          Find a partner&rsquo;s portfolio
+        </h2>
+        <PartnerSearchForm
+          id="portfolio-search"
+          action="/admin/investments"
+          name="partnerSearch"
+          label="Partner name or email"
+          defaultValue={partnerSearch}
+          keep={{ partner, cycle }}
+        />
+        {partnerSearch && (
+          <>
+            <p className="muted" role="status">
+              {partnerMatches.length
+                ? `${partnerMatches.length} ${partnerMatches.length === 1 ? "partner matches" : "partners match"} “${partnerSearch}”.`
+                : `No partners match “${partnerSearch}”. Check the spelling, or search by email.`}
+            </p>
+            {partnerMatches.length > 0 && (
+              <ul className="partner-results">
+                {partnerMatches.slice(0, SEARCH_RESULT_LIMIT).map((item) => (
+                  <li key={`${item.ref.kind}:${item.ref.id}`}>
+                    <span>
+                      <Link
+                        className="text-link"
+                        href={portfolioHref(item.ref, { from })}
+                      >
+                        {item.name}
+                      </Link>
+                      <small className="muted" style={{ display: "block" }}>
+                        {[
+                          item.ref.kind === "legacy"
+                            ? "Unclaimed import"
+                            : "Portal account",
+                          item.email ??
+                            item.phoneHint ??
+                            `Record ${item.ref.id.slice(0, 8)}`,
+                        ].join(" · ")}
+                      </small>
+                    </span>
+                    <Link
+                      className="button-secondary"
+                      href={portfolioHref(item.ref, { from })}
+                    >
+                      View portfolio
+                      <span className="visually-hidden"> for {item.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {partnerMatches.length > SEARCH_RESULT_LIMIT && (
+              <p>
+                <Link
+                  className="text-link"
+                  href={`/admin/partners?${new URLSearchParams({ q: partnerSearch })}`}
+                >
+                  See all {partnerMatches.length} matches on Partners
+                </Link>
+              </p>
+            )}
+          </>
+        )}
+      </section>
+
+      <h2 style={{ marginTop: "2rem" }}>All investments</h2>
+      <Form
         action="/admin/investments"
-        method="get"
         className="card admin-investment-filters"
       >
-        <label>
-          Find partner by name
-          <input
-            name="partnerSearch"
-            type="search"
-            defaultValue={partnerSearch}
-            placeholder="Enter a name"
-          />
-        </label>
-        <label>
-          Partner
-          <select name="partner" defaultValue={selectedPartner?.value ?? ""}>
-            <option value="">All partners</option>
-            {partnerOptions.map((option) => (
-              <option value={option.value} key={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <span className="muted">
-            Showing up to {PARTNER_OPTION_LIMIT} matching profiles and unclaimed
-            partners. Search, then choose a partner and apply filters.
-          </span>
-        </label>
+        {partner && <input type="hidden" name="partner" value={partner} />}
+        {partnerSearch && (
+          <input type="hidden" name="partnerSearch" value={partnerSearch} />
+        )}
         <label>
           Cycle
-          <select name="cycle" defaultValue={selectedCycle?.id ?? ""}>
+          <select
+            name="cycle"
+            defaultValue={selectedCycle?.id ?? ""}
+            key={cycle}
+          >
             <option value="">All cycles</option>
             {(cycles ?? []).map((item) => (
               <option value={item.id} key={item.id}>
@@ -234,15 +215,37 @@ export default async function AdminInvestmentsPage({
           </select>
         </label>
         <div className="admin-investment-filter-actions">
-          <button className="button-secondary" type="submit">
-            Find partners
-          </button>
           <button className="button" type="submit">
-            Apply filters
+            Show investments
           </button>
-          <Link href="/admin/investments">Clear</Link>
+          {(partner || cycle) && (
+            <Link
+              className="text-link"
+              href={investmentsHref({ partnerSearch })}
+            >
+              Clear filters
+            </Link>
+          )}
         </div>
-      </form>
+      </Form>
+      {selected && (
+        <p className="notice">
+          Showing investments for <strong>{selected.name}</strong>.{" "}
+          <Link
+            className="text-link"
+            href={portfolioHref(selected.ref, { from })}
+          >
+            View {selected.name}&rsquo;s portfolio
+          </Link>{" "}
+          ·{" "}
+          <Link
+            className="text-link"
+            href={investmentsHref({ partnerSearch, cycle })}
+          >
+            Show all partners
+          </Link>
+        </p>
+      )}
 
       {invalidFilter ? (
         <p className="notice">
@@ -255,50 +258,69 @@ export default async function AdminInvestmentsPage({
               ? `No investments found${count ? " on this page" : ""}.`
               : `Showing ${(page - 1) * PAGE_SIZE + 1}–${(page - 1) * PAGE_SIZE + investments.length} of ${count} investments.`}
           </p>
-          {investments.map((item) => (
-            <article
-              className="card"
-              style={{ marginBottom: "1rem" }}
-              key={item.id}
-            >
-              <div className="page-head">
-                <div>
-                  <h2>
-                    {(Array.isArray(item.profiles)
-                      ? item.profiles[0]?.legal_name
-                      : item.profiles?.legal_name) ??
-                      (Array.isArray(item.legacy_partner_identities)
-                        ? item.legacy_partner_identities[0]?.canonical_name
-                        : item.legacy_partner_identities?.canonical_name) ??
-                      "Unclaimed partner"}
-                  </h2>
-                  <p>
-                    {(Array.isArray(item.investment_cycles)
-                      ? item.investment_cycles[0]?.name
-                      : item.investment_cycles?.name) ?? "Unknown cycle"}{" "}
-                    · {units(item.units ?? 0)} units · {ugx(item.principal_ugx)}
-                  </p>
-                  <p className="muted">
-                    Requested {dateTime(item.requested_at)} · Matures{" "}
-                    {date(item.maturity_date)} · {item.record_origin}
-                  </p>
-                  <p className="muted">
-                    Projected payout {ugx(item.projected_value_ugx)}
-                    {item.reported_payout_ugx != null &&
-                      ` · Reported payout ${ugx(item.reported_payout_ugx)}`}
-                  </p>
+          {investments.map((item) => {
+            const profile = single(item.profiles);
+            const identity = single(item.legacy_partner_identities);
+            const owner: PartnerRef | null = item.investor_id
+              ? { kind: "profile", id: item.investor_id }
+              : identity?.profile_id
+                ? { kind: "profile", id: identity.profile_id }
+                : item.legacy_partner_id
+                  ? { kind: "legacy", id: item.legacy_partner_id }
+                  : null;
+            return (
+              <article
+                className="card"
+                style={{ marginBottom: "1rem" }}
+                key={item.id}
+              >
+                <div className="page-head">
+                  <div>
+                    <h3>
+                      {profile?.legal_name ??
+                        identity?.canonical_name ??
+                        "Unclaimed partner"}
+                    </h3>
+                    <p>
+                      {single(item.investment_cycles)?.name ?? "Unknown cycle"}{" "}
+                      · {units(item.units ?? 0)} units ·{" "}
+                      {ugx(item.principal_ugx)}
+                    </p>
+                    <p className="muted">
+                      Requested {dateTime(item.requested_at)} · Matures{" "}
+                      {date(item.maturity_date)} · {item.record_origin}
+                    </p>
+                    <p className="muted">
+                      Projected payout {ugx(item.projected_value_ugx)}
+                      {item.reported_payout_ugx != null &&
+                        ` · Reported payout ${ugx(item.reported_payout_ugx)}`}
+                    </p>
+                  </div>
+                  <span className="badge">{item.status}</span>
                 </div>
-                <span className="badge">{item.status}</span>
-              </div>
-              {item.status === "reserved" &&
-                item.record_origin === "portal" && (
-                  <Link className="button-secondary" href="/admin/activations">
-                    Review in Activations
-                  </Link>
-                )}
-              <ReceiptAdminLine receipts={item.investment_receipts} />
-            </article>
-          ))}
+                <p className="admin-investment-filter-actions">
+                  {owner && (
+                    <Link
+                      className="button-secondary"
+                      href={portfolioHref(owner, { from })}
+                    >
+                      View portfolio
+                    </Link>
+                  )}
+                  {item.status === "reserved" &&
+                    item.record_origin === "portal" && (
+                      <Link
+                        className="button-secondary"
+                        href="/admin/activations"
+                      >
+                        Review in Activations
+                      </Link>
+                    )}
+                </p>
+                <ReceiptAdminLine receipts={item.investment_receipts} />
+              </article>
+            );
+          })}
           {count > 0 && (page > 1 || page * PAGE_SIZE < count) && (
             <nav
               className="admin-investment-pagination"
@@ -307,7 +329,12 @@ export default async function AdminInvestmentsPage({
               {page > 1 && (
                 <Link
                   className="button-secondary"
-                  href={pageHref(partner, partnerSearch, cycle, page - 1)}
+                  href={investmentsHref({
+                    partner,
+                    partnerSearch,
+                    cycle,
+                    page: page - 1,
+                  })}
                 >
                   Previous
                 </Link>
@@ -318,7 +345,12 @@ export default async function AdminInvestmentsPage({
               {page * PAGE_SIZE < count && (
                 <Link
                   className="button-secondary"
-                  href={pageHref(partner, partnerSearch, cycle, page + 1)}
+                  href={investmentsHref({
+                    partner,
+                    partnerSearch,
+                    cycle,
+                    page: page + 1,
+                  })}
                 >
                   Next
                 </Link>

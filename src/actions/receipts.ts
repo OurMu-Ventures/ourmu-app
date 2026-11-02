@@ -1,6 +1,6 @@
 "use server";
 
-import { requireInvestor } from "@/lib/auth";
+import { requireAdmin, requireInvestor } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -56,6 +56,44 @@ export async function downloadInvestmentReceipt(
     };
   }
   revalidatePath(`/investments/${parsed.data}`);
+  redirect(url);
+}
+
+// Admin download of an existing receipt PDF. The short-lived link is minted
+// on click, so a storage problem never blocks the page that lists receipts.
+// Read-only: generating a missing PDF stays with the partner and job flows.
+export async function downloadAdminReceipt(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const parsed = z.uuid().safeParse(formData.get("receiptId"));
+  if (!parsed.success)
+    return { ok: false, message: "Receipt unavailable. Refresh and try again." };
+
+  let url: string;
+  try {
+    const admin = createAdminClient();
+    const { data: receipt, error } = await admin
+      .from("investment_receipts")
+      .select("pdf_path,pdf_status,receipt_number")
+      .eq("id", parsed.data)
+      .single();
+    if (error || !receipt?.pdf_path || receipt.pdf_status !== "ready")
+      throw new Error("RECEIPT_UNAVAILABLE");
+    const { data: signed, error: signError } = await admin.storage
+      .from("receipts")
+      .createSignedUrl(receipt.pdf_path, 60, {
+        download: `${receipt.receipt_number}.pdf`,
+      });
+    if (signError || !signed?.signedUrl) throw new Error("RECEIPT_UNAVAILABLE");
+    url = signed.signedUrl;
+  } catch {
+    return {
+      ok: false,
+      message: "Could not prepare this receipt. Please try again.",
+    };
+  }
   redirect(url);
 }
 

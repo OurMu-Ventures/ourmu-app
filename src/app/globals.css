@@ -619,6 +619,167 @@ a:focus-visible {
   justify-content: space-between;
   margin-top: 1.5rem;
 }
+/* Partner search and the read-only partner portfolio. */
+.text-link {
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--gold);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+.text-link:hover {
+  text-decoration-color: currentColor;
+}
+.partner-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  margin: 1rem 0;
+}
+.partner-search label {
+  grid-column: 1 / -1;
+}
+.page-head .partner-search {
+  width: min(100%, 360px);
+  margin: 0;
+}
+.partner-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.partner-results li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--line);
+}
+.row-heading,
+.portfolio-table tbody th {
+  color: var(--ink);
+  font-size: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.portfolio-identity {
+  margin-top: 1rem;
+}
+.portfolio-identity p {
+  margin-bottom: 0.5rem;
+}
+.portfolio-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-top: 2rem;
+}
+.portfolio-totals {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+.portfolio-totals .card p {
+  margin-bottom: 0.4rem;
+}
+.portfolio-totals .stat {
+  font-size: 1.4rem;
+  overflow-wrap: anywhere;
+}
+.portfolio-total-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.portfolio-total-note,
+.portfolio-cell-note {
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.portfolio-cell-note {
+  display: block;
+}
+.portfolio-filters,
+.portfolio-cycle-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.portfolio-cycle-filter label {
+  min-width: min(100%, 260px);
+}
+.portfolio-records {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.portfolio-record-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.portfolio-records h3 {
+  font-size: 1.05rem;
+}
+.portfolio-records dl {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr);
+  gap: 0.4rem 1rem;
+  margin: 0;
+}
+.portfolio-records dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.portfolio-records dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.portfolio-table {
+  display: none;
+}
+.portfolio-table th,
+.portfolio-table td {
+  white-space: normal;
+  overflow-wrap: break-word;
+  vertical-align: top;
+}
+.portfolio-table thead th,
+.portfolio-table .badge {
+  white-space: nowrap;
+}
+.portfolio-table .portfolio-amount {
+  text-align: right;
+  white-space: nowrap;
+}
+@media (min-width: 700px) {
+  .portfolio-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1000px) {
+  .portfolio-table {
+    display: block;
+  }
+  .portfolio-records {
+    display: none;
+  }
+}
+@media (min-width: 1400px) {
+  .portfolio-totals {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
 table {
   width: 100%;
   border-collapse: collapse;
