@@ -24,7 +24,9 @@ type Batch<T> = PromiseLike<{
 
 // Reads every row of an id-ordered query in batches. The exact count of the
 // first batch is the target, so a lower server row limit cannot silently cut
-// totals short, and rows are keyed by id so a shifted page counts once.
+// totals short. Reject changed counts, overlapping pages and premature EOF:
+// offset pagination can shift during concurrent writes. The page error
+// boundary offers a retry instead of displaying incomplete financial totals.
 export async function fetchAllRows<T extends { id: string }>(
   read: (from: number, to: number) => Batch<T>,
 ) {
@@ -34,14 +36,20 @@ export async function fetchAllRows<T extends { id: string }>(
   for (let batch = 0; batch < MAX_BATCHES; batch++) {
     const { data, error, count } = await read(offset, offset + BATCH_SIZE - 1);
     if (error) throw new Error("Unable to load partner records");
+    if (count === null || !Number.isSafeInteger(count) || count < 0)
+      throw new Error("Unable to verify complete partner records");
     expected ??= count;
-    for (const row of data ?? []) rows.set(row.id, row);
+    if (count !== expected)
+      throw new Error("Partner records changed while loading. Please try again.");
+    for (const row of data ?? []) {
+      if (rows.has(row.id))
+        throw new Error("Partner records changed while loading. Please try again.");
+      rows.set(row.id, row);
+    }
     offset += data?.length ?? 0;
-    if (
-      !data?.length ||
-      (expected === null ? data.length < BATCH_SIZE : offset >= expected)
-    )
-      return [...rows.values()];
+    if (rows.size > expected || (!data?.length && rows.size < expected))
+      throw new Error("Unable to verify complete partner records");
+    if (rows.size === expected) return [...rows.values()];
   }
   throw new Error("Partner records exceed the supported size");
 }

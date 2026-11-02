@@ -39,7 +39,12 @@ vi.mock("@/lib/supabase/admin", () => ({
         data: (state.tables[table] ?? []).filter((row) =>
           filters.every((filter) => filter(row)),
         ),
-        count: table === "investments" ? state.investmentCount : null,
+        count:
+          table === "investments"
+            ? state.investmentCount
+            : (state.tables[table] ?? []).filter((row) =>
+                filters.every((filter) => filter(row)),
+              ).length,
         error: null,
       });
       const query = {

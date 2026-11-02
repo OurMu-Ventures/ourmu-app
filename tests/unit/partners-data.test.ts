@@ -216,15 +216,63 @@ describe("bounded batch reads", () => {
     ).toEqual([0, 200, 400, 600, 800, 1000, 1200]);
   });
 
-  it("counts a row once when pages shift between batches", async () => {
+  it("rejects an insertion shifting the next page instead of returning 599 of 600 records", async () => {
     const ids = Array.from({ length: 600 }, (_, index) => ({
       id: String(index).padStart(4, "0"),
     }));
-    const pages = [ids.slice(0, 500), ids.slice(499, 600)];
-    const rows = await fetchAllRows(() =>
-      Promise.resolve({ data: pages.shift() ?? [], error: null, count: 600 }),
-    );
-    expect(rows).toHaveLength(600);
+    const pages = [
+      { data: ids.slice(0, 500), error: null, count: 600 },
+      // An insertion before the offset boundary repeats row 499 and leaves
+      // row 599 unread. The old reader stopped here with 599 unique rows.
+      { data: ids.slice(499, 599), error: null, count: 601 },
+    ];
+    await expect(
+      fetchAllRows(() => Promise.resolve(pages.shift()!)),
+    ).rejects.toThrow("Partner records changed while loading");
+  });
+
+  it("rejects overlapping pages even when the exact count stays unchanged", async () => {
+    const ids = Array.from({ length: 600 }, (_, index) => ({
+      id: String(index).padStart(4, "0"),
+    }));
+    const pages = [ids.slice(0, 500), ids.slice(499, 599)];
+    await expect(
+      fetchAllRows(() =>
+        Promise.resolve({ data: pages.shift() ?? [], error: null, count: 600 }),
+      ),
+    ).rejects.toThrow("Partner records changed while loading");
+  });
+
+  it("rejects a deletion changing the exact count between batches", async () => {
+    const pages = [
+      { data: [{ id: "1" }], error: null, count: 2 },
+      { data: [], error: null, count: 1 },
+    ];
+    await expect(
+      fetchAllRows(() => Promise.resolve(pages.shift()!)),
+    ).rejects.toThrow("Partner records changed while loading");
+  });
+
+  it("rejects premature EOF and missing counts instead of returning partial records", async () => {
+    const pages = [[{ id: "1" }], []];
+    await expect(
+      fetchAllRows(() =>
+        Promise.resolve({ data: pages.shift() ?? [], error: null, count: 2 }),
+      ),
+    ).rejects.toThrow("Unable to verify complete partner records");
+    await expect(
+      fetchAllRows(() =>
+        Promise.resolve({ data: [{ id: "1" }], error: null, count: null }),
+      ),
+    ).rejects.toThrow("Unable to verify complete partner records");
+  });
+
+  it("returns an empty result only when the exact count confirms it", async () => {
+    await expect(
+      fetchAllRows(() =>
+        Promise.resolve({ data: [], error: null, count: 0 }),
+      ),
+    ).resolves.toEqual([]);
   });
 
   it("fails loudly rather than truncating on errors or oversized results", async () => {
