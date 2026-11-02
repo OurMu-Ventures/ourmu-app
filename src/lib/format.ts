@@ -10,10 +10,42 @@ export function units(value: number | string) {
     maximumFractionDigits: 6,
   });
 }
+// PostgreSQL `date` values (YYYY-MM-DD) are calendar days, not instants.
+// Returns UTC midnight of the day, to format with timeZone "UTC" so the day
+// cannot shift with the runtime zone; NaN for days that do not exist (e.g.
+// 2026-02-30); null when the value is not date-only.
+function parseDateOnly(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const time = Date.UTC(year, month - 1, day);
+  const check = new Date(time);
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month - 1 ||
+    check.getUTCDate() !== day
+  ) {
+    return NaN;
+  }
+  return time;
+}
+// Day, month and year, e.g. "31 Dec 2026". Date-only values show their
+// calendar day on any runtime timezone; timestamps show their Africa/Kampala
+// day. Invalid input, including impossible days, throws RangeError.
 export function date(value: string) {
-  return new Intl.DateTimeFormat("en-UG", { dateStyle: "medium" }).format(
-    new Date(value),
-  );
+  const day = parseDateOnly(value.trim());
+  if (day !== null) {
+    return new Intl.DateTimeFormat("en-UG", {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    }).format(day);
+  }
+  return new Intl.DateTimeFormat("en-UG", {
+    dateStyle: "medium",
+    timeZone: "Africa/Kampala",
+  }).format(new Date(value));
 }
 // Month and year of a timestamp, e.g. "June 2026". Null for missing or
 // invalid input so callers can fall back to a stored label.
@@ -25,26 +57,14 @@ export function date(value: string) {
 export function monthYear(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
-  if (dateOnly) {
-    const year = Number(dateOnly[1]);
-    const month = Number(dateOnly[2]);
-    const day = Number(dateOnly[3]);
-    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-    const time = Date.UTC(year, month - 1, day);
-    const check = new Date(time);
-    if (
-      check.getUTCFullYear() !== year ||
-      check.getUTCMonth() !== month - 1 ||
-      check.getUTCDate() !== day
-    ) {
-      return null;
-    }
+  const day = parseDateOnly(trimmed);
+  if (day !== null) {
+    if (!Number.isFinite(day)) return null;
     return new Intl.DateTimeFormat("en-UG", {
       month: "long",
       year: "numeric",
       timeZone: "UTC",
-    }).format(check);
+    }).format(day);
   }
   const time = Date.parse(trimmed);
   if (!Number.isFinite(time)) return null;
@@ -54,10 +74,14 @@ export function monthYear(value: string | null | undefined): string | null {
     timeZone: "Africa/Kampala",
   }).format(new Date(time));
 }
+// Day, month, year and time of a timestamp in Africa/Kampala, e.g.
+// "1 Jan 2027, 00:30". The explicit zone keeps server rendering (UTC on
+// Vercel) and browser hydration identical.
 export function dateTime(value: string) {
   return new Intl.DateTimeFormat("en-UG", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Africa/Kampala",
   }).format(new Date(value));
 }
 
