@@ -32,7 +32,7 @@ function parseDateOnly(value: string): number | null {
   return time;
 }
 // Day, month and year, e.g. "31 Dec 2026". Date-only values show their
-// calendar day on any runtime timezone; timestamps show the runtime zone's
+// calendar day on any runtime timezone; timestamps show their Africa/Kampala
 // day. Invalid input, including impossible days, throws RangeError.
 export function date(value: string) {
   const day = parseDateOnly(value.trim());
@@ -42,9 +42,10 @@ export function date(value: string) {
       timeZone: "UTC",
     }).format(day);
   }
-  return new Intl.DateTimeFormat("en-UG", { dateStyle: "medium" }).format(
-    new Date(value),
-  );
+  return new Intl.DateTimeFormat("en-UG", {
+    dateStyle: "medium",
+    timeZone: "Africa/Kampala",
+  }).format(new Date(value));
 }
 // Month and year of a timestamp, e.g. "June 2026". Null for missing or
 // invalid input so callers can fall back to a stored label.
@@ -73,10 +74,14 @@ export function monthYear(value: string | null | undefined): string | null {
     timeZone: "Africa/Kampala",
   }).format(new Date(time));
 }
+// Day, month, year and time of a timestamp in Africa/Kampala, e.g.
+// "1 Jan 2027, 00:30". The explicit zone keeps server rendering (UTC on
+// Vercel) and browser hydration identical.
 export function dateTime(value: string) {
   return new Intl.DateTimeFormat("en-UG", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Africa/Kampala",
   }).format(new Date(value));
 }
 
