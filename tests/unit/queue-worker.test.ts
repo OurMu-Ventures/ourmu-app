@@ -40,6 +40,7 @@ const state = vi.hoisted(() => ({
   send: vi.fn<(...args: unknown[]) => Promise<string>>(async () => "resend-1"),
   jobs: [] as FakeJob[],
   raceClaimIds: new Set<string>(),
+  unclaimableIds: new Set<string>(),
   staleTokenIds: new Set<string>(),
   trackingError: null as null | { message: string },
   upsertError: null as null | { message: string },
@@ -88,6 +89,10 @@ function matches(row: FakeJob, ops: Op[]): boolean {
         break;
       case "in":
         if (!Array.isArray(op.val) || !(op.val as unknown[]).includes(value))
+          return false;
+        break;
+      case "notIn":
+        if (Array.isArray(op.val) && (op.val as unknown[]).includes(value))
           return false;
         break;
       case "lte":
@@ -149,6 +154,9 @@ class FakeQuery {
 
   in = (col: string, val: unknown): FakeQuery =>
     this.fork({ ops: [...this.ops, { m: "in", col, val }] });
+
+  notIn = (col: string, val: unknown): FakeQuery =>
+    this.fork({ ops: [...this.ops, { m: "notIn", col, val }] });
 
   lte = (col: string, val: unknown): FakeQuery =>
     this.fork({ ops: [...this.ops, { m: "lte", col, val }] });
@@ -282,6 +290,14 @@ class FakeQuery {
       );
       if (targetId && hasTokenGuard && state.staleTokenIds.has(targetId))
         return { data: [], error: null };
+      // The database skips the claim (a stale confirmation, for example):
+      // the row stays due and unchanged.
+      if (
+        targetId &&
+        state.unclaimableIds.has(targetId) &&
+        this.patch.status === "running"
+      )
+        return { data: [], error: null };
       if (
         targetId &&
         state.raceClaimIds.has(targetId) &&
@@ -386,6 +402,7 @@ beforeEach(() => {
   jobSeq = 0;
   state.jobs = [];
   state.raceClaimIds = new Set<string>();
+  state.unclaimableIds = new Set<string>();
   state.staleTokenIds = new Set<string>();
   state.trackingError = null;
   state.upsertError = null;
@@ -492,6 +509,34 @@ describe("leases and overlapping workers", () => {
     expect(result.succeeded).toBe(1);
     expect(result.claimed).toBe(1);
     expect(state.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("excludes unclaimable rows from later batches so newer work still runs", async () => {
+    for (let i = 0; i < 12; i += 1) {
+      const stuck = sendEmailJob({}, { created_at: pastIso(120 - i) });
+      state.jobs.push(stuck);
+      state.unclaimableIds.add(stuck.id);
+    }
+    for (let i = 0; i < 3; i += 1)
+      state.jobs.push(sendEmailJob({}, { created_at: pastIso(30 - i) }));
+    const result = await processDueJobs(10, undefined, {
+      drainQueue: true,
+      pacingMs: 0,
+    });
+    // Each unclaimable row is attempted once per run; newer work still runs.
+    expect(result.skipped).toBe(12);
+    expect(result.claimed).toBe(3);
+    expect(result.succeeded).toBe(3);
+    expect(result.stopReason).toBe("queue_empty");
+    expect(result.remainingDue).toBe(12);
+    expect(state.send).toHaveBeenCalledTimes(3);
+    // The exclusion lasts for one run only.
+    const next = await processDueJobs(10, undefined, {
+      drainQueue: true,
+      pacingMs: 0,
+    });
+    expect(next.skipped).toBe(12);
+    expect(next.claimed).toBe(0);
   });
 
   it("recovers recorded acceptance without resending or counting a new acceptance", async () => {
@@ -810,6 +855,17 @@ describe("pure helpers", () => {
     // Retry-After is bounded so a bad header cannot stall the queue.
     expect(deferRetryAt("EMAIL_RATE_LIMITED", 1_000_000, 10_000)).toBe(
       new Date(1_000_000 + 900_000).toISOString(),
+    );
+    // The local daily budget reopens at the UTC reset; other holds probe daily.
+    const held = Date.UTC(2026, 9, 5, 9);
+    expect(deferRetryAt("EMAIL_BUDGET_DEFERRED", held, undefined, "daily")).toBe(
+      new Date(Date.UTC(2026, 9, 6, 0, 1)).toISOString(),
+    );
+    expect(deferRetryAt("EMAIL_BUDGET_DEFERRED", held, undefined, "monthly")).toBe(
+      new Date(held + 24 * 60 * 60 * 1000).toISOString(),
+    );
+    expect(deferRetryAt("EMAIL_BUDGET_DEFERRED", held)).toBe(
+      new Date(held + 24 * 60 * 60 * 1000).toISOString(),
     );
   });
 

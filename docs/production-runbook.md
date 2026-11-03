@@ -166,3 +166,7 @@ Admins enter the actual payment received date using Uganda’s calendar date. Ne
 For automatic-cycle reservations, a payment may occur on the same Uganda date as the reservation, regardless of its time. Earlier calendar dates and future dates are rejected. A payment date must intersect exactly one portal cycle and match the reservation’s cycle. Midnight closes are exclusive; end-of-day closes include that date. If two cycles intersect the same day, staff must reconcile the boundaries; the system never guesses or moves the investment. Amount, administrator two-factor authentication, capacity, partner limits, cancellation and duplicate-payment checks remain enforced.
 
 Existing timestamp-based receipt and audit data is unchanged. Deployment rollback can restore the previous app while keeping this backward-compatible migration in place.
+
+## Stale maturity confirmation retirement
+
+`20261103030635_retire_stale_maturity_confirmation_jobs.sql` and the application can deploy in either order. On apply, the migration retires maturity choice confirmations that are already stale and audits each one. `docs/queue-worker.md` lists what it changes and how to find the retired jobs.

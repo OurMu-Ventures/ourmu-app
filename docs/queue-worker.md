@@ -93,13 +93,25 @@ credentials never appear in workflow logs.
   never retried automatically.
 - Removed requests, paid-out investments, removed aliases, and missing or
   not-ready receipt PDFs are checked immediately before sending.
+- A maturity choice confirmation is stale once its request is fulfilled or
+  removed, or its investment is reported paid. The database retires unsent
+  stale confirmations at that moment (`dead`,
+  `STALE_MATURITY_CONFIRMATION_CANCELLED`); a running one retires on its
+  worker's failure write or on lease recovery. While no live request exists,
+  Retry and Authorize resend change nothing and report that the job is no
+  longer eligible, so a delivery awaiting reconciliation can still be
+  confirmed. Claims of stale confirmations still match no rows, and a run
+  excludes any row whose claim matched nothing from its later batches, so a
+  few unclaimable rows cannot crowd out newer work.
 - Provider sends are paced to one request per second per run; provider error
   codes are preserved and `Retry-After` is honoured. Quota, rate-limit, and
   local-budget deferrals never consume the ordinary retry budget, and
   document/recipient preparation continues while sending is deferred.
 - Local email budget is a conservative 80 recipient deliveries/day and
   2,400 per rolling 31 days (To + CC + BCC, ambiguous sends counted,
-  deduplicated retries consume each budget window once). A private reservation ledger and
+  deduplicated retries consume each budget window once). Daily budget holds
+  resume at the next 00:01 UTC (03:01 Kampala), when the daily count resets;
+  monthly budget holds probe once per 24 hours. A private reservation ledger and
   database advisory lock make tracking and reservations atomic across workers.
   Explicit provider rejections retain their reservations conservatively; worker
   retries on the same day do not reserve again. Retries crossing UTC midnight
@@ -128,13 +140,25 @@ credentials never appear in workflow logs.
 5. If necessary, roll queue draining back to one batch while retaining the
    stale-email protections and recovery safeguards.
 
+`20261103030635_retire_stale_maturity_confirmation_jobs.sql` and the
+application can deploy in either order. On apply the migration retires
+confirmations that are already stale: pending and failed
+rows, and running rows without a live lease, become `dead` with
+`STALE_MATURITY_CONFIRMATION_CANCELLED` and one
+`email.stale_maturity_confirmation_cancelled` audit event each, so **Failed
+jobs** on Admin → Overview may rise. List them with
+`select entity_id, created_at from public.audit_events where action = 'email.stale_maturity_confirmation_cancelled';`.
+
 ## Verification commands
 
 - `npm test`, `npx tsc --noEmit`, and ESLint on touched files.
 - `node scripts/test-queue-worker-migration.mjs` checks legacy backfill and
   quarantine in a local transaction that rolls back.
+- `node scripts/test-stale-confirmation-migration.mjs` replays the one-time
+  stale confirmation cleanup against legacy rows in a local transaction that
+  rolls back.
 - `supabase test db` includes reservation counting, stale tracking, deduplication,
-  monthly rollover, and privilege checks.
+  monthly rollover, stale confirmation retirement, and privilege checks.
 - `node scripts/test-queue-budget-concurrency.mjs` uses two local Postgres
   sessions competing for the last daily slot. Run on an empty local test budget.
 

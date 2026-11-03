@@ -286,6 +286,10 @@ export async function processDueJobs(
   let emailPaused = Boolean(quotaHold);
 
   let lastProviderSendAt = 0;
+  // Due rows whose claim matched nothing (for example confirmations the
+  // database refuses to claim) would refill every batch: later fetches in this
+  // run exclude them, so a few cannot crowd out newer work.
+  const unclaimable = new Set<string>();
 
   const maxBatches = drainQueue
     ? Math.ceil(maxJobs / batchSize) + 1
@@ -301,6 +305,7 @@ export async function processDueJobs(
       .in("status", ["pending", "failed"])
       .lte("available_at", new Date().toISOString());
     if (emailPaused) query = query.neq("kind", "send_email");
+    if (unclaimable.size > 0) query = query.notIn("id", [...unclaimable]);
     if (campaignId)
       query = query
         .eq("entity_type", "email_campaign")
@@ -350,6 +355,7 @@ export async function processDueJobs(
         .select("id");
       if (claimError) throw new Error("JOB_CLAIM_FAILED");
       if (!claimed || (claimed as unknown[]).length === 0) {
+        unclaimable.add(raw.id);
         result.skipped += 1;
         continue;
       }
@@ -446,7 +452,16 @@ export async function processDueJobs(
             jobError instanceof EmailRateLimitError
               ? jobError.retryAfterSec
               : undefined;
-          const retryAt = deferRetryAt(code, Date.now(), retryAfterSec);
+          const budgetScope =
+            jobError instanceof EmailBudgetDeferredError
+              ? jobError.scope
+              : undefined;
+          const retryAt = deferRetryAt(
+            code,
+            Date.now(),
+            retryAfterSec,
+            budgetScope,
+          );
           const { data: deferred, error: deferError } = await admin
             .from("jobs")
             .update({
