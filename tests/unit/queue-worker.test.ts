@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -9,6 +9,7 @@ import {
   deferRetryAt,
   quotaRetryAt,
 } from "@/lib/email/quota";
+import { fakeQueueSnapshotRow } from "./helpers/fake-queue-snapshot";
 
 type FakeJob = {
   id: string;
@@ -41,7 +42,10 @@ const state = vi.hoisted(() => ({
   jobs: [] as FakeJob[],
   raceClaimIds: new Set<string>(),
   unclaimableIds: new Set<string>(),
+  unrecoverableIds: new Set<string>(),
   staleTokenIds: new Set<string>(),
+  snapshotError: false,
+  rpcCalls: [] as Array<[string, unknown]>,
   trackingError: null as null | { message: string },
   upsertError: null as null | { message: string },
   recipientSingle: { id: "e1" } as unknown,
@@ -283,6 +287,12 @@ class FakeQuery {
         return { data: null, error: { message: "EMAIL_DAILY_BUDGET_DEFERRED" } };
       if (isTracking && state.trackingError)
         return { data: null, error: state.trackingError };
+      // Lease recovery leaves rows the database refuses to recover running.
+      if (
+        this.patch.status === "pending" &&
+        this.ops.some((op) => op.m === "lt" && op.col === "lease_expires_at")
+      )
+        rows = rows.filter((row) => !state.unrecoverableIds.has(row.id));
       const idOp = this.ops.find((op) => op.m === "eq" && op.col === "id");
       const targetId = idOp?.val as string | undefined;
       const hasTokenGuard = this.ops.some(
@@ -357,7 +367,16 @@ class FakeQuery {
 function fakeAdmin() {
   return {
     from: (table: string) => new FakeQuery(table),
-    rpc: async () => ({ data: 1, error: null }),
+    rpc: async (name: string, args?: { p_campaign_id?: string }) => {
+      state.rpcCalls.push([name, args]);
+      if (name !== "job_queue_snapshot") return { data: 1, error: null };
+      if (state.snapshotError)
+        return { data: null, error: { message: "unavailable" } };
+      return {
+        data: [fakeQueueSnapshotRow(state.jobs, args?.p_campaign_id ?? null)],
+        error: null,
+      };
+    },
     storage: {
       from: () => ({
         download: async () => ({ data: null, error: { message: "not found" } }),
@@ -382,9 +401,12 @@ vi.mock("@/lib/env", () => ({
 
 import {
   deliverJobEmail,
+  IDEMPOTENCY_WINDOW_MS,
   needsReconciliation,
   processDueJobs,
   recipientsForPayload,
+  retryDelayMs,
+  retryScheduleTotalMs,
   type JobRow,
 } from "@/lib/jobs";
 
@@ -403,7 +425,10 @@ beforeEach(() => {
   state.jobs = [];
   state.raceClaimIds = new Set<string>();
   state.unclaimableIds = new Set<string>();
+  state.unrecoverableIds = new Set<string>();
   state.staleTokenIds = new Set<string>();
+  state.snapshotError = false;
+  state.rpcCalls = [];
   state.trackingError = null;
   state.upsertError = null;
   state.send.mockReset();
@@ -416,6 +441,7 @@ beforeEach(() => {
   state.receiptError = null;
   state.sentPayloads = [];
 });
+afterEach(() => vi.useRealTimers());
 
 describe("queue draining", () => {
   it("processes successive batches so queues larger than 10 drain in one run", async () => {
@@ -525,6 +551,7 @@ describe("leases and overlapping workers", () => {
     });
     // Each unclaimable row is attempted once per run; newer work still runs.
     expect(result.skipped).toBe(12);
+    expect(result.unclaimable).toBe(12);
     expect(result.claimed).toBe(3);
     expect(result.succeeded).toBe(3);
     expect(result.stopReason).toBe("queue_empty");
@@ -536,6 +563,7 @@ describe("leases and overlapping workers", () => {
       pacingMs: 0,
     });
     expect(next.skipped).toBe(12);
+    expect(next.unclaimable).toBe(12);
     expect(next.claimed).toBe(0);
   });
 
@@ -774,6 +802,34 @@ describe("delivery guards", () => {
     expect(state.send).not.toHaveBeenCalled();
   });
 
+  it("records a stale confirmation dead as a deliberate drop, not a failure", async () => {
+    state.investmentRow = {
+      principal_ugx: "1000000",
+      projected_return_ugx: "300000",
+      projected_return_bps: 3000,
+      projected_value_ugx: "1300000",
+      maturity_date: "2026-09-30",
+      payout_basis: "reported_paid",
+    };
+    state.instructionRow = { choice: "reinvest_all", status: "requested" };
+    state.jobs.push(
+      sendEmailJob(
+        { template: "maturity_choice_confirmed", to: "a@example.com" },
+        { entity_type: "investment" },
+      ),
+    );
+    const result = await processDueJobs(10, undefined, {
+      drainQueue: true,
+      pacingMs: 0,
+    });
+    expect(state.jobs[0]).toMatchObject({
+      status: "dead",
+      last_error_code: "STALE_MATURITY_CONFIRMATION",
+    });
+    expect(result).toMatchObject({ skipped: 1, failed: 0 });
+    expect(state.send).not.toHaveBeenCalled();
+  });
+
   it("marks jobs dead after the retry budget is exhausted", async () => {
     state.send.mockRejectedValueOnce(new Error("EMAIL_DELIVERY_FAILED:validation_error"));
     state.jobs.push(sendEmailJob({}, { attempts: 7, max_attempts: 8 }));
@@ -806,6 +862,137 @@ describe("reporting compatibility", () => {
     expect(result).toHaveProperty("oldestDueAgeSec");
     expect(result).toHaveProperty("needsReconciliation");
     expect(result).toHaveProperty("stateErrors");
+    expect(result).toMatchObject({
+      unclaimable: 0,
+      dueBefore: 1,
+      processableDueBefore: 1,
+      expiredLeasesBefore: 0,
+      remainingDue: 0,
+      remainingProcessableDue: 0,
+      remainingExpiredLeases: 0,
+      oldestDueAgeSec: null,
+      emailHold: null,
+    });
+  });
+});
+
+describe("queue snapshot", () => {
+  it("measures due work before the drain from available_at, without held emails", async () => {
+    state.jobs.push(
+      sendEmailJob(
+        {},
+        {
+          last_error_code: "EMAIL_DAILY_QUOTA_EXCEEDED",
+          available_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        },
+      ),
+      sendEmailJob({}, { created_at: pastIso(180), available_at: pastIso(20) }),
+      makeJob({
+        kind: "generate_receipt_pdf",
+        payload: {},
+        created_at: pastIso(10),
+        available_at: pastIso(5),
+      }),
+    );
+    const result = await processDueJobs(10, undefined, {
+      drainQueue: true,
+      pacingMs: 0,
+    });
+    expect(result.dueBefore).toBe(2);
+    expect(result.processableDueBefore).toBe(1);
+    expect(result.oldestDueAgeSecBefore).toBeGreaterThanOrEqual(298);
+    expect(result.oldestDueAgeSecBefore).toBeLessThanOrEqual(302);
+    expect(state.send).not.toHaveBeenCalled();
+  });
+
+  it("reports the hold a daily quota refusal sets", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 9, 5, 12));
+    state.send.mockRejectedValueOnce(
+      new EmailQuotaError("EMAIL_DAILY_QUOTA_EXCEEDED"),
+    );
+    state.jobs.push(sendEmailJob({}, { available_at: pastIso(1) }));
+    const result = await processDueJobs(10, undefined, {
+      drainQueue: true,
+      pacingMs: 0,
+    });
+    expect(result.deferred).toBe(1);
+    // min(next 00:01 UTC, now + 3 h)
+    expect(result.emailHold).toEqual({
+      code: "EMAIL_DAILY_QUOTA_EXCEEDED",
+      until: "2026-10-05T15:00:00.000Z",
+    });
+  });
+
+  it("spaces generic failures by the retry schedule", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 9, 5, 12));
+    state.send.mockRejectedValue(new Error("EMAIL_DELIVERY_FAILED"));
+    const first = sendEmailJob({}, { attempts: 0, available_at: pastIso(1) });
+    const fourth = sendEmailJob({}, { attempts: 3, available_at: pastIso(1) });
+    state.jobs.push(first, fourth);
+    const result = await processDueJobs(10, undefined, {
+      drainQueue: true,
+      pacingMs: 0,
+    });
+    expect(result.failed).toBe(2);
+    expect(first).toMatchObject({
+      status: "failed",
+      attempts: 1,
+      available_at: "2026-10-05T12:05:00.000Z",
+    });
+    expect(fourth).toMatchObject({
+      status: "failed",
+      attempts: 4,
+      available_at: "2026-10-05T14:15:00.000Z",
+    });
+  });
+
+  it("fails the run when the snapshot cannot be read", async () => {
+    state.snapshotError = true;
+    state.jobs.push(sendEmailJob({}));
+    await expect(
+      processDueJobs(10, undefined, { drainQueue: true, pacingMs: 0 }),
+    ).rejects.toThrow("JOB_QUEUE_SNAPSHOT_FAILED");
+    expect(state.send).not.toHaveBeenCalled();
+  });
+
+  it("filters the snapshot by campaign only on the campaign path", async () => {
+    state.jobs.push(
+      sendEmailJob({}, { entity_type: "email_campaign", entity_id: "camp-1" }),
+    );
+    await processDueJobs(10, "camp-1", { pacingMs: 0 });
+    await processDueJobs(10, undefined, { pacingMs: 0 });
+    expect(
+      state.rpcCalls.filter(([name]) => name === "job_queue_snapshot"),
+    ).toEqual([
+      ["job_queue_snapshot", { p_campaign_id: "camp-1" }],
+      ["job_queue_snapshot", { p_campaign_id: "camp-1" }],
+      ["job_queue_snapshot", {}],
+      ["job_queue_snapshot", {}],
+    ]);
+  });
+
+  it("reports expired leases the recovery step could not recover", async () => {
+    const stuck = sendEmailJob(
+      {},
+      {
+        status: "running",
+        claim_token: "dead-worker",
+        lease_expires_at: pastIso(10),
+        attempts: 1,
+      },
+    );
+    state.jobs.push(stuck);
+    state.unrecoverableIds.add(stuck.id);
+    const result = await processDueJobs(10, undefined, {
+      drainQueue: true,
+      pacingMs: 0,
+    });
+    expect(result.recoveredLeases).toBe(0);
+    expect(result.expiredLeasesBefore).toBe(1);
+    expect(result.remainingExpiredLeases).toBe(1);
+    expect(result.remainingProcessableDue).toBe(0);
   });
 });
 
@@ -848,8 +1035,12 @@ describe("pure helpers", () => {
   });
 
   it("schedules quota and rate-limit retries", () => {
+    // Daily refusals re-probe within 3 hours, or at the UTC reset if sooner.
     const daily = quotaRetryAt("EMAIL_DAILY_QUOTA_EXCEEDED", Date.UTC(2026, 9, 5, 12));
-    expect(daily).toBe(new Date(Date.UTC(2026, 9, 6, 0, 1)).toISOString());
+    expect(daily).toBe("2026-10-05T15:00:00.000Z");
+    expect(
+      quotaRetryAt("EMAIL_DAILY_QUOTA_EXCEEDED", Date.UTC(2026, 9, 5, 23)),
+    ).toBe("2026-10-06T00:01:00.000Z");
     const rate = deferRetryAt("EMAIL_RATE_LIMITED", 1_000_000, 120);
     expect(rate).toBe(new Date(1_000_000 + 120_000).toISOString());
     // Retry-After is bounded so a bad header cannot stall the queue.
@@ -866,6 +1057,25 @@ describe("pure helpers", () => {
     );
     expect(deferRetryAt("EMAIL_BUDGET_DEFERRED", held)).toBe(
       new Date(held + 24 * 60 * 60 * 1000).toISOString(),
+    );
+    // The local daily budget has no 3-hour re-probe.
+    expect(
+      deferRetryAt(
+        "EMAIL_BUDGET_DEFERRED",
+        Date.UTC(2026, 9, 5, 12),
+        undefined,
+        "daily",
+      ),
+    ).toBe("2026-10-06T00:01:00.000Z");
+  });
+
+  it("spaces retries 5, 15, 45, 135, 300, 300 and 300 minutes inside the idempotency window", () => {
+    expect(
+      [0, 1, 2, 3, 4, 5, 6].map((attempts) => retryDelayMs(attempts) / 60_000),
+    ).toEqual([5, 15, 45, 135, 300, 300, 300]);
+    expect(retryScheduleTotalMs(8)).toBe(66_000_000);
+    expect(retryScheduleTotalMs(8)).toBeLessThan(
+      IDEMPOTENCY_WINDOW_MS - 4 * 3_600_000,
     );
   });
 

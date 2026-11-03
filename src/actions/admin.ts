@@ -10,7 +10,7 @@ import { audit, requestId } from "@/lib/db";
 import { isMonthEndMaturity } from "@/lib/maturity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { EMAIL_QUOTA_CODES } from "@/lib/email/quota";
+import { EMAIL_DEFERRAL_CODES } from "@/lib/email/quota";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { getPublicEnv } from "@/lib/env";
 import { emailSchema, type ActionState } from "@/lib/validation";
@@ -415,7 +415,7 @@ export async function retryJob(formData: FormData) {
     })
     .eq("id", jobId)
     .or(
-      `status.in.(failed,dead),and(status.eq.pending,last_error_code.in.(${EMAIL_QUOTA_CODES.join(",")}))`,
+      `status.in.(failed,dead),and(status.eq.pending,last_error_code.in.(${EMAIL_DEFERRAL_CODES.join(",")}))`,
     )
     .select("id,kind,entity_id,status")
     .maybeSingle();

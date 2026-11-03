@@ -9,11 +9,11 @@
 7. Create one Vercel project and set environment variables only through Vercel.
 8. Configure backup, cron, and release-gate values in the private `OurMu-Ventures/ourmu-ops` repository; complete acceptance before domain change.
 
-Vercel needs `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `IDENTITY_MASTER_KEY_BASE64`, `CRON_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ALLOW_MANUAL_TEST_LINKS`, `LEGAL_PRIVACY_VERSION`, and `AGREEMENT_PLACEHOLDER_BLOCK`.
+Vercel needs `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `IDENTITY_MASTER_KEY_BASE64`, `CRON_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ALLOW_MANUAL_TEST_LINKS`, `LEGAL_PRIVACY_VERSION`, and `AGREEMENT_PLACEHOLDER_BLOCK`. Vercel also needs `JOB_TRIGGER_SECRET` in the Production environment only; it must equal the Vault secret `ourmu_job_trigger_secret` (see Job dispatcher below).
 
-The private `OurMu-Ventures/ourmu-ops` repository needs secrets `PROD_DATABASE_URL`, `AGE_RESTORE_IDENTITY`, `CRON_SECRET`, `TEMP_DEPLOYMENT_URL`, and `LEGAL_AGREEMENT_SHA256`; variable `AGE_RECIPIENT`; and the release variables documented alongside its private workflows. Production workflows and their configuration do not belong in this public application repository.
+The private `OurMu-Ventures/ourmu-ops` repository needs secrets `PROD_DATABASE_URL`, `AGE_RESTORE_IDENTITY`, `CRON_SECRET`, `TEMP_DEPLOYMENT_URL`, and `LEGAL_AGREEMENT_SHA256`; variable `AGE_RECIPIENT`; and the release variables documented alongside its private workflows. Production workflows and their configuration do not belong in this public application repository. `TEMP_DEPLOYMENT_URL` must hold exactly `https://partners.ourmu.org`, the canonical production URL, never a generated `*.vercel.app` deployment URL: that runs a stale build, may sit behind Deployment Protection, and can be deleted by retention. The workflows append `/api/cron/jobs` and `/api/cron/maintenance`. Keep the name until the job dispatcher's rollback window has passed, because the previous workflows read it.
 
-Operationally verify health, maintenance, dead jobs, daily encrypted artifacts, monthly restore, Supabase advisors, and critical dependency audit. Supabase Free is acceptable only for the controlled invite-only pilot with these compensating backups. Upgrade before open enrollment, payment/payout work, or when automatic backups/support become required.
+Operationally verify health, the Admin → Jobs worker trigger panel, maintenance, dead jobs, daily encrypted artifacts, monthly restore, Supabase advisors, and critical dependency audit. Supabase Free is acceptable only for the controlled invite-only pilot with these compensating backups. Upgrade before open enrollment, payment/payout work, or when automatic backups/support become required.
 
 ## Resend email cutover and operations
 
@@ -170,3 +170,29 @@ Existing timestamp-based receipt and audit data is unchanged. Deployment rollbac
 ## Stale maturity confirmation retirement
 
 `20261103030635_retire_stale_maturity_confirmation_jobs.sql` and the application can deploy in either order. On apply, the migration retires maturity choice confirmations that are already stale and audits each one. `docs/queue-worker.md` lists what it changes and how to find the retired jobs.
+
+## Job dispatcher (Supabase Cron)
+
+A Supabase Cron job dispatches the job worker within about two minutes of work becoming due, a daily Vercel Cron runs maintenance, and the ourmu-ops workflows become an hourly watchdog and a late maintenance fallback. `docs/queue-worker.md` has the full production setup, verification, rollback, troubleshooting and free-tier figures. In order:
+
+1. Merge #127 (stale maturity confirmation retirement) first, with a merge commit, not a squash: the dispatcher change is stacked on it. Its migration and its app deploy in either order. Then set the dispatcher pull request's base branch to `main` and check that it shows only its own commits: GitHub keeps merged branches here, so it does not retarget the pull request on its own.
+2. Apply `20261103073957_job_dispatcher.sql` with `supabase db push --dry-run`, then `supabase db push`, before the dispatcher's app deploys. Unlike the previous section, this order matters: the new worker calls `public.job_queue_snapshot` and answers 503 until the migration exists. The migration schedules nothing and writes no secrets, so it is inert until step 5.
+3. Merge the dispatcher change. Vercel deploys it and registers the daily `/api/cron/maintenance` cron.
+4. Add `JOB_TRIGGER_SECRET` to Vercel for Production only and redeploy; then add the Vault secrets `ourmu_job_worker_url` and `ourmu_job_trigger_secret` in the Supabase dashboard.
+5. Run the one-time scheduling SQL in the SQL editor.
+6. Prove the delivery path with the owner probe, `select private.dispatch_job_worker(true);`.
+7. Review the backlog (`NEEDS_RECONCILIATION` rows and dead jobs from the last 24 hours) in Admin → Jobs.
+8. Apply the ourmu-ops watchdog change, then run the watchdog once.
+
+Health fails with `MAINTENANCE_STALE` when maintenance has not completed for 32 hours, which happens only when both the Vercel Cron and the `maintenance.yml` fallback missed a day.
+
+### Firewall
+
+- Attack Mode is one project-wide switch (Firewall → Bot Management) and cannot be scoped to a path. It lets through Vercel's own Cron Jobs, so the daily maintenance run still works, but pg_net and the GitHub watchdog are unrecognized automated clients and may get challenge pages. While it is on, expect `bad_response` or `http_error` outcomes, `DISPATCH_FAILING`, red watchdog runs, and only the daily Vercel Cron draining the queue. Turn it off again as soon as possible.
+- During an incident, prefer a WAF custom rule with action Challenge whose condition excludes requests whose path starts with `/api/cron/`. Custom rules are available on all plans; start the rule in Log mode, as Vercel recommends.
+- Keep the Bot Protection managed ruleset Off or in Log mode. If it is ever set to Challenge, first add a custom rule with action Bypass for paths starting with `/api/cron/`.
+- At setup, check that Attack Mode is off and Bot Protection is Off or Log.
+
+### pg_cron privileges
+
+Never run `grant ... on schema cron to postgres` or `grant ... on all tables in schema cron to postgres`, although Supabase's cron guide suggests them. Supabase already grants `postgres` what the dispatcher needs, and such a self-grant makes every later `create extension ... pg_cron` fail with `dependent privileges exist`. If that happens, run `revoke all on all tables in schema cron from postgres; revoke usage on schema cron from postgres;` as `postgres`, which removes only those self-grants, then retry the create from a new database connection. `docs/queue-worker.md` explains why.

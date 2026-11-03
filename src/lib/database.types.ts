@@ -75,6 +75,186 @@ export type Database = {
         }
         Relationships: []
       }
+      job_dispatch_state: {
+        Row: {
+          consecutive_failures: number
+          id: boolean
+          last_dispatch_at: string | null
+          last_dispatch_id: string | null
+          last_dispatch_newest_ready_at: string | null
+          last_error: string | null
+          last_http_status: number | null
+          last_outcome: string | null
+          last_outcome_at: string | null
+          last_reason: string
+          last_request_id: number | null
+          last_request_scored: boolean
+          last_success_at: string | null
+          last_tick_at: string | null
+          no_progress_newest_ready_at: string | null
+          no_progress_streak: number
+          no_progress_until: string | null
+          stall_counted: boolean
+          updated_at: string
+        }
+        Insert: {
+          consecutive_failures?: number
+          id?: boolean
+          last_dispatch_at?: string | null
+          last_dispatch_id?: string | null
+          last_dispatch_newest_ready_at?: string | null
+          last_error?: string | null
+          last_http_status?: number | null
+          last_outcome?: string | null
+          last_outcome_at?: string | null
+          last_reason?: string
+          last_request_id?: number | null
+          last_request_scored?: boolean
+          last_success_at?: string | null
+          last_tick_at?: string | null
+          no_progress_newest_ready_at?: string | null
+          no_progress_streak?: number
+          no_progress_until?: string | null
+          stall_counted?: boolean
+          updated_at?: string
+        }
+        Update: {
+          consecutive_failures?: number
+          id?: boolean
+          last_dispatch_at?: string | null
+          last_dispatch_id?: string | null
+          last_dispatch_newest_ready_at?: string | null
+          last_error?: string | null
+          last_http_status?: number | null
+          last_outcome?: string | null
+          last_outcome_at?: string | null
+          last_reason?: string
+          last_request_id?: number | null
+          last_request_scored?: boolean
+          last_success_at?: string | null
+          last_tick_at?: string | null
+          no_progress_newest_ready_at?: string | null
+          no_progress_streak?: number
+          no_progress_until?: string | null
+          stall_counted?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      job_worker_runs: {
+        Row: {
+          claimed: number
+          deferred: number
+          dispatch_id: string | null
+          documents_generated: number
+          due_before: number | null
+          email_hold_code: string | null
+          email_hold_until: string | null
+          error_code: string | null
+          expired_leases_before: number | null
+          failed: number
+          finished_at: string
+          health_checked_at: string | null
+          id: number
+          maintenance_status: string | null
+          needs_reconciliation: number
+          ok: boolean
+          oldest_due_age_sec: number | null
+          oldest_due_age_sec_before: number | null
+          processable_due_before: number | null
+          provider_accepted: number
+          recipient_jobs_created: number
+          recorded_at: string
+          recovered_leases: number
+          remaining_due: number | null
+          remaining_expired_leases: number | null
+          remaining_processable_due: number | null
+          request_id: string
+          route: string
+          skipped: number
+          started_at: string
+          state_errors: number
+          stop_reason: string | null
+          succeeded: number
+          trigger: string
+          unclaimable: number
+        }
+        Insert: {
+          claimed?: number
+          deferred?: number
+          dispatch_id?: string | null
+          documents_generated?: number
+          due_before?: number | null
+          email_hold_code?: string | null
+          email_hold_until?: string | null
+          error_code?: string | null
+          expired_leases_before?: number | null
+          failed?: number
+          finished_at: string
+          health_checked_at?: string | null
+          id?: never
+          maintenance_status?: string | null
+          needs_reconciliation?: number
+          ok: boolean
+          oldest_due_age_sec?: number | null
+          oldest_due_age_sec_before?: number | null
+          processable_due_before?: number | null
+          provider_accepted?: number
+          recipient_jobs_created?: number
+          recorded_at?: string
+          recovered_leases?: number
+          remaining_due?: number | null
+          remaining_expired_leases?: number | null
+          remaining_processable_due?: number | null
+          request_id: string
+          route: string
+          skipped?: number
+          started_at: string
+          state_errors?: number
+          stop_reason?: string | null
+          succeeded?: number
+          trigger: string
+          unclaimable?: number
+        }
+        Update: {
+          claimed?: number
+          deferred?: number
+          dispatch_id?: string | null
+          documents_generated?: number
+          due_before?: number | null
+          email_hold_code?: string | null
+          email_hold_until?: string | null
+          error_code?: string | null
+          expired_leases_before?: number | null
+          failed?: number
+          finished_at?: string
+          health_checked_at?: string | null
+          id?: never
+          maintenance_status?: string | null
+          needs_reconciliation?: number
+          ok?: boolean
+          oldest_due_age_sec?: number | null
+          oldest_due_age_sec_before?: number | null
+          processable_due_before?: number | null
+          provider_accepted?: number
+          recipient_jobs_created?: number
+          recorded_at?: string
+          recovered_leases?: number
+          remaining_due?: number | null
+          remaining_expired_leases?: number | null
+          remaining_processable_due?: number | null
+          request_id?: string
+          route?: string
+          skipped?: number
+          started_at?: string
+          state_errors?: number
+          stop_reason?: string | null
+          succeeded?: number
+          trigger?: string
+          unclaimable?: number
+        }
+        Relationships: []
+      }
       queued_email_reservations: {
         Row: {
           daily_reserved_at: string
@@ -136,6 +316,7 @@ export type Database = {
         Args: { p_cycle_id: string }
         Returns: boolean
       }
+      dispatch_job_worker: { Args: { p_probe?: boolean }; Returns: string }
       is_accepted_import_batch: {
         Args: { check_batch_id: string }
         Returns: boolean
@@ -2207,6 +2388,56 @@ export type Database = {
         }
         Returns: Json
       }
+      job_dispatch_health: {
+        Args: { p_since_last_watchdog?: boolean }
+        Returns: Json
+      }
+      job_queue_snapshot: {
+        Args: { p_campaign_id?: string }
+        Returns: {
+          due_count: number
+          email_hold_code: string
+          email_hold_until: string
+          expired_lease_count: number
+          held_email_count: number
+          newest_ready_at: string
+          oldest_due_at: string
+          oldest_expired_lease_at: string
+          oldest_processable_due_at: string
+          processable_due_count: number
+          snapshot_at: string
+        }[]
+      }
+      job_worker_recent_runs: {
+        Args: { p_limit?: number }
+        Returns: {
+          claimed: number
+          deferred: number
+          documents_generated: number
+          email_hold_code: string
+          email_hold_until: string
+          error_code: string
+          failed: number
+          finished_at: string
+          id: number
+          maintenance_status: string
+          needs_reconciliation: number
+          ok: boolean
+          oldest_due_age_sec_before: number
+          processable_due_before: number
+          provider_accepted: number
+          recovered_leases: number
+          remaining_due: number
+          route: string
+          skipped: number
+          started_at: string
+          state_errors: number
+          stop_reason: string
+          succeeded: number
+          trigger: string
+          unclaimable: number
+        }[]
+      }
       link_legacy_partner: {
         Args: {
           p_admin_aal2: boolean
@@ -2257,6 +2488,7 @@ export type Database = {
         }
         Returns: Json
       }
+      record_job_worker_run: { Args: { p_run: Json }; Returns: number }
       record_newsletter_visit: {
         Args: {
           p_event: string
@@ -2322,6 +2554,10 @@ export type Database = {
         Returns: undefined
       }
       run_maintenance: { Args: { p_request_id: string }; Returns: Json }
+      run_maintenance_exclusive: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
       save_admin_maturity_payout_destination: {
         Args: {
           p_admin_aal2: boolean
