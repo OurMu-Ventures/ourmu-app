@@ -69,18 +69,25 @@ export function deferRetryAt(
   code: EmailDeferralCode,
   nowMs = Date.now(),
   retryAfterSec?: number,
+  budgetScope?: EmailBudgetDeferredError["scope"],
 ): string {
   // Honour Retry-After for rate limits (bounded between 5s and 15min).
-  // Budget holds probe daily: the worker does not know the account reset date
-  // and local counters alone are not a complete quota guarantee.
+  // The local daily budget counts UTC days, so its holds resume at the reset
+  // like a daily quota. Other budget holds probe daily: the worker does not
+  // know the account reset date and local counters alone are not a complete
+  // quota guarantee.
   if (code === "EMAIL_RATE_LIMITED") {
     const bounded = Math.min(900, Math.max(5, retryAfterSec ?? 60));
     return new Date(nowMs + bounded * 1000).toISOString();
   }
-  return quotaRetryAt(
-    code === "EMAIL_BUDGET_DEFERRED" ? "EMAIL_MONTHLY_QUOTA_EXCEEDED" : code,
-    nowMs,
-  );
+  if (code === "EMAIL_BUDGET_DEFERRED")
+    return quotaRetryAt(
+      budgetScope === "daily"
+        ? "EMAIL_DAILY_QUOTA_EXCEEDED"
+        : "EMAIL_MONTHLY_QUOTA_EXCEEDED",
+      nowMs,
+    );
+  return quotaRetryAt(code, nowMs);
 }
 
 export function quotaRetryAt(code: EmailQuotaCode, nowMs = Date.now()): string {

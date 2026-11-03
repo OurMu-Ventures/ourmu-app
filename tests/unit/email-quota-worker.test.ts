@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   send: vi.fn(),
   queries: [] as string[],
   deferError: false,
+  budgetError: null as null | string,
 }));
 vi.mock("@/lib/email/send", () => ({
   sendTransactionalEmail: (...args: unknown[]) => state.send(...args),
@@ -39,6 +40,9 @@ vi.mock("@/lib/supabase/admin", () => ({
             patch.last_error_code === "EMAIL_DAILY_QUOTA_EXCEEDED"
           )
             return { data: null, error: { message: "write failed" } };
+          // Only pre-send tracking writes the payload; the ledger refuses it.
+          if (state.budgetError && "payload" in patch)
+            return { data: null, error: { message: state.budgetError } };
           for (const row of rows) Object.assign(row, patch);
         }
         return {
@@ -148,6 +152,7 @@ beforeEach(() => {
   state.send.mockReset().mockResolvedValue("provider-1");
   state.queries = [];
   state.deferError = false;
+  state.budgetError = null;
 });
 afterEach(() => vi.useRealTimers());
 describe("quota-aware email worker", () => {
@@ -200,6 +205,31 @@ describe("quota-aware email worker", () => {
     expect(
       state.send.mock.calls.map(([input]) => input.idempotencyKey),
     ).toEqual(["job-1", "job-1"]);
+  });
+  it("resumes daily budget holds at the next UTC reset", async () => {
+    state.budgetError = "EMAIL_DAILY_BUDGET_DEFERRED";
+    expect(await processDueJobs()).toMatchObject({ deferred: 1, claimed: 1 });
+    expect(state.rows[0]).toMatchObject({
+      status: "pending",
+      attempts: 0,
+      available_at: "2026-10-04T00:01:00.000Z",
+      last_error_code: "EMAIL_BUDGET_DEFERRED",
+    });
+    state.budgetError = null;
+    vi.setSystemTime("2026-10-04T00:01:00Z");
+    await processDueJobs();
+    expect(state.rows[0]).toMatchObject({ status: "succeeded", attempts: 1 });
+    expect(state.send).toHaveBeenCalledOnce();
+  });
+  it("probes monthly budget holds once a day", async () => {
+    state.budgetError = "EMAIL_MONTHLY_BUDGET_DEFERRED";
+    await processDueJobs();
+    expect(state.rows[0]).toMatchObject({
+      status: "pending",
+      available_at: "2026-10-04T19:00:00.000Z",
+      last_error_code: "EMAIL_BUDGET_DEFERRED",
+    });
+    expect(state.send).not.toHaveBeenCalled();
   });
   it("can recover after repeated monthly refusals beyond the 24h idempotency window", async () => {
     state.send.mockRejectedValueOnce(

@@ -141,6 +141,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { check_user_id?: string }; Returns: boolean }
+      is_stale_maturity_confirmation: {
+        Args: { p_job: Database["public"]["Tables"]["jobs"]["Row"] }
+        Returns: boolean
+      }
       kampala_date: { Args: { p_at?: string }; Returns: string }
       resolve_portal_cycle: { Args: { p_at: string }; Returns: string }
     }

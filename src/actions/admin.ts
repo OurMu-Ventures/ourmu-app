@@ -417,10 +417,12 @@ export async function retryJob(formData: FormData) {
     .or(
       `status.in.(failed,dead),and(status.eq.pending,last_error_code.in.(${EMAIL_QUOTA_CODES.join(",")}))`,
     )
-    .select("id,kind,entity_id")
+    .select("id,kind,entity_id,status")
     .maybeSingle();
   if (error) throw new Error("Job retry failed");
-  if (!job) throw new Error("Job is no longer eligible for retry");
+  // The database never re-queues a stale maturity confirmation.
+  if (!job || job.status !== "pending")
+    throw new Error("Job is no longer eligible for retry");
   // Retrying a receipt generation reuses the same receipt number: reset the
   // row to generating so the worker rebuilds the same document.
   if (job?.kind === "generate_receipt_pdf" && job.entity_id) {
@@ -476,7 +478,7 @@ export async function reconcileJobDelivery(formData: FormData) {
       .eq("id", jobId);
     if (error) throw new Error("Reconciliation failed");
   } else {
-    const { error } = await admin
+    const { data: resent, error } = await admin
       .from("jobs")
       .update({
         status: "pending",
@@ -485,8 +487,13 @@ export async function reconcileJobDelivery(formData: FormData) {
         last_error_code: null,
         first_send_attempt_at: null,
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .select("status")
+      .maybeSingle();
     if (error) throw new Error("Reconciliation failed");
+    // The database never re-queues a stale maturity confirmation.
+    if (resent?.status !== "pending")
+      throw new Error("Job is no longer eligible for resend");
   }
   await audit({
     actorId: adminProfile.id,

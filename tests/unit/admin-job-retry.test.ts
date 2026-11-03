@@ -14,12 +14,13 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/email/send", () => ({ sendTransactionalEmail: vi.fn() }));
-import { retryJob } from "@/actions/admin";
+import { reconcileJobDelivery, retryJob } from "@/actions/admin";
 import { EMAIL_QUOTA_CODES } from "@/lib/email/quota";
 const jobId = "11111111-1111-4111-8111-111111111111";
-function form() {
+function form(fields: Record<string, string> = {}) {
   const data = new FormData();
   data.set("jobId", jobId);
+  for (const [name, value] of Object.entries(fields)) data.set(name, value);
   return data;
 }
 beforeEach(() => {
@@ -36,7 +37,7 @@ beforeEach(() => {
 describe("admin job retry", () => {
   it("uses shared quota codes and audits the matched job", async () => {
     mocks.result.mockResolvedValue({
-      data: { id: jobId, kind: "send_email" },
+      data: { id: jobId, kind: "send_email", status: "pending" },
       error: null,
     });
     await retryJob(form());
@@ -52,5 +53,41 @@ describe("admin job retry", () => {
     await expect(retryJob(form())).rejects.toThrow("no longer eligible");
     expect(mocks.audit).not.toHaveBeenCalled();
     expect(mocks.from).toHaveBeenCalledTimes(1);
+  });
+  it("rejects a stale confirmation the database retired instead of re-queuing", async () => {
+    mocks.result.mockResolvedValue({
+      data: { id: jobId, kind: "send_email", status: "dead" },
+      error: null,
+    });
+    await expect(retryJob(form())).rejects.toThrow("no longer eligible");
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+});
+describe("admin delivery reconciliation", () => {
+  const awaiting = {
+    id: jobId,
+    status: "dead",
+    last_error_code: "NEEDS_RECONCILIATION",
+  };
+  it("audits an authorized resend once the job is queued again", async () => {
+    mocks.result
+      .mockResolvedValueOnce({ data: awaiting, error: null })
+      .mockResolvedValueOnce({ data: { status: "pending" }, error: null });
+    await reconcileJobDelivery(form({ outcome: "authorize_resend" }));
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "job.delivery_reconciled",
+        metadata: { outcome: "authorize_resend", notes: null },
+      }),
+    );
+  });
+  it("rejects a resend the database refuses for a stale confirmation", async () => {
+    mocks.result
+      .mockResolvedValueOnce({ data: awaiting, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    await expect(
+      reconcileJobDelivery(form({ outcome: "authorize_resend" })),
+    ).rejects.toThrow("no longer eligible");
+    expect(mocks.audit).not.toHaveBeenCalled();
   });
 });
