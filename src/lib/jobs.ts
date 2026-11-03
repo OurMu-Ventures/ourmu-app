@@ -7,10 +7,10 @@ import { randomUUID } from "node:crypto";
 import {
   deferralCode,
   deferRetryAt,
-  EMAIL_DEFERRAL_CODES,
   EmailBudgetDeferredError,
   EmailRateLimitError,
   isEmailDeferralError,
+  type EmailDeferralCode,
 } from "@/lib/email/quota";
 
 import { investmentReturnView } from "@/lib/actual-returns";
@@ -58,10 +58,12 @@ export type JobRow = {
   last_error_code?: string | null;
 };
 
-// Queue-draining budgets for the hourly free-tier worker. Each invocation
-// processes successive small batches so newly created receipt and email jobs
-// can run immediately, stopping when the queue is empty, the job budget is
-// reached, or the time budget elapses. No new job starts after the deadline.
+// Queue-draining budgets for the free-tier worker. Supabase Cron dispatches it
+// every 2 minutes while work is due; an hourly watchdog and the daily
+// maintenance run drain as fallbacks. Each invocation processes successive
+// small batches so newly created receipt and email jobs can run immediately,
+// stopping when the queue is empty, the job budget is reached, or the time
+// budget elapses. No new job starts after the deadline.
 export const JOB_BATCH_SIZE = 10;
 export const MAX_JOBS_PER_RUN = 50;
 export const WORKER_TIME_BUDGET_MS = 40_000;
@@ -90,8 +92,10 @@ export type ProcessDueJobsResult = {
   deferred: number;
   /** Jobs claimed with a lease token this run. */
   claimed: number;
-  /** Skipped: lost claims, stale completions, suppressed deliveries. */
+  /** Skipped: lost claims, stale completions, suppressed deliveries, deliberate drops. */
   skipped: number;
+  /** Distinct due jobs whose claim matched no row this run. */
+  unclaimable: number;
   /** Provider-accepted sends (Resend id returned), distinct from delivery. */
   providerAccepted: number;
   documentsGenerated: number;
@@ -100,10 +104,102 @@ export type ProcessDueJobsResult = {
   needsReconciliation: number;
   /** Database state-transition failures (completion/record writes). */
   stateErrors: number;
+  /** Before the drain: all due jobs, including emails held by a deferral. */
+  dueBefore: number;
+  /** Before the drain: due jobs the worker may process (held emails excluded). */
+  processableDueBefore: number;
+  /** Before the drain: seconds since the oldest processable job became due. */
+  oldestDueAgeSecBefore: number | null;
+  /** Before the drain: expired leases the recovery step could not recover. */
+  expiredLeasesBefore: number;
+  /** After the drain: all due jobs, including held emails. */
   remainingDue: number;
+  /** After the drain: due jobs the worker may process. */
+  remainingProcessableDue: number;
+  /** After the drain: running jobs whose lease has expired. */
+  remainingExpiredLeases: number;
+  /**
+   * After the drain: seconds since the oldest processable job became due
+   * (available_at, not created_at), held emails excluded.
+   */
   oldestDueAgeSec: number | null;
+  /** After the drain: the active email deferral, if any. */
+  emailHold: EmailHold | null;
   stopReason: StopReason;
 };
+
+export type EmailHold = { code: EmailDeferralCode; until: string };
+
+export type QueueSnapshot = {
+  snapshotAt: string;
+  emailHold: (EmailHold & { heldCount: number }) | null;
+  dueCount: number;
+  processableDueCount: number;
+  oldestDueAt: string | null;
+  oldestProcessableDueAt: string | null;
+  newestReadyAt: string | null;
+  expiredLeaseCount: number;
+  oldestExpiredLeaseAt: string | null;
+};
+
+// public.job_queue_snapshot's row. The generated types mark every column
+// non-null, but the timestamps and the hold are null when there is nothing
+// to report.
+type QueueSnapshotRow = {
+  snapshot_at: string;
+  email_hold_code: string | null;
+  email_hold_until: string | null;
+  held_email_count: number;
+  due_count: number;
+  processable_due_count: number;
+  oldest_due_at: string | null;
+  oldest_processable_due_at: string | null;
+  newest_ready_at: string | null;
+  expired_lease_count: number;
+  oldest_expired_lease_at: string | null;
+};
+
+// Retry delays after failures 1-7: 5, 15, 45, 135, 300, 300 and 300 minutes,
+// 18 h 20 min in total, inside Resend's 24h idempotency window (see
+// IDEMPOTENCY_WINDOW_MS) so retries of an ambiguous send keep their key.
+// Deferrals (quota, rate limit, budget) consume no attempts.
+export const RETRY_BASE_DELAY_MS = 5 * 60 * 1000;
+export const RETRY_BACKOFF_FACTOR = 3;
+export const RETRY_MAX_DELAY_MS = 5 * 60 * 60 * 1000;
+export const DEFAULT_MAX_ATTEMPTS = 8;
+
+export function retryDelayMs(attemptsBeforeClaim: number): number {
+  return Math.min(
+    RETRY_MAX_DELAY_MS,
+    RETRY_BASE_DELAY_MS *
+      RETRY_BACKOFF_FACTOR **
+        Math.min(Math.max(0, Math.floor(attemptsBeforeClaim)), 10),
+  );
+}
+
+export function retryScheduleTotalMs(
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+): number {
+  let total = 0;
+  for (let attempts = 0; attempts <= maxAttempts - 2; attempts += 1)
+    total += retryDelayMs(attempts);
+  return total;
+}
+
+/** Terminal codes for emails deliberately not sent because they are no longer relevant.
+ *  Mirrored after the marker comment in public.job_dispatch_health (parity unit test). */
+export const DELIBERATE_DROP_CODES = [
+  "RESERVATION_NOT_FOUND",
+  "STALE_MATURITY_CONFIRMATION",
+  "STALE_RESERVATION",
+] as const;
+export type DeliberateDropCode = (typeof DELIBERATE_DROP_CODES)[number];
+
+export function isDeliberateDropCode(
+  value: unknown,
+): value is DeliberateDropCode {
+  return DELIBERATE_DROP_CODES.some((code) => code === value);
+}
 
 export type SendEmailPayload = {
   template?: EmailTemplate;
@@ -192,44 +288,53 @@ export function recipientsForPayload(payload: SendEmailPayload): number {
   return 1 + cc + (payload.bcc?.length ?? 0);
 }
 
-async function queueStatus(
+// The queue as public.job_queue_snapshot sees it: the single definition of
+// the email hold, due, processable and expired-lease work, shared with the
+// Supabase Cron dispatcher and the health RPC. The hold is global; due work
+// and leases are filtered by campaign when one is given.
+export async function fetchQueueSnapshot(
   admin: ReturnType<typeof createAdminClient>,
-  campaignId: string | undefined,
-  nowMs: number,
-): Promise<{ remainingDue: number; oldestDueAgeSec: number | null }> {
-  let countQuery = admin
-    .from("jobs")
-    .select("id", { count: "exact", head: true })
-    .in("status", ["pending", "failed"])
-    .lte("available_at", new Date(nowMs).toISOString());
-  let oldestQuery = admin
-    .from("jobs")
-    .select("created_at")
-    .in("status", ["pending", "failed"])
-    .lte("available_at", new Date(nowMs).toISOString())
-    .order("created_at", { ascending: true })
-    .limit(1);
-  if (campaignId) {
-    countQuery = countQuery
-      .eq("entity_type", "email_campaign")
-      .eq("entity_id", campaignId);
-    oldestQuery = oldestQuery
-      .eq("entity_type", "email_campaign")
-      .eq("entity_id", campaignId);
-  }
-  const [{ count, error: countError }, { data: oldest, error: oldestError }] =
-    await Promise.all([countQuery, oldestQuery]);
-  if (countError || oldestError) throw new Error("JOB_QUEUE_STATUS_FAILED");
-  const rows = (oldest ?? []) as Array<{ created_at: string }>;
+  campaignId?: string,
+): Promise<QueueSnapshot> {
+  const { data, error } = await admin.rpc(
+    "job_queue_snapshot",
+    campaignId ? { p_campaign_id: campaignId } : {},
+  );
+  const row: QueueSnapshotRow | undefined = Array.isArray(data)
+    ? data[0]
+    : undefined;
+  if (error || !row) throw new Error("JOB_QUEUE_SNAPSHOT_FAILED");
   return {
-    remainingDue: count ?? 0,
-    oldestDueAgeSec: rows.length
-      ? Math.max(
-          0,
-          Math.floor((nowMs - new Date(rows[0].created_at).getTime()) / 1000),
-        )
-      : null,
+    snapshotAt: row.snapshot_at,
+    // Fail closed: any hold the database reports pauses email. The parity
+    // unit test keeps its codes equal to EMAIL_DEFERRAL_CODES.
+    emailHold:
+      row.email_hold_code === null
+        ? null
+        : {
+            code: row.email_hold_code as EmailDeferralCode,
+            until: row.email_hold_until ?? row.snapshot_at,
+            heldCount: row.held_email_count,
+          },
+    dueCount: row.due_count,
+    processableDueCount: row.processable_due_count,
+    oldestDueAt: row.oldest_due_at,
+    oldestProcessableDueAt: row.oldest_processable_due_at,
+    newestReadyAt: row.newest_ready_at,
+    expiredLeaseCount: row.expired_lease_count,
+    oldestExpiredLeaseAt: row.oldest_expired_lease_at,
   };
+}
+
+// Whole seconds from a snapshot timestamp back to the snapshot time, on the
+// database clock.
+function snapshotAgeSec(snapshot: QueueSnapshot, at: string | null) {
+  return at === null
+    ? null
+    : Math.max(
+        0,
+        Math.floor((Date.parse(snapshot.snapshotAt) - Date.parse(at)) / 1000),
+      );
 }
 
 // Campaign worker compatibility: processDueJobs(limit, campaignId?) keeps its
@@ -256,14 +361,22 @@ export async function processDueJobs(
     deferred: 0,
     claimed: 0,
     skipped: 0,
+    unclaimable: 0,
     providerAccepted: 0,
     documentsGenerated: 0,
     recipientJobsCreated: 0,
     recoveredLeases: 0,
     needsReconciliation: 0,
     stateErrors: 0,
+    dueBefore: 0,
+    processableDueBefore: 0,
+    oldestDueAgeSecBefore: null,
+    expiredLeasesBefore: 0,
     remainingDue: 0,
+    remainingProcessableDue: 0,
+    remainingExpiredLeases: 0,
     oldestDueAgeSec: null,
+    emailHold: null,
     stopReason: drainQueue ? "queue_empty" : "single_batch",
   };
 
@@ -272,18 +385,15 @@ export async function processDueJobs(
 
   result.recoveredLeases = await recoverExpiredLeases(admin);
 
-  const { data: quotaHold, error: quotaHoldError } = await admin
-    .from("jobs")
-    .select("available_at")
-    .eq("kind", "send_email")
-    .in("status", ["pending", "failed"])
-    .in("last_error_code", [...EMAIL_DEFERRAL_CODES])
-    .gt("available_at", new Date().toISOString())
-    .order("available_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (quotaHoldError) throw new Error("EMAIL_QUOTA_HOLD_FETCH_FAILED");
-  let emailPaused = Boolean(quotaHold);
+  const before = await fetchQueueSnapshot(admin, campaignId);
+  result.dueBefore = before.dueCount;
+  result.processableDueBefore = before.processableDueCount;
+  result.oldestDueAgeSecBefore = snapshotAgeSec(
+    before,
+    before.oldestProcessableDueAt,
+  );
+  result.expiredLeasesBefore = before.expiredLeaseCount;
+  let emailPaused = before.emailHold !== null;
 
   let lastProviderSendAt = 0;
   // Due rows whose claim matched nothing (for example confirmations the
@@ -317,8 +427,8 @@ export async function processDueJobs(
     const due = (jobs ?? []) as JobRow[];
     if (due.length === 0) {
       // No fetchable work: the queue is empty or only holds deferred emails
-      // waiting for quota. Deferred emails stay queued; the final queueStatus
-      // probe (unfiltered) still reports them in remainingDue.
+      // waiting for quota. Deferred emails stay queued; the final snapshot
+      // still reports them in remainingDue.
       result.stopReason = "queue_empty";
       break;
     }
@@ -496,12 +606,9 @@ export async function processDueJobs(
         const terminal =
           raw.attempts + 1 >= raw.max_attempts ||
           (jobError instanceof Error &&
-            [
-              "NEEDS_RECONCILIATION",
-              "STALE_MATURITY_CONFIRMATION",
-              "STALE_RESERVATION",
-              "RESERVATION_NOT_FOUND",
-            ].includes(jobError.message));
+            ["NEEDS_RECONCILIATION", ...DELIBERATE_DROP_CODES].includes(
+              jobError.message,
+            ));
         const code =
           jobError instanceof Error
             ? jobError.message.slice(0, 80)
@@ -517,7 +624,7 @@ export async function processDueJobs(
               : new Date(Date.now() + JOB_LEASE_MS).toISOString(),
             last_error_code: code,
             available_at: new Date(
-              Date.now() + Math.min(3600, 2 ** raw.attempts * 60) * 1000,
+              Date.now() + retryDelayMs(raw.attempts),
             ).toISOString(),
             ...(providerMessageId
               ? { provider_message_id: providerMessageId }
@@ -534,7 +641,11 @@ export async function processDueJobs(
           result.stateErrors += 1;
           continue;
         }
-        result.failed += 1;
+        // A deliberate drop (the email is no longer relevant) is recorded
+        // dead with its code but is not a failure.
+        if (jobError instanceof Error && isDeliberateDropCode(jobError.message))
+          result.skipped += 1;
+        else result.failed += 1;
       }
     }
     if (
@@ -544,10 +655,16 @@ export async function processDueJobs(
       break;
     if (!drainQueue) break;
   }
+  result.unclaimable = unclaimable.size;
 
-  const status = await queueStatus(admin, campaignId, Date.now());
-  result.remainingDue = status.remainingDue;
-  result.oldestDueAgeSec = status.oldestDueAgeSec;
+  const after = await fetchQueueSnapshot(admin, campaignId);
+  result.remainingDue = after.dueCount;
+  result.remainingProcessableDue = after.processableDueCount;
+  result.remainingExpiredLeases = after.expiredLeaseCount;
+  result.oldestDueAgeSec = snapshotAgeSec(after, after.oldestProcessableDueAt);
+  result.emailHold = after.emailHold
+    ? { code: after.emailHold.code, until: after.emailHold.until }
+    : null;
   return result;
 }
 

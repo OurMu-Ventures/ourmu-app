@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fakeQueueSnapshotRow } from "./helpers/fake-queue-snapshot";
 vi.mock("server-only", () => ({}));
 const state = vi.hoisted(() => ({
   rows: [] as Array<Record<string, unknown>>,
@@ -6,6 +7,7 @@ const state = vi.hoisted(() => ({
   queries: [] as string[],
   deferError: false,
   budgetError: null as null | string,
+  investment: null as null | Record<string, unknown>,
 }));
 vi.mock("@/lib/email/send", () => ({
   sendTransactionalEmail: (...args: unknown[]) => state.send(...args),
@@ -23,6 +25,11 @@ vi.mock("@/lib/supabase/admin", () => ({
         order = "",
         ascending = true;
       const result = () => {
+        if (table === "investments")
+          return {
+            data: state.investment ? [state.investment] : [],
+            error: null,
+          };
         if (table !== "jobs") return { data: null, error: null };
         let rows = state.rows.filter((row) =>
           filters.every((filter) => filter(row)),
@@ -117,6 +124,15 @@ vi.mock("@/lib/supabase/admin", () => ({
       };
       return q;
     },
+    rpc: async (name: string, args?: { p_campaign_id?: string }) =>
+      name === "job_queue_snapshot"
+        ? {
+            data: [
+              fakeQueueSnapshotRow(state.rows, args?.p_campaign_id ?? null),
+            ],
+            error: null,
+          }
+        : { data: 1, error: null },
   }),
 }));
 import { processDueJobs } from "@/lib/jobs";
@@ -153,6 +169,7 @@ beforeEach(() => {
   state.queries = [];
   state.deferError = false;
   state.budgetError = null;
+  state.investment = null;
 });
 afterEach(() => vi.useRealTimers());
 describe("quota-aware email worker", () => {
@@ -171,7 +188,7 @@ describe("quota-aware email worker", () => {
     expect(state.rows[0]).toMatchObject({
       status: "pending",
       attempts: 7,
-      available_at: "2026-10-04T00:01:00.000Z",
+      available_at: "2026-10-03T22:00:00.000Z",
       first_send_attempt_at: null,
       send_attempts: 0,
       last_error_code: "EMAIL_DAILY_QUOTA_EXCEEDED",
@@ -300,11 +317,27 @@ describe("quota-aware email worker", () => {
         payload: { template: "reservation_created" },
       }),
     ];
-    await processDueJobs();
+    expect(await processDueJobs()).toMatchObject({ failed: 0, skipped: 1 });
     expect(state.rows[0]).toMatchObject({
       status: "dead",
       attempts: 1,
       last_error_code: "RESERVATION_NOT_FOUND",
+    });
+    expect(state.send).not.toHaveBeenCalled();
+  });
+  it("marks a reservation email dead once the investment is no longer reserved", async () => {
+    state.investment = { status: "active" };
+    state.rows = [
+      job("stale-reservation", {
+        entity_type: "investment",
+        payload: { template: "reservation_created" },
+      }),
+    ];
+    expect(await processDueJobs()).toMatchObject({ failed: 0, skipped: 1 });
+    expect(state.rows[0]).toMatchObject({
+      status: "dead",
+      attempts: 1,
+      last_error_code: "STALE_RESERVATION",
     });
     expect(state.send).not.toHaveBeenCalled();
   });

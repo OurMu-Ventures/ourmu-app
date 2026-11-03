@@ -13,6 +13,17 @@ export const EMAIL_DEFERRAL_CODES = [
 ] as const;
 export type EmailDeferralCode = (typeof EMAIL_DEFERRAL_CODES)[number];
 
+export function isEmailDeferralCode(
+  value: unknown,
+): value is EmailDeferralCode {
+  return EMAIL_DEFERRAL_CODES.some((code) => code === value);
+}
+
+// Resend documents its daily quota both as a UTC calendar day and as a
+// rolling 24h window, so a daily refusal is checked again every 3 hours as
+// well as after the UTC reset.
+export const DAILY_QUOTA_REPROBE_MS = 3 * 60 * 60 * 1000;
+
 // Conservative queued-email budget for the shared free-tier Resend allowance.
 // Authentication SMTP and manual sends share the same provider quota, so these
 // local counters reserve capacity for them and are reconciled against provider
@@ -72,37 +83,45 @@ export function deferRetryAt(
   budgetScope?: EmailBudgetDeferredError["scope"],
 ): string {
   // Honour Retry-After for rate limits (bounded between 5s and 15min).
-  // The local daily budget counts UTC days, so its holds resume at the reset
-  // like a daily quota. Other budget holds probe daily: the worker does not
-  // know the account reset date and local counters alone are not a complete
-  // quota guarantee.
+  // The local daily budget counts UTC days, so its holds resume exactly at
+  // the reset, without the provider quota's 3-hour re-probe. Other budget
+  // holds probe daily: the worker does not know the account reset date and
+  // local counters alone are not a complete quota guarantee.
   if (code === "EMAIL_RATE_LIMITED") {
     const bounded = Math.min(900, Math.max(5, retryAfterSec ?? 60));
     return new Date(nowMs + bounded * 1000).toISOString();
   }
   if (code === "EMAIL_BUDGET_DEFERRED")
-    return quotaRetryAt(
-      budgetScope === "daily"
-        ? "EMAIL_DAILY_QUOTA_EXCEEDED"
-        : "EMAIL_MONTHLY_QUOTA_EXCEEDED",
-      nowMs,
-    );
+    return budgetScope === "daily"
+      ? nextUtcResetAt(nowMs)
+      : quotaRetryAt("EMAIL_MONTHLY_QUOTA_EXCEEDED", nowMs);
   return quotaRetryAt(code, nowMs);
 }
 
-export function quotaRetryAt(code: EmailQuotaCode, nowMs = Date.now()): string {
+// Daily quotas reset at midnight UTC. Leave a minute for the reset to settle.
+export function nextUtcResetAt(nowMs = Date.now()): string {
   const now = new Date(nowMs);
-  // Daily quotas reset at midnight UTC. Leave a minute for the reset to settle.
-  // Monthly reset dates depend on the account: probe once per day rather than guess.
   return new Date(
-    code === "EMAIL_DAILY_QUOTA_EXCEEDED"
-      ? Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate() + 1,
-          0,
-          1,
-        )
-      : nowMs + 24 * 60 * 60 * 1000,
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      1,
+    ),
   ).toISOString();
+}
+
+export function quotaRetryAt(code: EmailQuotaCode, nowMs = Date.now()): string {
+  // A daily refusal is checked again after the UTC reset or within 3 hours,
+  // whichever comes first. Monthly reset dates depend on the account: probe
+  // once per day rather than guess.
+  if (code === "EMAIL_DAILY_QUOTA_EXCEEDED")
+    return new Date(
+      Math.min(
+        Date.parse(nextUtcResetAt(nowMs)),
+        nowMs + DAILY_QUOTA_REPROBE_MS,
+      ),
+    ).toISOString();
+  return new Date(nowMs + 24 * 60 * 60 * 1000).toISOString();
 }

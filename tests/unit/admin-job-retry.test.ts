@@ -15,7 +15,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/email/send", () => ({ sendTransactionalEmail: vi.fn() }));
 import { reconcileJobDelivery, retryJob } from "@/actions/admin";
-import { EMAIL_QUOTA_CODES } from "@/lib/email/quota";
+import { EMAIL_DEFERRAL_CODES } from "@/lib/email/quota";
 const jobId = "11111111-1111-4111-8111-111111111111";
 function form(fields: Record<string, string> = {}) {
   const data = new FormData();
@@ -35,14 +35,14 @@ beforeEach(() => {
   mocks.from.mockReturnValue(builder);
 });
 describe("admin job retry", () => {
-  it("uses shared quota codes and audits the matched job", async () => {
+  it("uses the shared deferral codes and audits the matched job", async () => {
     mocks.result.mockResolvedValue({
       data: { id: jobId, kind: "send_email", status: "pending" },
       error: null,
     });
     await retryJob(form());
     expect(mocks.filter).toHaveBeenCalledWith(
-      `status.in.(failed,dead),and(status.eq.pending,last_error_code.in.(${EMAIL_QUOTA_CODES.join(",")}))`,
+      `status.in.(failed,dead),and(status.eq.pending,last_error_code.in.(${EMAIL_DEFERRAL_CODES.join(",")}))`,
     );
     expect(mocks.audit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "job.retried", entityId: jobId }),
