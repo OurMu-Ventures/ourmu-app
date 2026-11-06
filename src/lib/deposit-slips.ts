@@ -13,7 +13,9 @@ export type DepositSlip = {
 };
 // New schema is accessed through an isolated untyped boundary until generated types are refreshed.
 export function slipClient(signal?: AbortSignal) {
-  return createAdminClient(signal) as unknown as import("@supabase/supabase-js").SupabaseClient;
+  return createAdminClient(
+    signal,
+  ) as unknown as import("@supabase/supabase-js").SupabaseClient;
 }
 export async function cleanupDepositSlips() {
   const db = slipClient(AbortSignal.timeout(10000));
@@ -21,32 +23,24 @@ export async function cleanupDepositSlips() {
   if (error) throw new Error("Deposit slip cleanup query failed");
   let deleted = 0,
     failed = 0;
-  for (const raw of data ?? []) {
-    const d = raw as DepositSlip;
-
-    const marked = await db
-      .from("deposit_slips")
-      .update({ state: "deleting" })
-      .eq("id", d.id)
-      .neq("state", "deleted");
-    if (marked.error) {
-      failed++;
-      continue;
+  const slips = (data ?? []) as DepositSlip[];
+  if (slips.length) {
+    const removed = await db.storage
+      .from("deposit-slips")
+      .remove(slips.map((d) => d.path));
+    if (removed.error) failed += slips.length;
+    else {
+      const result = await db
+        .from("deposit_slips")
+        .update({ state: "deleted" })
+        .in(
+          "id",
+          slips.map((d) => d.id),
+        )
+        .eq("state", "deleting");
+      if (result.error) failed += slips.length;
+      else deleted += slips.length;
     }
-    const removed = await db.storage.from("deposit-slips").remove([d.path]);
-    if (removed.error) {
-      failed++;
-      continue;
-    }
-    // Keep the slot unavailable beyond the upload policy's lifetime before releasing capacity.
-    if (Date.parse(d.created_at) > Date.now() - 20 * 60000) continue;
-    const result = await db
-      .from("deposit_slips")
-      .update({ state: "deleted" })
-      .eq("id", d.id)
-      .eq("state", "deleting");
-    if (result.error) failed++;
-    else deleted++;
   }
   const orphans = await db.rpc("deposit_slip_orphan_paths");
   if (orphans.error) failed++;

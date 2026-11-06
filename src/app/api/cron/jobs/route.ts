@@ -58,8 +58,11 @@ export async function POST(request: Request) {
     deleted: 0,
     failed: 1,
   }));
-  if (depositSlips.failed > 0 && errorCode === null)
-    errorCode = "DEPOSIT_SLIP_CLEANUP_FAILED";
+  if (depositSlips.failed > 0)
+    console.error("deposit_slips.cleanup_failed", {
+      requestId,
+      failed: depositSlips.failed,
+    });
   const finishedAt = new Date();
 
   // Recorded last: the next watchdog run counts only events after this row,

@@ -37,9 +37,11 @@ export type InvestmentCardData = {
 export function InvestmentCard({
   item,
   actions,
+  depositUploadsEnabled = false,
 }: {
   item: InvestmentCardData;
   actions?: React.ReactNode;
+  depositUploadsEnabled?: boolean;
 }) {
   const progress = maturityProgress(
     item.startIso,
@@ -159,7 +161,7 @@ export function InvestmentCard({
             label={isPaid ? "Opening investment details" : item.detailStatus}
           />
         </Link>
-        {item.status === "reserved" && (
+        {depositUploadsEnabled && item.status === "reserved" && (
           <Link href={`/investments/${item.investmentId}#deposit-slips`}>
             Upload deposit slip (optional)
           </Link>

@@ -9,12 +9,13 @@ async function accessible(id: string) {
   const db = slipClient();
   const { data } = await db
     .from("investments")
-    .select("id,status,investor_id")
+    .select("id,status,investor_id,record_origin")
     .eq("id", z.uuid().parse(id))
     .single();
   if (
     !data ||
     data.status !== "reserved" ||
+    data.record_origin !== "portal" ||
     (data.investor_id !== profile.id && profile.role !== "admin")
   )
     throw new Error("Reservation unavailable.");
@@ -56,12 +57,18 @@ export async function reserveDepositSlip(
     p_bytes: bytes,
     p_ceiling: ceiling,
   });
-  if (error)
+  if (error) {
+    const known = [
+      "Three attachments maximum",
+      "Uploads temporarily full. Investment processing continues",
+      "Previous uploads awaiting cleanup. Please try again later",
+      "Reservation unavailable",
+    ];
     throw new Error(
-      error.message.includes("Three attachments")
-        ? "Three attachments maximum."
-        : "Uploads are temporarily unavailable. Remove an old attachment or try later. Investment processing continues.",
+      known.find((message) => error.message.includes(message)) ??
+        "Uploads are temporarily unavailable. Investment processing continues.",
     );
+  }
   return data as DepositSlip;
 }
 export async function finalizeDepositSlip(investmentId: string, id: string) {
@@ -106,8 +113,14 @@ export async function removeDepositSlip(investmentId: string, id: string) {
 }
 export async function viewDepositSlip(investmentId: string, id: string) {
   const { db } = await accessible(investmentId);
-  const files = await listDepositSlips(investmentId);
-  const file = files.find((d) => d.id === id);
+  const { data: file } = await db
+    .from("deposit_slips")
+    .select("path")
+    .eq("id", z.uuid().parse(id))
+    .eq("investment_id", investmentId)
+    .eq("state", "ready")
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
   if (!file) throw new Error("Attachment unavailable.");
   const { data, error } = await db.storage
     .from("deposit-slips")

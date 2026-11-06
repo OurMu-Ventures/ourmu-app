@@ -1,3 +1,4 @@
+import { slipClient, type DepositSlip } from "@/lib/deposit-slips";
 import { DepositSlips } from "@/components/DepositSlips";
 import Link from "next/link";
 import { z } from "zod";
@@ -71,6 +72,24 @@ export default async function AdminActivationsPage({
   if (error) throw new Error("Unable to load investments awaiting activation");
   const items = data ?? [];
   const total = count ?? 0;
+  const slipsByInvestment = new Map<string, DepositSlip[]>();
+  if (items.length) {
+    const { data: slips } = await slipClient()
+      .from("deposit_slips")
+      .select("*")
+      .in(
+        "investment_id",
+        items.map((item) => item.id),
+      )
+      .eq("state", "ready")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at");
+    for (const slip of (slips ?? []) as DepositSlip[]) {
+      const group = slipsByInvestment.get(slip.investment_id) ?? [];
+      group.push(slip);
+      slipsByInvestment.set(slip.investment_id, group);
+    }
+  }
   return (
     <>
       <p className="eyebrow">Pending investment reservations</p>
@@ -139,7 +158,11 @@ export default async function AdminActivationsPage({
                 {date(item.maturity_date)}
               </p>
               <p>No automatic expiry · {item.status}</p>
-              <DepositSlips investmentId={item.id} admin />
+              <DepositSlips
+                investmentId={item.id}
+                admin
+                initialFiles={slipsByInvestment.get(item.id) ?? []}
+              />
             </div>
             <span className="badge">
               {item.is_test ? "Test reservation" : "Awaiting activation"}

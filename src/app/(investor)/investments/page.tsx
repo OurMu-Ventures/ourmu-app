@@ -59,6 +59,10 @@ export default async function InvestmentsPage() {
           return (
             <InvestmentCard
               key={item.id}
+              depositUploadsEnabled={
+                process.env.DEPOSIT_SLIPS_ENABLED === "true" &&
+                item.record_origin === "portal"
+              }
               item={{
                 investmentId: item.id,
                 alias: item.alias,

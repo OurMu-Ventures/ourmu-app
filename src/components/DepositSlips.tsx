@@ -41,11 +41,15 @@ async function prepare(file: File): Promise<Blob> {
 export function DepositSlips({
   investmentId,
   admin = false,
+  uploadsEnabled = false,
+  initialFiles,
 }: {
   investmentId: string;
   admin?: boolean;
+  uploadsEnabled?: boolean;
+  initialFiles?: DepositSlip[];
 }) {
-  const [files, setFiles] = useState<DepositSlip[]>([]);
+  const [files, setFiles] = useState<DepositSlip[]>(initialFiles ?? []);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -56,6 +60,7 @@ export function DepositSlips({
     setFiles(await listDepositSlips(investmentId));
   }
   useEffect(() => {
+    if (initialFiles !== undefined) return;
     let current = true;
     listDepositSlips(investmentId)
       .then((d) => {
@@ -67,7 +72,7 @@ export function DepositSlips({
     return () => {
       current = false;
     };
-  }, [investmentId]);
+  }, [investmentId, initialFiles]);
   async function upload(file: File) {
     setBusy(true);
     setMessage("");
@@ -132,7 +137,7 @@ export function DepositSlips({
       <h2>
         {admin ? "Deposit slips" : "Deposit slip (optional)"} · {files.length}/3
       </h2>
-      {!admin && (
+      {!admin && uploadsEnabled && (
         <>
           <p>
             Already made your bank deposit? You can share your slip here instead
@@ -182,7 +187,7 @@ export function DepositSlips({
           >
             View {file.mime === "application/pdf" ? "PDF" : "photo"} {index + 1}
           </button>
-          {!admin && (
+          {!admin && uploadsEnabled && (
             <button
               type="button"
               disabled={busy}
