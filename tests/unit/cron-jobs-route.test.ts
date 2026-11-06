@@ -1,3 +1,7 @@
+import { cleanupDepositSlips } from "@/lib/deposit-slips";
+vi.mock("@/lib/deposit-slips", () => ({
+  cleanupDepositSlips: vi.fn(async () => ({ deleted: 0, failed: 0 })),
+}));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProcessDueJobsResult } from "@/lib/jobs";
 vi.mock("server-only", () => ({}));
@@ -101,6 +105,31 @@ afterEach(() => {
 });
 
 describe("POST /api/cron/jobs", () => {
+  it.each(["reported", "thrown"])(
+    "keeps jobs successful after %s cleanup failures",
+    async (mode) => {
+      if (mode === "reported")
+        vi.mocked(cleanupDepositSlips).mockResolvedValueOnce({
+          deleted: 0,
+          failed: 20,
+        });
+      else
+        vi.mocked(cleanupDepositSlips).mockRejectedValueOnce(
+          new Error("missing migration"),
+        );
+      const response = await post({
+        authorization: `Bearer ${JOB}`,
+        "x-ourmu-trigger": "pg_cron",
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        ok: true,
+        jobs,
+        depositSlips: { failed: expect.any(Number) },
+      });
+      expect(recorded()).toMatchObject({ ok: true, error_code: null });
+    },
+  );
   it("rejects unauthenticated calls before any processing or RPC", async () => {
     const unauthenticated: Array<Record<string, string>> = [
       {},

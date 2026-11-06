@@ -180,3 +180,24 @@ describe("InvestmentCard return basis", () => {
     expect(screen.queryByText("Actual return")).toBeNull();
   });
 });
+
+describe("deposit upload rollout", () => {
+  it("does not advertise uploads by default", () => {
+    render(<InvestmentCard item={{ ...baseItem, status: "reserved" }} />);
+    expect(
+      screen.queryByText("Upload deposit slip (optional)"),
+    ).not.toBeInTheDocument();
+  });
+  it("advertises uploads only when enabled for a pending reservation", () => {
+    render(
+      <InvestmentCard
+        depositUploadsEnabled
+        item={{ ...baseItem, status: "reserved" }}
+      />,
+    );
+    expect(screen.getByText("Upload deposit slip (optional)")).toHaveAttribute(
+      "href",
+      `/investments/${baseItem.investmentId}#deposit-slips`,
+    );
+  });
+});

@@ -56,10 +56,7 @@ export default async function DashboardPage() {
   const activeReturns = activeInvestments.map((item) =>
     investmentReturnView(item, item.investment_cycles),
   );
-  const projected = activeReturns.reduce(
-    (sum, view) => sum + view.valueUgx,
-    0,
-  );
+  const projected = activeReturns.reduce((sum, view) => sum + view.valueUgx, 0);
   const actualCount = activeReturns.filter(
     (view) => view.basis === "actual",
   ).length;
@@ -148,6 +145,10 @@ export default async function DashboardPage() {
             return (
               <InvestmentCard
                 key={item.id}
+                depositUploadsEnabled={
+                  process.env.DEPOSIT_SLIPS_ENABLED === "true" &&
+                  item.record_origin === "portal"
+                }
                 item={{
                   investmentId: item.id,
                   alias: item.alias,

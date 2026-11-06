@@ -1,3 +1,4 @@
+import { DepositSlips } from "@/components/DepositSlips";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -12,10 +13,7 @@ import {
 import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
-import {
-  formatBpsPercent,
-  investmentReturnView,
-} from "@/lib/actual-returns";
+import { formatBpsPercent, investmentReturnView } from "@/lib/actual-returns";
 import { date, ugx } from "@/lib/format";
 import {
   safeFulfilledSplits,
@@ -130,6 +128,12 @@ export default async function InvestmentPage({
   );
   return (
     <>
+      {data.status === "reserved" && data.record_origin === "portal" && (
+        <DepositSlips
+          investmentId={id}
+          uploadsEnabled={process.env.DEPOSIT_SLIPS_ENABLED === "true"}
+        />
+      )}
       <p className="eyebrow">Investment record</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
         {data.alias || "Investment details"}
@@ -160,9 +164,7 @@ export default async function InvestmentPage({
               Projected {ugx(returns.projectedProfitUgx)} ({projectedRate})
             </p>
           )}
-          {returns.pending && (
-            <p className="badge">Actual return pending</p>
-          )}
+          {returns.pending && <p className="badge">Actual return pending</p>}
         </article>
         <article className="card">
           <p className="muted">
@@ -174,17 +176,14 @@ export default async function InvestmentPage({
           </p>
           <p className="stat">{ugx(returns.valueUgx)}</p>
           {returns.basis === "actual" && (
-            <p className="muted">
-              Projected {ugx(returns.projectedValueUgx)}
-            </p>
+            <p className="muted">Projected {ugx(returns.projectedValueUgx)}</p>
           )}
         </article>
       </div>
       {returns.revisable && (
         <p className="notice">
           The actual return of {actualRate} for this cycle has been published
-          and may still be revised until maturity on{" "}
-          {date(data.maturity_date)}.
+          and may still be revised until maturity on {date(data.maturity_date)}.
         </p>
       )}
       <div className="card" style={{ marginTop: "1rem" }}>
@@ -261,7 +260,11 @@ export default async function InvestmentPage({
         )}
       </div>
       {data.offline_settlement_id && (
-        <p className="notice">This matured placement was reinvested under recorded offline authorization. <Link href="/investments">View your investments</Link> for the resulting placement.</p>
+        <p className="notice">
+          This matured placement was reinvested under recorded offline
+          authorization. <Link href="/investments">View your investments</Link>{" "}
+          for the resulting placement.
+        </p>
       )}
       {isMatured && (
         <div className="card" style={{ marginTop: "1rem" }}>
@@ -288,9 +291,9 @@ export default async function InvestmentPage({
           )}
           {returns.pending && (
             <p className="notice">
-              <strong>Actual return pending.</strong> You can record your
-              choice now on the projected figures; you will confirm any revised
-              amounts before anything is paid or reinvested.
+              <strong>Actual return pending.</strong> You can record your choice
+              now on the projected figures; you will confirm any revised amounts
+              before anything is paid or reinvested.
             </p>
           )}
           {instructionTerms && <p className="muted">{instructionTerms}</p>}
@@ -299,8 +302,8 @@ export default async function InvestmentPage({
               <div className="success">
                 <h3>Your recorded maturity choice</h3>
                 <p>
-                  <strong>{maturityChoiceLabel(instruction.choice)}</strong>{" "}
-                  ({instructionBasis} payout{" "}
+                  <strong>{maturityChoiceLabel(instruction.choice)}</strong> (
+                  {instructionBasis} payout{" "}
                   {ugx(instruction.projected_payout_ugx)} · {instructionBasis}{" "}
                   reinvestment {ugx(instruction.projected_reinvest_ugx)}
                   {recordedCycle
@@ -332,7 +335,9 @@ export default async function InvestmentPage({
                 investmentId={data.id}
                 principalUgx={Number(data.principal_ugx)}
                 returnUgx={returns.profitUgx}
-                returnBasis={returns.basis === "actual" ? "actual" : "projected"}
+                returnBasis={
+                  returns.basis === "actual" ? "actual" : "projected"
+                }
                 actualReturnBps={returns.actualReturnBps}
                 savedDestinations={(destinations ?? []) as SavedDestination[]}
                 assignedCycle={assignedCycle}

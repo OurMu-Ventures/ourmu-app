@@ -32,6 +32,7 @@ vi.mock("@/actions/investments", () => ({
   requestInvestment: vi.fn(),
   activateInvestment: vi.fn(),
 }));
+vi.mock("@/components/DepositSlips", () => ({ DepositSlips: () => null }));
 vi.mock("@/actions/maturity", () => ({}));
 vi.mock("@/actions/receipts", () => ({ downloadInvestmentReceipt: vi.fn() }));
 vi.mock("@/actions/admin", () => ({}));

@@ -135,8 +135,7 @@ export async function requestInvestment(
   revalidatePath("/investments");
   return {
     ok: true,
-    message:
-      "Investment reserved. Transfer the exact amount shown. Your reservation stays pending until an administrator activates or expires it, or you cancel it.",
+    message: `Investment reserved.${process.env.DEPOSIT_SLIPS_ENABLED === "true" ? " You can return to this reservation to upload a deposit slip (optional)." : ""} Transfer the exact amount shown. Your reservation stays pending until an administrator activates or expires it, or you cancel it.`,
   };
 }
 
