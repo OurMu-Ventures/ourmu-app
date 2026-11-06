@@ -27,6 +27,8 @@ export type InvestmentCardData = {
   payoutUgx: number | string;
   maturityDate: string | null;
   startIso: string | null;
+  recordedDate?: { label: string; value: string };
+  pendingReinvestment?: { name: string; maturity_date: string } | null;
   detailHref: string;
   detailLabel: string;
   detailStatus: string;
@@ -71,6 +73,12 @@ export function InvestmentCard({
             alias={item.alias}
             defaultTitle={item.defaultTitle}
           />
+          {item.alias && <p className="muted">{item.defaultTitle}</p>}
+          {item.recordedDate && (
+            <p className="muted">
+              {item.recordedDate.label} {date(item.recordedDate.value)}
+            </p>
+          )}
           <p className="invest-amount">
             <span>
               {ugx(item.principalUgx)}{" "}
@@ -83,6 +91,13 @@ export function InvestmentCard({
         </div>
         <span className="badge">{item.statusLabel}</span>
       </div>
+      {item.pendingReinvestment && (
+        <p className="notice">
+          Reinvestment pending — {item.pendingReinvestment.name} cycle. Expected
+          maturity {date(item.pendingReinvestment.maturity_date)}. This has not
+          yet become an active investment.
+        </p>
+      )}
       <div className="invest-stats">
         <p>
           <span className="invest-stat-label">

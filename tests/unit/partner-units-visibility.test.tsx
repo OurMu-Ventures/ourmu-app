@@ -82,13 +82,14 @@ const placement = {
     status: "open",
     maturity_date: "2026-07-15T12:00:00.000Z",
     opens_at: "2026-01-05T06:00:00.000Z",
+    closes_at: "2026-02-01T20:59:59.000Z",
   },
   investment_agreements: [],
 };
 
 // Midday mid-month fixture timestamps keep the calendar month stable in every
 // timezone, unlike midnight boundary timestamps.
-const DURATION = "January 2026 - July 2026";
+const CYCLE_TITLE = "Cycle One cycle";
 
 const cycle = {
   id: "cycle-1",
@@ -334,7 +335,7 @@ describe("partner units visibility across pages", () => {
       expect(item).not.toHaveProperty("unitsValue");
       expect(item).not.toHaveProperty("unitPriceUgx");
     }
-    expect(items[0]).toMatchObject({ name: DURATION });
+    expect(items[0]).toMatchObject({ name: CYCLE_TITLE });
   });
 
   it("investments list omits units from every card", async () => {
@@ -353,10 +354,10 @@ describe("partner units visibility across pages", () => {
       expect(item).not.toHaveProperty("unitsValue");
       expect(item).not.toHaveProperty("unitPriceUgx");
     }
-    expect(items[0]).toMatchObject({ name: DURATION });
+    expect(items[0]).toMatchObject({ name: CYCLE_TITLE });
   });
 
-  it("investment detail uses an 'Investment details' heading with a status badge and no units", async () => {
+  it("investment detail names the cycle with a status badge and no units", async () => {
     mockClient({ investments: placement });
 
     const tree = await InvestmentDetailPage({
@@ -366,7 +367,7 @@ describe("partner units visibility across pages", () => {
     const text = collectText(tree);
 
     const heading = elements.find((element) => element.type === "h1");
-    expect(collectText(heading ?? null)).toMatch(/investment details/i);
+    expect(collectText(heading ?? null)).toBe(CYCLE_TITLE);
 
     const badges = elements
       .filter(
@@ -379,8 +380,44 @@ describe("partner units visibility across pages", () => {
       .map((element) => collectText(element));
     expect(badges.join(" ")).toMatch(/active/i);
     expect(text).not.toMatch(/\bunits\b/i);
-    expect(text).toMatch(/duration/i);
-    expect(text).toMatch(/january 2026 - july 2026/i);
+    expect(text).toMatch(/Investment window/i);
+    expect(text).not.toMatch(/Duration:/i);
+    expect(text).not.toMatch(/january 2026 - july 2026/i);
+  });
+
+  it("keeps prior-month cycle windows separate from receipt dates and pending destinations", async () => {
+    const investment = {
+      ...placement,
+      status: "matured",
+      investment_cycles: {
+        ...placement.investment_cycles,
+        name: "October 2026",
+        opens_at: "2026-09-24T21:00:00Z",
+      },
+      investment_receipts: {
+        source: "reinvestment",
+        transaction_date: "2026-10-20",
+      },
+      maturity_instructions: {
+        status: "requested",
+        choice: "reinvest_all",
+        investment_cycles: {
+          name: "November 2026",
+          maturity_date: "2027-04-30",
+        },
+      },
+    };
+    mockClient({ investments: [investment], investment_cycles: cycle });
+    for (const tree of [await DashboardPage(), await InvestmentsPage()]) {
+      expect(cardItems(walk(tree))[0]).toMatchObject({
+        defaultTitle: "October 2026 cycle",
+        recordedDate: { label: "Reinvested", value: "2026-10-20" },
+        pendingReinvestment: {
+          name: "November 2026",
+          maturity_date: "2027-04-30",
+        },
+      });
+    }
   });
 
   it("new-investment page shows return and maturity without a per-unit card", async () => {

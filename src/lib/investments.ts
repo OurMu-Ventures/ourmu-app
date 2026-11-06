@@ -62,3 +62,22 @@ export function canChooseMaturity(
     !investment.offline_settlement_id
   );
 }
+
+// Cycle names are contractual labels; opening windows can start in the prior month.
+export function investmentCycleTitle(name: string | null | undefined): string {
+  return name?.trim() ? `${name.trim()} cycle` : "OURMU investment";
+}
+
+export function investmentRecordedDate(
+  receipt: { source: string; transaction_date: string } | null | undefined,
+  status: string,
+  requestedAt: string,
+): { label: string; value: string } | undefined {
+  if (receipt?.source === "bank_activation")
+    return { label: "Payment received", value: receipt.transaction_date };
+  if (receipt?.source === "reinvestment")
+    return { label: "Reinvested", value: receipt.transaction_date };
+  if (status === "reserved") return { label: "Reserved", value: requestedAt };
+  // Imported records have no verified payment date. Never infer one from entry time.
+  return undefined;
+}

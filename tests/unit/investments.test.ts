@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   canChooseMaturity,
   investmentPeriod,
+  investmentCycleTitle,
+  investmentRecordedDate,
   maturityProgress,
 } from "@/lib/investments";
 
@@ -136,5 +138,45 @@ describe("canChooseMaturity", () => {
     expect(
       canChooseMaturity({ ...unpaid, record_origin: "legacy_import" }),
     ).toBe(true);
+  });
+});
+
+describe("cycle labels and recorded payment dates", () => {
+  it("uses the official cycle name and a neutral fallback for missing cycles", () => {
+    expect(investmentCycleTitle(" October 2026 ")).toBe("October 2026 cycle");
+    expect(investmentCycleTitle(null)).toBe("OURMU investment");
+    expect(investmentCycleTitle(" ")).toBe("OURMU investment");
+  });
+  it("distinguishes receipt payment dates from entry dates and reinvestments", () => {
+    expect(
+      investmentRecordedDate(
+        { source: "bank_activation", transaction_date: "2026-11-04" },
+        "active",
+        "2026-11-06",
+      ),
+    ).toEqual({ label: "Payment received", value: "2026-11-04" });
+    expect(
+      investmentRecordedDate(
+        { source: "reinvestment", transaction_date: "2026-10-20" },
+        "active",
+        "2026-10-21",
+      ),
+    ).toEqual({ label: "Reinvested", value: "2026-10-20" });
+  });
+  it("does not invent a payment date for imports or acknowledgment receipts", () => {
+    expect(
+      investmentRecordedDate(null, "active", "2026-05-01"),
+    ).toBeUndefined();
+    expect(
+      investmentRecordedDate(
+        { source: "investment_record", transaction_date: "2026-05-01" },
+        "active",
+        "2026-05-01",
+      ),
+    ).toBeUndefined();
+    expect(investmentRecordedDate(null, "reserved", "2026-11-04")).toEqual({
+      label: "Reserved",
+      value: "2026-11-04",
+    });
   });
 });

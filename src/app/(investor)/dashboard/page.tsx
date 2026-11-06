@@ -11,7 +11,8 @@ import { LinkStatus } from "@/components/ui/link-status";
 import { date, dateTime } from "@/lib/format";
 import {
   canChooseMaturity,
-  investmentPeriod,
+  investmentCycleTitle,
+  investmentRecordedDate,
   investmentTitle,
 } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
       supabase
         .from("investments")
         .select(
-          "*,investment_cycles(name,status,maturity_date,opens_at,actual_return_bps,legacy_settlement),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
+          "*,investment_cycles(name,status,maturity_date,opens_at,actual_return_bps,legacy_settlement),investment_receipts!investment_receipts_investment_id_fkey(source,transaction_date),maturity_instructions!maturity_instructions_investment_id_fkey(status,choice,investment_cycles!maturity_instructions_target_cycle_id_fkey(name,maturity_date))",
         )
         .eq("investor_id", profile.id)
         .neq("status", "cancelled")
@@ -142,6 +143,7 @@ export default async function DashboardPage() {
               item.maturity_instructions?.status,
             );
             const returns = investmentReturnView(item, itemCycle);
+            const defaultTitle = investmentCycleTitle(itemCycle?.name);
             return (
               <InvestmentCard
                 key={item.id}
@@ -152,16 +154,8 @@ export default async function DashboardPage() {
                 item={{
                   investmentId: item.id,
                   alias: item.alias,
-                  defaultTitle:
-                    investmentPeriod(itemCycle?.opens_at, item.maturity_date) ??
-                    itemCycle?.name ??
-                    "OURMU placement",
-                  name: investmentTitle(
-                    item.alias,
-                    investmentPeriod(itemCycle?.opens_at, item.maturity_date) ??
-                      itemCycle?.name ??
-                      "OURMU placement",
-                  ),
+                  defaultTitle,
+                  name: investmentTitle(item.alias, defaultTitle),
                   status: item.status,
                   statusLabel: paid
                     ? "Reported paid"
@@ -177,6 +171,19 @@ export default async function DashboardPage() {
                   payoutUgx: returns.valueUgx,
                   maturityDate: item.maturity_date,
                   startIso: item.requested_at,
+                  recordedDate: investmentRecordedDate(
+                    item.investment_receipts,
+                    item.status,
+                    item.requested_at,
+                  ),
+                  pendingReinvestment:
+                    item.maturity_instructions &&
+                    ["requested", "processing"].includes(
+                      item.maturity_instructions.status,
+                    ) &&
+                    item.maturity_instructions.choice !== "withdraw_all"
+                      ? item.maturity_instructions.investment_cycles
+                      : null,
                   detailHref: `/investments/${item.id}`,
                   detailLabel: maturityAction
                     ? "Withdraw or Re-invest"

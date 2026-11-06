@@ -201,3 +201,46 @@ describe("deposit upload rollout", () => {
     );
   });
 });
+
+describe("investment cycle chronology", () => {
+  it("keeps the official cycle visible alongside a custom label and receipt date", () => {
+    render(
+      <InvestmentCard
+        item={{
+          ...baseItem,
+          alias: "School fees",
+          defaultTitle: "October 2026 cycle",
+          recordedDate: { label: "Reinvested", value: "2026-10-20" },
+          maturityDate: "2027-03-31",
+        }}
+      />,
+    );
+    expect(screen.getByText("School fees")).toBeInTheDocument();
+    expect(screen.getByText("October 2026 cycle")).toBeInTheDocument();
+    expect(screen.getByText(/Reinvested 20 Oct 2026/)).toBeInTheDocument();
+    expect(screen.getByText("31 Mar 2027")).toBeInTheDocument();
+  });
+  it("shows a pending destination separately from the matured source investment", () => {
+    render(
+      <InvestmentCard
+        item={{
+          ...baseItem,
+          status: "matured",
+          statusLabel: "matured",
+          defaultTitle: "May 2026 cycle",
+          pendingReinvestment: {
+            name: "November 2026",
+            maturity_date: "2027-04-30",
+          },
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(/Reinvestment pending — November 2026 cycle/),
+    ).toHaveTextContent("Expected maturity 30 Apr 2027");
+    expect(
+      screen.getByText(/This has not yet become an active investment/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("May 2026 cycle")).toBeInTheDocument();
+  });
+});
