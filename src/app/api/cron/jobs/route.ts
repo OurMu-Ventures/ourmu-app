@@ -1,3 +1,4 @@
+import { cleanupDepositSlips } from "@/lib/deposit-slips";
 import { randomUUID } from "node:crypto";
 import {
   authorizeCronRequest,
@@ -53,6 +54,12 @@ export async function POST(request: Request) {
     errorCode =
       error instanceof Error ? error.message.slice(0, 80) : "WORKER_FAILED";
   }
+  const depositSlips = await cleanupDepositSlips().catch(() => ({
+    deleted: 0,
+    failed: 1,
+  }));
+  if (depositSlips.failed > 0 && errorCode === null)
+    errorCode = "DEPOSIT_SLIP_CLEANUP_FAILED";
   const finishedAt = new Date();
 
   // Recorded last: the next watchdog run counts only events after this row,
@@ -96,6 +103,7 @@ export async function POST(request: Request) {
     requestId,
     trigger,
     jobs,
+    depositSlips,
     ...health,
     runRecorded,
   });

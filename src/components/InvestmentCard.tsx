@@ -159,6 +159,11 @@ export function InvestmentCard({
             label={isPaid ? "Opening investment details" : item.detailStatus}
           />
         </Link>
+        {item.status === "reserved" && (
+          <Link href={`/investments/${item.investmentId}#deposit-slips`}>
+            Upload deposit slip (optional)
+          </Link>
+        )}
         {actions}
       </div>
     </article>

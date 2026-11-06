@@ -136,7 +136,7 @@ export async function requestInvestment(
   return {
     ok: true,
     message:
-      "Investment reserved. Transfer the exact amount shown. Your reservation stays pending until an administrator activates or expires it, or you cancel it.",
+      "Investment reserved. You can return to this reservation to upload a deposit slip (optional). Transfer the exact amount shown. Your reservation stays pending until an administrator activates or expires it, or you cancel it.",
   };
 }
 

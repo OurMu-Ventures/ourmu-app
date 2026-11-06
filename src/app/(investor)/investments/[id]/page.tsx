@@ -1,3 +1,4 @@
+import { DepositSlips } from "@/components/DepositSlips";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -130,6 +131,7 @@ export default async function InvestmentPage({
   );
   return (
     <>
+      {data.status === "reserved" && <DepositSlips investmentId={id} />}
       <p className="eyebrow">Investment record</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
         {data.alias || "Investment details"}

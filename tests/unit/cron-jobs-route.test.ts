@@ -1,3 +1,6 @@
+vi.mock("@/lib/deposit-slips", () => ({
+  cleanupDepositSlips: vi.fn(async () => ({ deleted: 0, failed: 0 })),
+}));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProcessDueJobsResult } from "@/lib/jobs";
 vi.mock("server-only", () => ({}));

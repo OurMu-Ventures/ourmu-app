@@ -1,3 +1,4 @@
+import { DepositSlips } from "@/components/DepositSlips";
 import Link from "next/link";
 import { z } from "zod";
 
@@ -138,6 +139,7 @@ export default async function AdminActivationsPage({
                 {date(item.maturity_date)}
               </p>
               <p>No automatic expiry · {item.status}</p>
+              <DepositSlips investmentId={item.id} admin />
             </div>
             <span className="badge">
               {item.is_test ? "Test reservation" : "Awaiting activation"}
