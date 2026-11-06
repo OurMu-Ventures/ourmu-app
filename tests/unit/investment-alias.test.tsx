@@ -21,7 +21,7 @@ describe("InvestmentAlias", () => {
   const props = {
     investmentId: "00000000-0000-4000-8000-000000000001",
     alias: null,
-    defaultTitle: "April 2026 - September 2026",
+    defaultTitle: "April 2026 cycle",
   };
 
   it("shows the default, saves an alias with Enter, and restores the default", async () => {
@@ -30,6 +30,7 @@ describe("InvestmentAlias", () => {
       .mockResolvedValueOnce({ ok: true, alias: null });
     const user = userEvent.setup();
     render(<InvestmentAlias {...props} />);
+    expect(screen.getAllByText(props.defaultTitle)).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: /Rename investment/ }));
     const input = screen.getByRole("textbox", { name: "Investment name" });
     expect(input).toHaveAttribute("placeholder", props.defaultTitle);
@@ -41,6 +42,8 @@ describe("InvestmentAlias", () => {
         }),
       ).toBeInTheDocument(),
     );
+    // The subtitle follows the saved client value before server props refresh.
+    expect(screen.getAllByText(props.defaultTitle)).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: /Rename investment/ }));
     await user.click(screen.getByRole("button", { name: "Use default name" }));
     await waitFor(() =>
@@ -50,6 +53,7 @@ describe("InvestmentAlias", () => {
         }),
       ).toBeInTheDocument(),
     );
+    expect(screen.getAllByText(props.defaultTitle)).toHaveLength(1);
     expect(rename).toHaveBeenLastCalledWith({
       investmentId: props.investmentId,
       alias: "",

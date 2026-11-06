@@ -5,7 +5,7 @@
 import { investmentReturnView } from "@/lib/actual-returns";
 import type { Tables } from "@/lib/database.types";
 import { date, ugx } from "@/lib/format";
-import { investmentPeriod, investmentTitle } from "@/lib/investments";
+import { investmentCycleTitle, investmentTitle } from "@/lib/investments";
 import { maturityChoiceLabel } from "@/lib/maturity";
 
 export type PartnerKind = "profile" | "legacy";
@@ -375,10 +375,7 @@ export function describeInvestment(
       : `${choice} ${instruction.status === "processing" ? "processing" : "requested"}`;
   }
 
-  const defaultTitle =
-    investmentPeriod(cycle?.opens_at, row.maturity_date) ??
-    cycle?.name ??
-    "OURMU placement";
+  const defaultTitle = investmentCycleTitle(cycle?.name);
   const receipt = row.investment_receipts;
   return {
     id: row.id,

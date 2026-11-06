@@ -506,9 +506,23 @@ describe("portfolio records", () => {
       isTest: true,
       receipt: { number: "OURMU-2026-000123", status: "ready" },
     });
-    expect(describeInvestment(row(), NOW).title).toBe(
-      "June 2026 - December 2026",
+    expect(describeInvestment(row(), NOW).title).toBe("June 2026 cycle");
+  });
+
+  it("uses the named October cycle even when its window opens in September", () => {
+    const record = describeInvestment(
+      row({
+        investment_cycles: {
+          ...juneCycle,
+          name: "October 2026",
+          opens_at: "2026-09-24T21:00:00Z",
+        },
+        maturity_date: "2027-03-31",
+      }),
+      NOW,
     );
+    expect(record.title).toBe("October 2026 cycle");
+    expect(record.maturityDate).toBe("2027-03-31");
   });
 
   it("orders newest first and lists each cycle once, latest term first", () => {

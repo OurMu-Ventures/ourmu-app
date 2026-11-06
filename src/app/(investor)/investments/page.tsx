@@ -8,8 +8,10 @@ import { investmentReturnView } from "@/lib/actual-returns";
 import { requireInvestor } from "@/lib/auth";
 import {
   canChooseMaturity,
-  investmentPeriod,
+  investmentCycleTitle,
+  investmentRecordedDate,
   investmentTitle,
+  pendingReinvestmentCycle,
 } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,7 +21,7 @@ export default async function InvestmentsPage() {
   const { data } = await supabase
     .from("investments")
     .select(
-      "*,investment_cycles(name,opens_at,actual_return_bps,legacy_settlement),maturity_instructions!maturity_instructions_investment_id_fkey(status)",
+      "*,investment_cycles(name,opens_at,actual_return_bps,legacy_settlement),investment_receipts!investment_receipts_investment_id_fkey(source,transaction_date),maturity_instructions!maturity_instructions_investment_id_fkey(status,choice,investment_cycles!maturity_instructions_target_cycle_id_fkey(name,maturity_date))",
     )
     .eq("investor_id", profile.id)
     .neq("status", "cancelled")
@@ -44,18 +46,11 @@ export default async function InvestmentsPage() {
             : item.investment_cycles;
           const returns = investmentReturnView(item, cycle);
           const isCancellable = item.status === "reserved";
-          const cycleName = Array.isArray(item.investment_cycles)
-            ? (item.investment_cycles[0]?.name ?? "OURMU placement")
-            : (item.investment_cycles?.name ?? "OURMU placement");
-          const termStart = Array.isArray(item.investment_cycles)
-            ? item.investment_cycles[0]?.opens_at
-            : item.investment_cycles?.opens_at;
           const maturityAction = canChooseMaturity(
             item,
             item.maturity_instructions?.status,
           );
-          const defaultTitle =
-            investmentPeriod(termStart, item.maturity_date) ?? cycleName;
+          const defaultTitle = investmentCycleTitle(cycle?.name);
           return (
             <InvestmentCard
               key={item.id}
@@ -82,6 +77,15 @@ export default async function InvestmentsPage() {
                 payoutUgx: returns.valueUgx,
                 maturityDate: item.maturity_date,
                 startIso: item.requested_at,
+                recordedDate: investmentRecordedDate(
+                  item.investment_receipts,
+                  item.status,
+                  item.requested_at,
+                ),
+                pendingReinvestment: pendingReinvestmentCycle(
+                  item.maturity_instructions,
+                  item.maturity_instructions?.investment_cycles,
+                ),
                 detailHref: `/investments/${item.id}`,
                 detailLabel: maturityAction
                   ? "Withdraw or Re-invest"

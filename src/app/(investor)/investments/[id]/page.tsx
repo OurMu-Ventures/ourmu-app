@@ -22,7 +22,12 @@ import {
   maturityChoiceLabel,
   maturityPayoutDateIso,
 } from "@/lib/maturity";
-import { canChooseMaturity, investmentPeriod } from "@/lib/investments";
+import {
+  canChooseMaturity,
+  investmentCycleTitle,
+  investmentRecordedDate,
+  pendingReinvestmentCycle,
+} from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentPage({
@@ -36,7 +41,7 @@ export default async function InvestmentPage({
   const { data } = await supabase
     .from("investments")
     .select(
-      "*,investment_agreements(id,pdf_status),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status),investment_cycles(name,opens_at,actual_return_bps,legacy_settlement)",
+      "*,investment_agreements(id,pdf_status),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status,source,transaction_date),investment_cycles(name,opens_at,closes_at,actual_return_bps,legacy_settlement)",
     )
     .eq("id", id)
     .eq("investor_id", profile.id)
@@ -48,7 +53,14 @@ export default async function InvestmentPage({
   const receiptRaw = (data as unknown as { investment_receipts?: unknown })
     .investment_receipts;
   const receipt = (Array.isArray(receiptRaw) ? receiptRaw[0] : receiptRaw) as
-    { id: string; receipt_number: string; pdf_status: string } | undefined;
+    | {
+        id: string;
+        receipt_number: string;
+        pdf_status: string;
+        source: string;
+        transaction_date: string;
+      }
+    | undefined;
   const isMatured = canChooseMaturity(data);
   const nowIso = new Date().toISOString();
   const [
@@ -120,11 +132,12 @@ export default async function InvestmentPage({
       : formatBpsPercent(returns.actualReturnBps);
   const isCancellable = data.status === "reserved";
   const isExpired = data.status === "expired";
-  const period = investmentPeriod(
-    Array.isArray(data.investment_cycles)
-      ? data.investment_cycles[0]?.opens_at
-      : data.investment_cycles?.opens_at,
-    data.maturity_date,
+  const cycleTitle = investmentCycleTitle(sourceCycle?.name);
+  const pendingCycle = pendingReinvestmentCycle(instruction, recordedCycle);
+  const recordedDate = investmentRecordedDate(
+    receipt,
+    data.status,
+    data.requested_at,
   );
   return (
     <>
@@ -136,8 +149,9 @@ export default async function InvestmentPage({
       )}
       <p className="eyebrow">Investment record</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
-        {data.alias || "Investment details"}
+        {data.alias || cycleTitle}
       </h1>
+      {data.alias && <p>{cycleTitle}</p>}
       <p>
         <span className="badge">
           {data.payout_basis === "reported_paid"
@@ -187,9 +201,19 @@ export default async function InvestmentPage({
         </p>
       )}
       <div className="card" style={{ marginTop: "1rem" }}>
-        {period && (
+        <p>
+          Cycle: <strong>{cycleTitle}</strong>
+        </p>
+        {recordedDate && (
           <p>
-            Duration: <strong>{period}</strong>
+            {recordedDate.label}: <strong>{date(recordedDate.value)}</strong>
+          </p>
+        )}
+        {sourceCycle?.opens_at && sourceCycle?.closes_at && (
+          <p className="muted">
+            Investment window: {date(sourceCycle.opens_at)} –{" "}
+            {date(sourceCycle.closes_at)}. This is when the cycle accepts
+            investments.
           </p>
         )}
         <p>
@@ -259,6 +283,13 @@ export default async function InvestmentPage({
           </p>
         )}
       </div>
+      {pendingCycle && (
+        <p className="notice">
+          Reinvestment pending — {investmentCycleTitle(pendingCycle.name)}.
+          Expected maturity {date(pendingCycle.maturity_date)}. This has not yet
+          become an active investment.
+        </p>
+      )}
       {data.offline_settlement_id && (
         <p className="notice">
           This matured placement was reinvested under recorded offline
@@ -306,9 +337,6 @@ export default async function InvestmentPage({
                   {instructionBasis} payout{" "}
                   {ugx(instruction.projected_payout_ugx)} · {instructionBasis}{" "}
                   reinvestment {ugx(instruction.projected_reinvest_ugx)}
-                  {recordedCycle
-                    ? ` · assigned cycle ${recordedCycle.name} (matures ${date(recordedCycle.maturity_date)})`
-                    : ""}
                   ). You can revise it until our team begins processing.
                 </p>
               </div>

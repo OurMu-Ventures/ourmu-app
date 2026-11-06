@@ -47,33 +47,6 @@ export function date(value: string) {
     timeZone: "Africa/Kampala",
   }).format(new Date(value));
 }
-// Month and year of a timestamp, e.g. "June 2026". Null for missing or
-// invalid input so callers can fall back to a stored label.
-//
-// Timezone is explicit so month-boundary values cannot shift with the
-// runtime zone: business timestamps (timestamptz) read in Africa/Kampala,
-// while date-only values (PostgreSQL `date` as YYYY-MM-DD) parse as calendar
-// dates in UTC instead of undergoing a timezone conversion.
-export function monthYear(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  const day = parseDateOnly(trimmed);
-  if (day !== null) {
-    if (!Number.isFinite(day)) return null;
-    return new Intl.DateTimeFormat("en-UG", {
-      month: "long",
-      year: "numeric",
-      timeZone: "UTC",
-    }).format(day);
-  }
-  const time = Date.parse(trimmed);
-  if (!Number.isFinite(time)) return null;
-  return new Intl.DateTimeFormat("en-UG", {
-    month: "long",
-    year: "numeric",
-    timeZone: "Africa/Kampala",
-  }).format(new Date(time));
-}
 // Day, month, year and time of a timestamp in Africa/Kampala, e.g.
 // "1 Jan 2027, 00:30". The explicit zone keeps server rendering (UTC on
 // Vercel) and browser hydration identical.

@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import type { ReturnBasis } from "@/lib/actual-returns";
 import { date, ugx } from "@/lib/format";
-import { maturityProgress } from "@/lib/investments";
+import { investmentCycleTitle, maturityProgress } from "@/lib/investments";
 
 export type InvestmentCardData = {
   investmentId: string;
@@ -27,6 +27,8 @@ export type InvestmentCardData = {
   payoutUgx: number | string;
   maturityDate: string | null;
   startIso: string | null;
+  recordedDate?: { label: string; value: string };
+  pendingReinvestment?: { name: string; maturity_date: string } | null;
   detailHref: string;
   detailLabel: string;
   detailStatus: string;
@@ -71,6 +73,11 @@ export function InvestmentCard({
             alias={item.alias}
             defaultTitle={item.defaultTitle}
           />
+          {item.recordedDate && (
+            <p className="muted">
+              {item.recordedDate.label} {date(item.recordedDate.value)}
+            </p>
+          )}
           <p className="invest-amount">
             <span>
               {ugx(item.principalUgx)}{" "}
@@ -83,6 +90,14 @@ export function InvestmentCard({
         </div>
         <span className="badge">{item.statusLabel}</span>
       </div>
+      {item.pendingReinvestment && (
+        <p className="notice">
+          Reinvestment pending —{" "}
+          {investmentCycleTitle(item.pendingReinvestment.name)}. Expected
+          maturity {date(item.pendingReinvestment.maturity_date)}. This has not
+          yet become an active investment.
+        </p>
+      )}
       <div className="invest-stats">
         <p>
           <span className="invest-stat-label">
