@@ -244,3 +244,19 @@ describe("investment cycle chronology", () => {
     expect(screen.getByText("May 2026 cycle")).toBeInTheDocument();
   });
 });
+
+it.each([" November 2026 ", ""])("normalizes pending cycle name %j", (name) => {
+  render(
+    <InvestmentCard
+      item={{
+        ...baseItem,
+        pendingReinvestment: { name, maturity_date: "2027-04-30" },
+      }}
+    />,
+  );
+  expect(screen.getByText(/Reinvestment pending/)).toHaveTextContent(
+    name.trim()
+      ? "Reinvestment pending — November 2026 cycle."
+      : "Reinvestment pending — OURMU investment.",
+  );
+});

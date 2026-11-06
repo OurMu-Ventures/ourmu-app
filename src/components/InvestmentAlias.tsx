@@ -70,6 +70,7 @@ export function InvestmentAlias({
             <Pencil size={16} aria-hidden="true" />
           </button>
         </h3>
+        {saved && <p className="muted">{defaultTitle}</p>}
         <noscript>
           <details className="investment-alias-editor">
             <summary>Rename investment</summary>

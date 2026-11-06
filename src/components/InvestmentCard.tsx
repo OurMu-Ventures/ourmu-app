@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import type { ReturnBasis } from "@/lib/actual-returns";
 import { date, ugx } from "@/lib/format";
-import { maturityProgress } from "@/lib/investments";
+import { investmentCycleTitle, maturityProgress } from "@/lib/investments";
 
 export type InvestmentCardData = {
   investmentId: string;
@@ -73,7 +73,6 @@ export function InvestmentCard({
             alias={item.alias}
             defaultTitle={item.defaultTitle}
           />
-          {item.alias && <p className="muted">{item.defaultTitle}</p>}
           {item.recordedDate && (
             <p className="muted">
               {item.recordedDate.label} {date(item.recordedDate.value)}
@@ -93,7 +92,8 @@ export function InvestmentCard({
       </div>
       {item.pendingReinvestment && (
         <p className="notice">
-          Reinvestment pending — {item.pendingReinvestment.name} cycle. Expected
+          Reinvestment pending —{" "}
+          {investmentCycleTitle(item.pendingReinvestment.name)}. Expected
           maturity {date(item.pendingReinvestment.maturity_date)}. This has not
           yet become an active investment.
         </p>

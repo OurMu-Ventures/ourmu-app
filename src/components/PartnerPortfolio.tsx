@@ -1,4 +1,5 @@
 import { AdminReceiptDownload } from "@/components/AdminReceiptDownload";
+import { investmentCycleTitle } from "@/lib/investments";
 import { date, ugx } from "@/lib/format";
 import {
   basisMix,
@@ -110,7 +111,9 @@ function Placement({ record }: { record: PortfolioRecord }) {
     <>
       <strong>{record.title}</strong>
       <small className="muted portfolio-cell-note">
-        {record.cycleName} · {record.originLabel}
+        {record.title !== investmentCycleTitle(record.cycleName) &&
+          `${investmentCycleTitle(record.cycleName)} · `}
+        {record.originLabel}
         {record.isTest ? " · Test record" : ""}
       </small>
     </>

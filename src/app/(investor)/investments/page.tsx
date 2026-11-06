@@ -11,6 +11,7 @@ import {
   investmentCycleTitle,
   investmentRecordedDate,
   investmentTitle,
+  pendingReinvestmentCycle,
 } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
@@ -81,14 +82,10 @@ export default async function InvestmentsPage() {
                   item.status,
                   item.requested_at,
                 ),
-                pendingReinvestment:
-                  item.maturity_instructions &&
-                  ["requested", "processing"].includes(
-                    item.maturity_instructions.status,
-                  ) &&
-                  item.maturity_instructions.choice !== "withdraw_all"
-                    ? item.maturity_instructions.investment_cycles
-                    : null,
+                pendingReinvestment: pendingReinvestmentCycle(
+                  item.maturity_instructions,
+                  item.maturity_instructions?.investment_cycles,
+                ),
                 detailHref: `/investments/${item.id}`,
                 detailLabel: maturityAction
                   ? "Withdraw or Re-invest"

@@ -121,6 +121,26 @@ beforeEach(() => {
 });
 
 describe("partner portfolio page", () => {
+  it.each([null, "School fees"])(
+    "shows the cycle once in each placement view with alias %j",
+    async (alias) => {
+      vi.mocked(loadPortfolioInvestments).mockResolvedValue([row({ alias })]);
+      const container = document.createElement("div");
+      container.innerHTML = await render();
+      for (const selector of [
+        'tbody tr th[scope="row"]',
+        ".portfolio-record-head h3",
+      ]) {
+        const cell = container.querySelector(selector);
+        expect(cell).not.toBeNull();
+        expect((cell?.textContent?.match(/June 2026/g) ?? []).length).toBe(1);
+        expect(cell?.textContent).toContain("June 2026 cycle");
+        expect(cell?.textContent).toContain("Portal");
+        if (alias) expect(cell?.textContent).toContain(alias);
+      }
+    },
+  );
+
   it("authorizes before reading and rejects malformed partner links without a query", async () => {
     vi.mocked(requireAdmin).mockRejectedValueOnce(new Error("REDIRECT:/login"));
     await expect(render()).rejects.toThrow("REDIRECT:/login");

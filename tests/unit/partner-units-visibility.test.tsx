@@ -420,6 +420,27 @@ describe("partner units visibility across pages", () => {
     }
   });
 
+  it.each([
+    { status: "requested", choice: "reinvest_all", hasTarget: true, pending: true },
+    { status: "processing", choice: "reinvest_all", hasTarget: true, pending: true },
+    { status: "requested", choice: "withdraw_all", hasTarget: true, pending: false },
+    { status: "processing", choice: "reinvest_all", hasTarget: false, pending: false },
+  ])("keeps pending cycle notices consistent for $status $choice with target=$hasTarget", async ({ status, choice, hasTarget, pending }) => {
+    const target = hasTarget ? { ...cycle, name: "November 2026", maturity_date: "2027-04-30" } : null;
+    const instruction = { status, choice, target_cycle_id: hasTarget ? "target-cycle" : null,
+      projected_payout_ugx: 0, projected_reinvest_ugx: 325000, investment_cycles: target };
+    const investment = { ...placement, status: "matured", maturity_instructions: instruction };
+    mockClient({ investments: [investment], investment_cycles: target });
+    for (const tree of [await DashboardPage(), await InvestmentsPage()]) {
+      expect(cardItems(walk(tree))[0].pendingReinvestment).toEqual(pending ? target : null);
+    }
+    mockClient({ investments: investment, maturity_instructions: instruction, investment_cycles: target });
+    const text = collectText(await InvestmentDetailPage({ params: Promise.resolve({ id: "inv-1" }) }));
+    expect((text.match(/Reinvestment pending/g) ?? []).length).toBe(pending ? 1 : 0);
+    expect((text.match(/November 2026 cycle/g) ?? []).length).toBe(pending ? 1 : 0);
+    expect(text).not.toContain("assigned cycle");
+  });
+
   it("new-investment page shows return and maturity without a per-unit card", async () => {
     mockClient({
       investment_cycles: cycle,

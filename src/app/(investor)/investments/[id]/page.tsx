@@ -26,6 +26,7 @@ import {
   canChooseMaturity,
   investmentCycleTitle,
   investmentRecordedDate,
+  pendingReinvestmentCycle,
 } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
@@ -132,6 +133,7 @@ export default async function InvestmentPage({
   const isCancellable = data.status === "reserved";
   const isExpired = data.status === "expired";
   const cycleTitle = investmentCycleTitle(sourceCycle?.name);
+  const pendingCycle = pendingReinvestmentCycle(instruction, recordedCycle);
   const recordedDate = investmentRecordedDate(
     receipt,
     data.status,
@@ -281,16 +283,13 @@ export default async function InvestmentPage({
           </p>
         )}
       </div>
-      {instruction &&
-        recordedCycle &&
-        ["requested", "processing"].includes(instruction.status) &&
-        instruction.choice !== "withdraw_all" && (
-          <p className="notice">
-            Reinvestment pending — {investmentCycleTitle(recordedCycle.name)}.
-            Expected maturity {date(recordedCycle.maturity_date)}. This has not
-            yet become an active investment.
-          </p>
-        )}
+      {pendingCycle && (
+        <p className="notice">
+          Reinvestment pending — {investmentCycleTitle(pendingCycle.name)}.
+          Expected maturity {date(pendingCycle.maturity_date)}. This has not yet
+          become an active investment.
+        </p>
+      )}
       {data.offline_settlement_id && (
         <p className="notice">
           This matured placement was reinvested under recorded offline
@@ -338,9 +337,6 @@ export default async function InvestmentPage({
                   {instructionBasis} payout{" "}
                   {ugx(instruction.projected_payout_ugx)} · {instructionBasis}{" "}
                   reinvestment {ugx(instruction.projected_reinvest_ugx)}
-                  {recordedCycle
-                    ? ` · assigned cycle ${recordedCycle.name} (matures ${date(recordedCycle.maturity_date)})`
-                    : ""}
                   ). You can revise it until our team begins processing.
                 </p>
               </div>
