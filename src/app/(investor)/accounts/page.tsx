@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { InvestmentAccountForm } from "@/components/InvestmentAccounts";
+import { buttonVariants } from "@/components/ui/button";
 import { requireInvestor } from "@/lib/auth";
 import { getInvestmentAccounts } from "@/lib/investment-accounts";
 
@@ -21,12 +22,15 @@ export default async function AccountsPage() {
       )}
       <div className="cycle-list" style={{ marginTop: "1rem" }}>
         {accounts.map((account) => (
-          <section className="card" key={account.id}>
+          <section className="card account-card" key={account.id}>
             <h2>
               {account.name}
               {account.archived_at ? " (archived)" : ""}
             </h2>
-            <Link href={`/dashboard?account=${account.id}`}>
+            <Link
+              className={buttonVariants({ variant: "secondary" })}
+              href={`/dashboard?account=${account.id}`}
+            >
               View balance and investments
             </Link>
             <InvestmentAccountForm account={account} />
