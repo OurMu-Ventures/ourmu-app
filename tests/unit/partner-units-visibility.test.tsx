@@ -4,7 +4,14 @@
 // and unit pricing even though the underlying rows still carry units, while
 // /investments/new still shows per-unit pricing and fractional-unit guidance.
 import type { ReactElement, ReactNode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import DashboardPage from "@/app/(investor)/dashboard/page";
@@ -19,6 +26,7 @@ import {
   CurrentOpportunityRate,
   PortfolioSummary,
 } from "@/components/PortfolioOverview";
+import { requestInvestment } from "@/actions/investments";
 import { requireInvestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -506,6 +514,77 @@ describe("partner limit in the existing investment form", () => {
       );
     },
   );
+  it("checks decimals, the minimum and malformed input", () => {
+    render(
+      <InvestmentRequestForm
+        cycleId="cycle-1"
+        agreementId="agr-1"
+        agreementTitle="Agreement"
+      />,
+    );
+    const amount = screen.getByLabelText(/investment amount/i) as HTMLInputElement;
+    const principal = () => new FormData(amount.form!).get("principalUgx");
+
+    fireEvent.change(amount, { target: { value: "125000.5" } });
+    expect(amount.checkValidity()).toBe(true);
+    expect(principal()).toBe("125000.5");
+    expect(screen.getByText(/amount to reserve/i).textContent).toContain(
+      "125,000.50",
+    );
+
+    fireEvent.change(amount, { target: { value: "125000.555" } });
+    expect(amount.checkValidity()).toBe(false);
+
+    fireEvent.change(amount, { target: { value: "124999" } });
+    expect(amount.checkValidity()).toBe(false);
+    expect(screen.queryByText(/amount to reserve/i)).not.toBeInTheDocument();
+
+    fireEvent.change(amount, { target: { value: "12a" } });
+    expect(amount).toHaveValue("12a");
+    expect(amount.checkValidity()).toBe(false);
+  });
+
+  it("shows the amount error inline once the field is left", () => {
+    render(
+      <InvestmentRequestForm
+        cycleId="cycle-1"
+        agreementId="agr-1"
+        agreementTitle="Agreement"
+      />,
+    );
+    const amount = screen.getByLabelText(/investment amount/i);
+    fireEvent.change(amount, { target: { value: "1000" } });
+    expect(screen.queryByText(/enter an amount between/i)).not.toBeInTheDocument();
+
+    fireEvent.blur(amount);
+    expect(amount).toHaveAttribute("aria-invalid", "true");
+    expect(amount).toHaveAccessibleDescription(/enter an amount between/i);
+  });
+
+  it("clears the amount after a successful reservation", async () => {
+    vi.mocked(requestInvestment).mockResolvedValue({
+      ok: true,
+      message: "Investment reserved.",
+    });
+    render(
+      <InvestmentRequestForm
+        cycleId="cycle-1"
+        agreementId="agr-1"
+        agreementTitle="Agreement"
+      />,
+    );
+    const amount = screen.getByLabelText(/investment amount/i) as HTMLInputElement;
+    fireEvent.change(amount, { target: { value: "500000" } });
+    expect(amount).toHaveValue("500,000");
+
+    await act(async () => {
+      fireEvent.submit(amount.form!);
+    });
+    await waitFor(() => expect(amount).toHaveValue(""));
+    expect(new FormData(amount.form!).get("principalUgx")).toBe("");
+    expect(screen.queryByText(/amount to reserve/i)).not.toBeInTheDocument();
+  });
+
   it("passes the authenticated partner override from the page", async () => {
     vi.mocked(requireInvestor).mockResolvedValue({
       ...profile,

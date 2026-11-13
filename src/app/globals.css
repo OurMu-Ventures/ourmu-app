@@ -882,6 +882,11 @@ th {
   color: #a43b35;
   font-size: 0.875rem;
 }
+.field-error {
+  display: block;
+  color: #a43b35;
+  font-size: 0.875rem;
+}
 .invest-amount {
   margin: 0.25rem 0 0;
   font-weight: 700;

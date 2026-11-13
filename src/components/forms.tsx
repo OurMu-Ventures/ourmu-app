@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -40,7 +40,12 @@ import {
   AGREEMENT_TITLE,
   LEGAL_CONTENT_VERSION,
 } from "@/content/legal";
-import { initialActionState } from "@/lib/validation";
+import { amountPrincipal, formatAmountInput } from "@/lib/amount-input";
+import {
+  INVESTMENT_AMOUNT_PATTERN,
+  MIN_INVESTMENT_UGX,
+  initialActionState,
+} from "@/lib/validation";
 
 export function MagicLinkForm({
   next,
@@ -405,16 +410,29 @@ export function InvestmentRequestForm({
 }) {
   const [state, action] = useActionState(requestInvestment, initialActionState);
   const [amount, setAmount] = useState("");
+  const [amountTouched, setAmountTouched] = useState(false);
+  // Controlled fields survive the automatic form reset, so clear the amount
+  // after a successful reservation to avoid reserving the same amount twice.
+  const [handledState, setHandledState] = useState(state);
+  if (state !== handledState) {
+    setHandledState(state);
+    if (state.ok) {
+      setAmount("");
+      setAmountTouched(false);
+    }
+  }
   const amountInput = useRef<HTMLInputElement>(null);
-  const principal = amount.replaceAll(",", "");
-  const validAmount = /^\d+(?:\.\d{1,2})?$/.test(principal);
+  const amountHintId = useId();
+  const amountErrorId = useId();
+  const principal = amountPrincipal(amount);
   const amountError = !principal
     ? ""
-    : !validAmount
-      ? "Enter an amount with up to two decimal places."
-      : Number(principal) < 125_000 || Number(principal) > limitUgx
-        ? `Enter an amount between UGX 125,000 and ${ugx(limitUgx)}.`
+    : !INVESTMENT_AMOUNT_PATTERN.test(principal)
+      ? "Use digits only, with up to two decimal places."
+      : Number(principal) < MIN_INVESTMENT_UGX || Number(principal) > limitUgx
+        ? `Enter an amount between ${ugx(MIN_INVESTMENT_UGX)} and ${ugx(limitUgx)}.`
         : "";
+  const showAmountError = amountTouched && Boolean(amountError);
   useEffect(() => {
     amountInput.current?.setCustomValidity(amountError);
   }, [amountError]);
@@ -435,39 +453,44 @@ export function InvestmentRequestForm({
           type="text"
           inputMode="decimal"
           value={amount}
+          aria-invalid={showAmountError || undefined}
+          aria-describedby={
+            showAmountError ? `${amountHintId} ${amountErrorId}` : amountHintId
+          }
+          onBlur={() => setAmountTouched(true)}
+          onInvalid={() => setAmountTouched(true)}
           onChange={(event) => {
             const input = event.currentTarget;
-            const entered = input.value;
-            const raw = entered.replaceAll(",", "");
-            // Keep malformed input visible so it cannot silently become a different amount.
-            if (!/^\d*(?:\.\d*)?$/.test(raw)) {
-              setAmount(entered);
-              return;
-            }
-            const beforeCaret = entered
-              .slice(0, input.selectionStart ?? entered.length)
-              .replaceAll(",", "").length;
-            const [whole, fraction] = raw.split(".");
-            const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-            const formatted = fraction === undefined ? grouped : `${grouped}.${fraction}`;
-            let caret = 0;
-            for (let count = 0; caret < formatted.length && count < beforeCaret; caret++) {
-              if (formatted[caret] !== ",") count++;
-            }
-            input.value = formatted;
+            const inputType = (event.nativeEvent as InputEvent).inputType;
+            const { value, caret } = formatAmountInput(
+              amount,
+              input.value,
+              input.selectionStart ?? input.value.length,
+              inputType,
+            );
+            input.value = value;
             input.setSelectionRange(caret, caret);
-            setAmount(formatted);
+            setAmount(value);
           }}
           required
         />
-        <small className="muted">
+        {showAmountError && (
+          <small id={amountErrorId} className="field-error">
+            {amountError}
+          </small>
+        )}
+        <small id={amountHintId} className="muted">
           Minimum UGX 125,000; maximum {ugx(limitUgx)} per cycle. Fractional
           units are calculated automatically.
         </small>
       </label>
-      {validAmount && !amountError && (
-        <p className="muted">Amount to reserve <strong>{ugx(principal)}</strong></p>
-      )}
+      <div aria-live="polite">
+        {principal && !amountError && (
+          <p className="muted">
+            Amount to reserve <strong>{ugx(principal)}</strong>
+          </p>
+        )}
+      </div>
       <p className="muted">
         Your reservation stays pending until an administrator activates or
         expires it, or you cancel it. Transfer the exact amount shown on your
