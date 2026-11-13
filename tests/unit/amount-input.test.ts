@@ -54,6 +54,15 @@ describe("formatAmountInput", () => {
 });
 
 describe("amountPrincipal", () => {
+  it.each(["125000,50", "1,00,000", "125,000.5,0"])(
+    "keeps ambiguous pasted amount %s invalid",
+    (entered) => {
+      const { value } = formatAmountInput("125,000", entered, entered.length, "insertFromPaste");
+      expect(value).toBe(entered);
+      expect(amountPrincipal(value)).toBe(entered);
+    },
+  );
+
   it("removes grouping and a trailing decimal point", () => {
     expect(amountPrincipal("125,000.50")).toBe("125000.50");
     expect(amountPrincipal("125,000.")).toBe("125000");

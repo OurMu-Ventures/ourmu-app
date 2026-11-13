@@ -5,6 +5,8 @@
 export type AmountEdit = { value: string; caret: number };
 
 const SIGNIFICANT = /[\d.]/;
+const GROUPED_AMOUNT = /^(?:\d*|\d{1,3}(?:,\d{3})+)(?:\.\d*)?$/;
+const SPACE_GROUPED_AMOUNT = /^\d{1,3}(?:\s+\d{3})+(?:\.\d*)?$/;
 
 function significant(text: string) {
   return [...text].filter((char) => SIGNIFICANT.test(char)).join("");
@@ -17,7 +19,17 @@ export function formatAmountInput(
   inputType?: string,
 ): AmountEdit {
   // Pasted amounts often carry spaces or a currency prefix ("UGX 125 000").
-  const stripped = entered.replace(/\s+/g, "").replace(/^ugx/i, "");
+  const supplied = entered.trim().replace(/^ugx\s*/i, "");
+  const stripped = SPACE_GROUPED_AMOUNT.test(supplied)
+    ? supplied.replace(/\s+/g, "")
+    : supplied;
+  // A normal edit can shift commas already placed by the formatter.
+  const editingGroupedAmount =
+    /^(?:insertText|deleteContentBackward|deleteContentForward)$/.test(inputType ?? "") &&
+    GROUPED_AMOUNT.test(previous) &&
+    (entered.match(/,/g)?.length ?? 0) <= (previous.match(/,/g)?.length ?? 0);
+  if (!GROUPED_AMOUNT.test(stripped) && !editingGroupedAmount)
+    return { value: entered, caret };
   if (!/^\d*(?:\.\d*)?$/.test(stripped.replaceAll(",", "")))
     return { value: entered, caret };
 
@@ -26,7 +38,11 @@ export function formatAmountInput(
 
   // Deleting a grouping comma alone would be undone by regrouping, so delete
   // the digit beside it instead, in the direction the key deletes.
-  if (entered.length < previous.length && significant(previous) === raw) {
+  if (
+    (inputType === "deleteContentBackward" || inputType === "deleteContentForward") &&
+    entered.length < previous.length &&
+    significant(previous) === raw
+  ) {
     if (inputType === "deleteContentForward") {
       raw = raw.slice(0, digitsBeforeCaret) + raw.slice(digitsBeforeCaret + 1);
     } else if (digitsBeforeCaret > 0) {
@@ -64,5 +80,7 @@ export function formatAmountInput(
 // The amount as the server expects it: no grouping commas, and a trailing
 // decimal point ("125,000.") read as the whole amount.
 export function amountPrincipal(value: string) {
-  return value.replaceAll(",", "").replace(/\.$/, "");
+  return GROUPED_AMOUNT.test(value)
+    ? value.replaceAll(",", "").replace(/\.$/, "")
+    : value;
 }
