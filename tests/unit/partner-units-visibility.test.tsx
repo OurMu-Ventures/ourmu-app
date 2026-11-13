@@ -4,7 +4,7 @@
 // and unit pricing even though the underlying rows still carry units, while
 // /investments/new still shows per-unit pricing and fractional-unit guidance.
 import type { ReactElement, ReactNode } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import DashboardPage from "@/app/(investor)/dashboard/page";
@@ -493,10 +493,14 @@ describe("partner limit in the existing investment form", () => {
           limitUgx={limitUgx}
         />,
       );
-      expect(screen.getByLabelText(/investment amount/i)).toHaveAttribute(
-        "max",
-        String(limitUgx),
-      );
+      const amount = screen.getByLabelText(/investment amount/i) as HTMLInputElement;
+      fireEvent.change(amount, { target: { value: String(limitUgx + 1) } });
+      expect(amount.checkValidity()).toBe(false);
+
+      fireEvent.change(amount, { target: { value: String(limitUgx) } });
+      expect(amount.checkValidity()).toBe(true);
+      expect(amount).toHaveValue(limitUgx.toLocaleString("en-UG"));
+      expect(new FormData(amount.form!).get("principalUgx")).toBe(String(limitUgx));
       expect(screen.getByText(/minimum UGX/i).textContent).toContain(
         limitUgx.toLocaleString("en-UG"),
       );

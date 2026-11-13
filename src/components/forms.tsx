@@ -404,6 +404,20 @@ export function InvestmentRequestForm({
   limitUgx?: number;
 }) {
   const [state, action] = useActionState(requestInvestment, initialActionState);
+  const [amount, setAmount] = useState("");
+  const amountInput = useRef<HTMLInputElement>(null);
+  const principal = amount.replaceAll(",", "");
+  const validAmount = /^\d+(?:\.\d{1,2})?$/.test(principal);
+  const amountError = !principal
+    ? ""
+    : !validAmount
+      ? "Enter an amount with up to two decimal places."
+      : Number(principal) < 125_000 || Number(principal) > limitUgx
+        ? `Enter an amount between UGX 125,000 and ${ugx(limitUgx)}.`
+        : "";
+  useEffect(() => {
+    amountInput.current?.setCustomValidity(amountError);
+  }, [amountError]);
   const agreementAcceptance = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (agreementAcceptance.current)
@@ -413,14 +427,37 @@ export function InvestmentRequestForm({
     <form className="form" action={action}>
       <input type="hidden" name="cycleId" value={cycleId} />
       <input type="hidden" name="agreementVersionId" value={agreementId} />
+      <input type="hidden" name="principalUgx" value={principal} />
       <label>
         Investment amount (UGX)
         <input
-          name="principalUgx"
-          type="number"
-          min="125000"
-          max={limitUgx}
-          step="0.01"
+          ref={amountInput}
+          type="text"
+          inputMode="decimal"
+          value={amount}
+          onChange={(event) => {
+            const input = event.currentTarget;
+            const entered = input.value;
+            const raw = entered.replaceAll(",", "");
+            // Keep malformed input visible so it cannot silently become a different amount.
+            if (!/^\d*(?:\.\d*)?$/.test(raw)) {
+              setAmount(entered);
+              return;
+            }
+            const beforeCaret = entered
+              .slice(0, input.selectionStart ?? entered.length)
+              .replaceAll(",", "").length;
+            const [whole, fraction] = raw.split(".");
+            const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            const formatted = fraction === undefined ? grouped : `${grouped}.${fraction}`;
+            let caret = 0;
+            for (let count = 0; caret < formatted.length && count < beforeCaret; caret++) {
+              if (formatted[caret] !== ",") count++;
+            }
+            input.value = formatted;
+            input.setSelectionRange(caret, caret);
+            setAmount(formatted);
+          }}
           required
         />
         <small className="muted">
@@ -428,6 +465,9 @@ export function InvestmentRequestForm({
           units are calculated automatically.
         </small>
       </label>
+      {validAmount && !amountError && (
+        <p className="muted">Amount to reserve <strong>{ugx(principal)}</strong></p>
+      )}
       <p className="muted">
         Your reservation stays pending until an administrator activates or
         expires it, or you cancel it. Transfer the exact amount shown on your
