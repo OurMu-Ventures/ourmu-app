@@ -1,6 +1,5 @@
 import { ShellNav, type ShellLink } from "@/components/ShellNav";
 const partnerLinks: ShellLink[] = [
-  { href: "/accounts", label: "Accounts", status: "Opening accounts" },
   { href: "/dashboard", label: "Overview", status: "Opening overview" },
   { href: "/profile", label: "Profile", status: "Opening profile" },
   {
@@ -9,6 +8,7 @@ const partnerLinks: ShellLink[] = [
     status: "Opening investment form",
   },
   { href: "/investments", label: "Investments", status: "Opening investments" },
+  { href: "/accounts", label: "Accounts", status: "Opening accounts" },
   { href: "/newsletters", label: "Newsletter", status: "Opening newsletters" },
 ];
 const adminLinks: ShellLink[] = [
