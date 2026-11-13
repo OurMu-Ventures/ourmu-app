@@ -10,6 +10,7 @@ import { investmentCycleTitle, maturityProgress } from "@/lib/investments";
 
 export type InvestmentCardData = {
   investmentId: string;
+  accountName?: string;
   alias: string | null;
   defaultTitle: string;
   name: string;
@@ -73,6 +74,7 @@ export function InvestmentCard({
             alias={item.alias}
             defaultTitle={item.defaultTitle}
           />
+          {item.accountName && <p className="muted">Account: {item.accountName}</p>}
           {item.recordedDate && (
             <p className="muted">
               {item.recordedDate.label} {date(item.recordedDate.value)}

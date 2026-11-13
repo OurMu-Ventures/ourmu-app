@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ACCOUNT_SCOPED_PATHS } from "@/lib/investment-account-context";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import {
@@ -165,7 +166,7 @@ export function ShellNav({
           const active = current?.href === link.href;
           return (
             <Link
-              href={link.href}
+              href={searchParams.has("account") && ACCOUNT_SCOPED_PATHS.includes(link.href) ? `${link.href}?account=${encodeURIComponent(searchParams.get("account")!)}` : link.href}
               key={link.href}
               aria-current={active ? "page" : undefined}
               // Leave the drawer open during navigation so the LinkStatus

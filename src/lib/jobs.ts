@@ -1,4 +1,5 @@
 import "server-only";
+import { investmentAccountLabel } from "@/lib/investment-account-context";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { guardOperation, runBoundedOperation } from "@/lib/jobs/operation";
@@ -673,13 +674,13 @@ async function generateAgreement(investmentId: string) {
   const { data: investment } = await admin
     .from("investments")
     .select(
-      "id,units,principal_ugx,projected_return_ugx,projected_value_ugx,maturity_date,investor_id",
+      "id,units,principal_ugx,projected_return_ugx,projected_value_ugx,maturity_date,investor_id,account_id",
     )
     .eq("id", investmentId)
     .single();
   const { data: acceptance } = await admin
     .from("investment_agreements")
-    .select("id,accepted_at,agreement_version_id")
+    .select("id,accepted_at,agreement_version_id,investment_account_name")
     .eq("investment_id", investmentId)
     .single();
   if (!investment || !acceptance) throw new Error("AGREEMENT_DATA_MISSING");
@@ -707,6 +708,10 @@ async function generateAgreement(investmentId: string) {
     template: version.template_markdown,
     investorName: profile.legal_name,
     investorEmail: profile.email,
+    investmentAccountLabel:
+      acceptance.investment_account_name && investment.account_id
+        ? investmentAccountLabel(acceptance.investment_account_name, investment.account_id)
+        : null,
     units: Number(investment.units),
     principalUgx: Number(investment.principal_ugx),
     projectedReturnUgx: Number(investment.projected_return_ugx),
@@ -948,6 +953,7 @@ export async function deliverJobEmailWithOutcome(
     actionUrl = payload.actionUrl ?? `${baseUrl}/investments/${job.entity_id}`;
     if (receipt) {
       activationReceipt = {
+        accountName: receipt.investment_account_name ?? undefined,
         partnerName: receipt.partner_name,
         amountUgx: formatUgxExact(receipt.amount_ugx),
         receiptNumber: receipt.receipt_number,
@@ -1058,7 +1064,7 @@ async function reservationEmailContent(
   const actionUrl = `${getPublicEnv().NEXT_PUBLIC_APP_URL}/investments/${investmentId}`;
   const { data: investment, error: reservationError } = await admin
     .from("investments")
-    .select("principal_ugx,investment_cycles(name)")
+    .select("principal_ugx,account_id,investment_accounts(name),investment_cycles(name)")
     .eq("id", investmentId)
     .single();
   if (reservationError) throw new Error("RESERVATION_LOOKUP_FAILED");
@@ -1069,6 +1075,7 @@ async function reservationEmailContent(
   const detail =
     `Your OURMU investment reservation of ${ugx(Number(investment.principal_ugx))}` +
     `${cycle?.name ? ` for ${cycle.name}` : ""} is recorded. ` +
+    (investment.investment_accounts?.name ? `Investment account: ${investment.investment_accounts.name}. ` : "") +
     "Transfer the exact amount shown. Your reservation does not expire automatically; " +
     "it stays pending until an administrator activates or expires it, or you cancel it. " +
     "Payments must match the reserved cycle. Contact our team if the cycle closes before you transfer. " +
@@ -1092,7 +1099,7 @@ async function maturityEmailContent(
   const { data: investment, error: investmentError } = await admin
     .from("investments")
     .select(
-      "principal_ugx,projected_return_ugx,projected_return_bps,projected_value_ugx,maturity_date,payout_basis,reported_return_ugx,reported_payout_ugx,investment_cycles(actual_return_bps,legacy_settlement)",
+      "principal_ugx,projected_return_ugx,projected_return_bps,projected_value_ugx,maturity_date,payout_basis,reported_return_ugx,reported_payout_ugx,investment_accounts(name),investment_cycles(actual_return_bps,legacy_settlement)",
     )
     .eq("id", investmentId)
     .single();
@@ -1124,6 +1131,7 @@ async function maturityEmailContent(
     throw new Error("STALE_MATURITY_CONFIRMATION");
   }
   const basis =
+    (investment.investment_accounts?.name ? `Investment account: ${investment.investment_accounts.name}. ` : "") +
     `Your OURMU investment of ${ugx(principal)} matured on ${date(investment.maturity_date)} ` +
     (actual
       ? `with an actual ${bpsToPercent(returns.actualReturnBps ?? 0)}% return of ` +
@@ -1133,6 +1141,7 @@ async function maturityEmailContent(
     `Payouts are scheduled for ${payoutDate}.`;
   if (template === "maturity_notice") {
     const maturityNotice: MaturityNoticeInput = {
+      accountName: investment.investment_accounts?.name,
       principalUgx: principal,
       projectedReturnUgx: projectedReturn,
       projectedValueUgx: Number(investment.projected_value_ugx),

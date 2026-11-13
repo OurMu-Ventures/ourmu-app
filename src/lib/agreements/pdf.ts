@@ -1,6 +1,9 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 function wrap(text: string, length = 88) {
@@ -22,6 +25,7 @@ export async function buildAgreementPdf(input: {
   template: string;
   investorName: string;
   investorEmail: string;
+  investmentAccountLabel?: string | null;
   units: number;
   principalUgx: number;
   projectedReturnUgx: number;
@@ -30,7 +34,11 @@ export async function buildAgreementPdf(input: {
   acceptedAt: string;
 }) {
   const document = await PDFDocument.create();
-  const regular = await document.embedFont(StandardFonts.Helvetica);
+  document.registerFontkit(fontkit);
+  const regular = await document.embedFont(
+    await readFile(join(process.cwd(), "public/fonts/OpenSans-Regular.ttf")),
+    { subset: true },
+  );
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
   let page = document.addPage([595, 842]);
   let y = 790;
@@ -51,6 +59,18 @@ export async function buildAgreementPdf(input: {
   y -= 8;
   line(`Investor: ${input.investorName}`);
   line(`Email: ${input.investorEmail}`);
+  if (input.investmentAccountLabel) {
+    // Account names can be one long word; wrap using the embedded font width.
+    let part = "";
+    for (const character of `Investment account: ${input.investmentAccountLabel}`) {
+      if (regular.widthOfTextAtSize(part + character, 9.5) > 491) {
+        line(part);
+        part = "";
+      }
+      part += character;
+    }
+    if (part) line(part);
+  }
   line(`Units: ${input.units}`);
   line(`Principal: UGX ${input.principalUgx.toLocaleString("en-UG")}`);
   line(
@@ -75,10 +95,7 @@ export async function buildAgreementPdf(input: {
       "{{UNIT_PRICE}}",
       (input.principalUgx / input.units).toLocaleString("en-UG"),
     )
-    .replaceAll(
-      "{{PRINCIPAL}}",
-      input.principalUgx.toLocaleString("en-UG"),
-    )
+    .replaceAll("{{PRINCIPAL}}", input.principalUgx.toLocaleString("en-UG"))
     .replaceAll(
       "{{PROJECTED_RETURN}}",
       input.projectedReturnUgx.toLocaleString("en-UG"),

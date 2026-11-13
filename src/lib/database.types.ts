@@ -806,8 +806,44 @@ export type Database = {
           },
         ]
       }
+      investment_accounts: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          investor_id: string
+          is_default: boolean
+          name: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          investor_id: string
+          is_default?: boolean
+          name: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          investor_id?: string
+          is_default?: boolean
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_accounts_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       investment_agreements: {
         Row: {
+          investment_account_name: string | null
           acceptance_request_id: string
           accepted_at: string
           accepted_content_hash: string
@@ -824,6 +860,7 @@ export type Database = {
           pdf_status: Database["public"]["Enums"]["agreement_status"]
         }
         Insert: {
+          investment_account_name?: string | null
           acceptance_request_id: string
           accepted_at: string
           accepted_content_hash: string
@@ -840,6 +877,7 @@ export type Database = {
           pdf_status?: Database["public"]["Enums"]["agreement_status"]
         }
         Update: {
+          investment_account_name?: string | null
           acceptance_request_id?: string
           accepted_at?: string
           accepted_content_hash?: string
@@ -985,6 +1023,7 @@ export type Database = {
       }
       investment_receipts: {
         Row: {
+          investment_account_name: string | null
           offline_authorization_id: string | null
           account_description: string
           amount_ugx: number
@@ -1012,6 +1051,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          investment_account_name?: string | null
           offline_authorization_id?: string | null
           account_description: string
           amount_ugx: number
@@ -1039,6 +1079,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          investment_account_name?: string | null
           offline_authorization_id?: string | null
           account_description?: string
           amount_ugx?: number
@@ -1105,6 +1146,7 @@ export type Database = {
       }
       investments: {
         Row: {
+          account_id: string | null
           offline_settlement_id: string | null
           administratively_archived_at: string | null
           offline_authorization_id: string | null
@@ -1139,6 +1181,7 @@ export type Database = {
           units: number | null
         }
         Insert: {
+          account_id?: string | null
           offline_settlement_id?: string | null
           administratively_archived_at?: string | null
           offline_authorization_id?: string | null
@@ -1173,6 +1216,7 @@ export type Database = {
           units?: number | null
         }
         Update: {
+          account_id?: string | null
           offline_settlement_id?: string | null
           administratively_archived_at?: string | null
           offline_authorization_id?: string | null
@@ -1207,6 +1251,7 @@ export type Database = {
           units?: number | null
         }
         Relationships: [
+          { foreignKeyName: "investments_account_owner_fkey"; columns: ["account_id", "investor_id"]; isOneToOne: false; referencedRelation: "investment_accounts"; referencedColumns: ["id", "investor_id"] },
           {
             foreignKeyName: "investments_cycle_id_fkey"
             columns: ["cycle_id"]
@@ -2244,6 +2289,29 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      request_account_investment: {
+        Args: {
+          p_account_id: string
+          p_cycle_id: string
+          p_expected_agreement_version_id?: string
+          p_investor_id: string
+          p_ip_fingerprint: string
+          p_principal_ugx: number
+          p_request_id: string
+          p_user_agent: string
+        }
+        Returns: string
+      }
+      manage_investment_account: {
+        Args: {
+          p_account_id?: string
+          p_archive?: boolean
+          p_investor_id: string
+          p_name: string
+          p_request_id: string
+        }
+        Returns: string
+      }
       record_offline_reinvestment: {
         Args: {
           p_target_maturity_date: string

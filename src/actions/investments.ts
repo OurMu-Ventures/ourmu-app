@@ -86,6 +86,8 @@ export async function requestInvestment(
   formData: FormData,
 ): Promise<ActionState> {
   const profile = await requireInvestor();
+  const accountId = z.uuid().safeParse(formData.get("accountId"));
+  if (!accountId.success) return { ok: false, message: "Choose an investment account and try again." };
   const limitUgx = effectiveInvestmentLimit(profile.investment_limit_ugx);
   if (!formData.get("agreementVersionId"))
     return {
@@ -108,7 +110,8 @@ export async function requestInvestment(
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
   const admin = createAdminClient();
   const requestUuid = requestId();
-  const { error } = await admin.rpc("request_investment", {
+  const { error } = await admin.rpc("request_account_investment", {
+    p_account_id: accountId.data,
     p_investor_id: profile.id,
     p_cycle_id: parsed.data.cycleId,
     p_principal_ugx: Number(parsed.data.principalUgx),

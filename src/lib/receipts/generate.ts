@@ -18,6 +18,7 @@ export type ReceiptRow = {
   amount_ugx: string | number;
   transaction_date: string;
   account_description: string;
+  investment_account_name?: string | null;
   original_investment_id: string | null;
   pdf_status: string;
   pdf_path: string | null;

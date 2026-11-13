@@ -1,5 +1,7 @@
 // Only exact, recognized database rules become public text.
 const rules: Record<string, string> = {
+  "investment account unavailable": "This investment account is unavailable. Choose an active account and try again.",
+  "investment account required": "Choose an investment account and try again.",
   "next of kin is required":
     "Add your next-of-kin details in Profile, then return here to reserve your investment.",
   "investor is not eligible":

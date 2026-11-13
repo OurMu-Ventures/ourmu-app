@@ -35,6 +35,7 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 function form(amount: string) {
   const data = new FormData();
+  data.set("accountId", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
   data.set("cycleId", "a1b2c3d4-e5f6-47a8-9123-abcdef123456");
   data.set("agreementVersionId", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
   data.set("principalUgx", amount);
@@ -64,7 +65,7 @@ describe("authenticated investment limit validation", () => {
         .ok,
     ).toBe(true);
     expect(rpc).toHaveBeenCalledWith(
-      "request_investment",
+      "request_account_investment",
       expect.objectContaining({
         p_investor_id: "partner-1",
         p_principal_ugx: 60_000_000,
@@ -157,7 +158,7 @@ describe("reservation error reporting", () => {
         "The reservation could not be created. Contact support with reference request-1.",
     });
     expect(rpc).toHaveBeenCalledWith(
-      "request_investment",
+      "request_account_investment",
       expect.objectContaining({
         p_request_id: "request-1",
       }),

@@ -398,6 +398,8 @@ export function ConfirmPrimaryEmailForm({
 }
 
 export function InvestmentRequestForm({
+  accountId,
+  accountName,
   limitUgx = DEFAULT_INVESTMENT_LIMIT_UGX,
   cycleId,
   agreementId,
@@ -407,6 +409,8 @@ export function InvestmentRequestForm({
   agreementId: string;
   agreementTitle: string;
   limitUgx?: number;
+  accountId?: string;
+  accountName?: string;
 }) {
   const [state, action] = useActionState(requestInvestment, initialActionState);
   const [amount, setAmount] = useState("");
@@ -440,9 +444,11 @@ export function InvestmentRequestForm({
   useEffect(() => {
     if (agreementAcceptance.current)
       agreementAcceptance.current.checked = false;
-  }, [cycleId, agreementId]);
+  }, [cycleId, agreementId, accountId]);
   return (
     <form className="form" action={action}>
+      <input type="hidden" name="accountId" value={accountId ?? ""} />
+      {accountName && <p>Investment account: <strong>{accountName}</strong></p>}
       <input type="hidden" name="cycleId" value={cycleId} />
       <input type="hidden" name="agreementVersionId" value={agreementId} />
       <input type="hidden" name="principalUgx" value={principal} />

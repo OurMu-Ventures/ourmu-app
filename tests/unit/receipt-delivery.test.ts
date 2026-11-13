@@ -265,6 +265,7 @@ describe("receipt fan-out guard", () => {
       amount_ugx: "500000",
       transaction_date: "2026-09-20",
       account_description: "Accounts payable — Test Partner",
+      investment_account_name: "School Fees",
       original_investment_id: null,
       pdf_status: "ready",
       pdf_path: "u1/rcpt-1.pdf",
@@ -283,6 +284,8 @@ describe("receipt fan-out guard", () => {
     const calls = state.send.mock.calls as unknown as unknown[][];
     const sent = calls[0]?.[0] as Record<string, unknown>;
     expect(sent.idempotencyKey).toBe("receipt-rcpt-1-e1");
+    expect(sent.activationReceipt).toMatchObject({ accountName: "School Fees" });
+    expect(state.calls.filter((call) => call.table === "investments")).toHaveLength(0);
     const attachments = sent.attachments as Array<{ filename: string }>;
     expect(attachments).toHaveLength(1);
     expect(attachments[0].filename).toBe("OURMU-2026-000007.pdf");
