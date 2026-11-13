@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { DEFAULT_INVESTMENT_LIMIT_UGX } from "@/lib/investment-limits";
 
+export const MIN_INVESTMENT_UGX = 125_000;
+// Whole shillings without grouping commas.
+export const INVESTMENT_AMOUNT_PATTERN = /^\d+$/;
+
 const phone = z.string().trim().min(7).max(30);
 export const emailSchema = z
   .string()
@@ -35,11 +39,11 @@ export const investmentRequestSchemaForLimit = (limitUgx: number) =>
     principalUgx: z
       .string()
       .trim()
-      .regex(/^\d+(?:\.\d{1,2})?$/)
+      .regex(INVESTMENT_AMOUNT_PATTERN)
       .refine(
         (value) =>
           Number.isFinite(Number(value)) &&
-          Number(value) >= 125_000 &&
+          Number(value) >= MIN_INVESTMENT_UGX &&
           Number(value) <= limitUgx,
       ),
     agreementAccepted: z.literal("yes"),

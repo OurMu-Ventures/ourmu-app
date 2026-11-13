@@ -102,7 +102,7 @@ export async function requestInvestment(
   if (!parsed.success)
     return {
       ok: false,
-      message: `Enter an amount from UGX 125,000 to ${ugx(limitUgx)} with at most two decimals and accept the current agreement.`,
+      message: `Enter a whole-shilling amount from UGX 125,000 to ${ugx(limitUgx)} and accept the current agreement.`,
     };
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0] ?? "unknown";

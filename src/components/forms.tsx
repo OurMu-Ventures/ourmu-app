@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -40,7 +40,12 @@ import {
   AGREEMENT_TITLE,
   LEGAL_CONTENT_VERSION,
 } from "@/content/legal";
-import { initialActionState } from "@/lib/validation";
+import { amountPrincipal, formatAmountInput } from "@/lib/amount-input";
+import {
+  INVESTMENT_AMOUNT_PATTERN,
+  MIN_INVESTMENT_UGX,
+  initialActionState,
+} from "@/lib/validation";
 
 export function MagicLinkForm({
   next,
@@ -404,6 +409,33 @@ export function InvestmentRequestForm({
   limitUgx?: number;
 }) {
   const [state, action] = useActionState(requestInvestment, initialActionState);
+  const [amount, setAmount] = useState("");
+  const [amountTouched, setAmountTouched] = useState(false);
+  // Controlled fields survive the automatic form reset, so clear the amount
+  // after a successful reservation to avoid reserving the same amount twice.
+  const [handledState, setHandledState] = useState(state);
+  if (state !== handledState) {
+    setHandledState(state);
+    if (state.ok) {
+      setAmount("");
+      setAmountTouched(false);
+    }
+  }
+  const amountInput = useRef<HTMLInputElement>(null);
+  const amountHintId = useId();
+  const amountErrorId = useId();
+  const principal = amountPrincipal(amount);
+  const amountError = !principal
+    ? ""
+    : !INVESTMENT_AMOUNT_PATTERN.test(principal)
+      ? "Enter a whole number of shillings."
+      : Number(principal) < MIN_INVESTMENT_UGX || Number(principal) > limitUgx
+        ? `Enter an amount between ${ugx(MIN_INVESTMENT_UGX)} and ${ugx(limitUgx)}.`
+        : "";
+  const showAmountError = amountTouched && Boolean(amountError);
+  useEffect(() => {
+    amountInput.current?.setCustomValidity(amountError);
+  }, [amountError]);
   const agreementAcceptance = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (agreementAcceptance.current)
@@ -413,21 +445,52 @@ export function InvestmentRequestForm({
     <form className="form" action={action}>
       <input type="hidden" name="cycleId" value={cycleId} />
       <input type="hidden" name="agreementVersionId" value={agreementId} />
+      <input type="hidden" name="principalUgx" value={principal} />
       <label>
         Investment amount (UGX)
         <input
-          name="principalUgx"
-          type="number"
-          min="125000"
-          max={limitUgx}
-          step="0.01"
+          ref={amountInput}
+          type="text"
+          inputMode="numeric"
+          value={amount}
+          aria-invalid={showAmountError || undefined}
+          aria-describedby={
+            showAmountError ? `${amountHintId} ${amountErrorId}` : amountHintId
+          }
+          onBlur={() => setAmountTouched(true)}
+          onInvalid={() => setAmountTouched(true)}
+          onChange={(event) => {
+            const input = event.currentTarget;
+            const inputType = (event.nativeEvent as InputEvent).inputType;
+            const { value, caret } = formatAmountInput(
+              amount,
+              input.value,
+              input.selectionStart ?? input.value.length,
+              inputType,
+            );
+            input.value = value;
+            input.setSelectionRange(caret, caret);
+            setAmount(value);
+          }}
           required
         />
-        <small className="muted">
+        {showAmountError && (
+          <small id={amountErrorId} className="field-error">
+            {amountError}
+          </small>
+        )}
+        <small id={amountHintId} className="muted">
           Minimum UGX 125,000; maximum {ugx(limitUgx)} per cycle. Fractional
           units are calculated automatically.
         </small>
       </label>
+      <div aria-live="polite">
+        {principal && !amountError && (
+          <p className="muted">
+            Amount to reserve <strong>{`UGX ${Number(principal).toLocaleString("en-UG")}`}</strong>
+          </p>
+        )}
+      </div>
       <p className="muted">
         Your reservation stays pending until an administrator activates or
         expires it, or you cancel it. Transfer the exact amount shown on your
