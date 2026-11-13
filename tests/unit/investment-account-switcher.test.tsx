@@ -26,9 +26,9 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe("account switching", () => {
-  it("starts on Main Account and switches the overview using an explicit URL", () => {
+  it("starts on All accounts and switches the overview using an explicit URL", () => {
     render(<InvestmentAccountSwitcher accounts={accounts} />);
-    expect(screen.getByLabelText("Investment account")).toHaveValue("main");
+    expect(screen.getByLabelText("Investment account")).toHaveValue("all");
     fireEvent.change(screen.getByLabelText("Investment account"), {
       target: { value: "school" },
     });

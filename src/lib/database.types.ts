@@ -843,6 +843,7 @@ export type Database = {
       }
       investment_agreements: {
         Row: {
+          investment_account_name: string | null
           acceptance_request_id: string
           accepted_at: string
           accepted_content_hash: string
@@ -859,6 +860,7 @@ export type Database = {
           pdf_status: Database["public"]["Enums"]["agreement_status"]
         }
         Insert: {
+          investment_account_name?: string | null
           acceptance_request_id: string
           accepted_at: string
           accepted_content_hash: string
@@ -875,6 +877,7 @@ export type Database = {
           pdf_status?: Database["public"]["Enums"]["agreement_status"]
         }
         Update: {
+          investment_account_name?: string | null
           acceptance_request_id?: string
           accepted_at?: string
           accepted_content_hash?: string
@@ -1020,6 +1023,7 @@ export type Database = {
       }
       investment_receipts: {
         Row: {
+          investment_account_name: string | null
           offline_authorization_id: string | null
           account_description: string
           amount_ugx: number
@@ -1047,6 +1051,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          investment_account_name?: string | null
           offline_authorization_id?: string | null
           account_description: string
           amount_ugx: number
@@ -1074,6 +1079,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          investment_account_name?: string | null
           offline_authorization_id?: string | null
           account_description?: string
           amount_ugx?: number

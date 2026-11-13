@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ACCOUNT_SCOPED_PATHS } from "@/lib/investment-account-context";
 import { useActionState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { saveInvestmentAccount } from "@/actions/investment-accounts";
@@ -26,11 +27,7 @@ export function InvestmentAccountSwitcher({
   const params = useSearchParams();
   if (/^\/investments\/(?!new$)[^/]+$/.test(pathname) && !accountId)
     return null;
-  const selected =
-    accountId ??
-    params.get("account") ??
-    accounts.find((account) => account.is_default)?.id ??
-    "";
+  const selected = accountId ?? params.get("account") ?? "all";
   return (
     <div className="form" style={{ marginBottom: "1.5rem", maxWidth: "28rem" }}>
       <label>
@@ -41,12 +38,7 @@ export function InvestmentAccountSwitcher({
             const next = new URLSearchParams(params);
             next.set("account", event.target.value);
             // Detail pages belong to one investment; switching opens the chosen overview.
-            const path = [
-              "/dashboard",
-              "/investments",
-              "/investments/new",
-              "/accounts",
-            ].includes(pathname)
+            const path = ACCOUNT_SCOPED_PATHS.includes(pathname)
               ? pathname
               : "/dashboard";
             router.push(`${path}?${next.toString()}`);

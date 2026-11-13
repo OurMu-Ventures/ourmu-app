@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -38,6 +38,7 @@ const school = {
 const rpc = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(console, "error").mockImplementation(() => {});
   vi.stubEnv("MULTIPLE_INVESTMENT_ACCOUNTS_ENABLED", "true");
   const query = {
     select: vi.fn(),
@@ -57,9 +58,14 @@ beforeEach(() => {
   >);
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
 describe("investment account context", () => {
-  it("defaults existing links to Main Account", async () => {
-    expect((await resolveInvestmentAccount("owner-id")).selected).toEqual(main);
+  it("defaults existing links to All accounts", async () => {
+    expect((await resolveInvestmentAccount("owner-id")).selected).toBeNull();
   });
   it("resolves a specific account and an explicit combined overview", async () => {
     expect(
@@ -129,5 +135,48 @@ describe("account management action", () => {
     );
     expect(result.message).toContain("already have");
     expect(result.message).not.toContain("private");
+  });
+});
+
+describe("account failure reporting", () => {
+  it.each([
+    ["partner unavailable", "partner access is unavailable"],
+    ["investment account unavailable", "archived"],
+    ["Main Account cannot be archived", "must stay open"],
+    ["account has outstanding investments", "Settle this account"],
+  ])("explains %s", async (message, expected) => {
+    rpc.mockResolvedValue({ data: null, error: { code: "P0001", message } });
+    const form = new FormData();
+    form.set("name", "Private account name");
+    form.set("accountId", school.id);
+    const result = await saveInvestmentAccount(
+      { ok: false, message: "" },
+      form,
+    );
+    expect(result.message).toContain(expected);
+    expect(console.error).toHaveBeenCalledWith(
+      "investment_account.save_failed",
+      { requestId: "request-id", code: "P0001", recognized: true },
+    );
+  });
+  it("uses a generic support reference for unknown failures without logging private text", async () => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "PGRST001",
+        message: "private account name or database detail",
+      },
+    });
+    const form = new FormData();
+    form.set("name", "private account name");
+    const result = await saveInvestmentAccount(
+      { ok: false, message: "" },
+      form,
+    );
+    expect(result.message).toContain("reference request-id");
+    expect(result.message).not.toContain("outstanding");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
+      "private",
+    );
   });
 });

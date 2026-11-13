@@ -1,4 +1,5 @@
 import "server-only";
+import { investmentAccountLabel } from "@/lib/investment-account-context";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { guardOperation, runBoundedOperation } from "@/lib/jobs/operation";
@@ -679,7 +680,7 @@ async function generateAgreement(investmentId: string) {
     .single();
   const { data: acceptance } = await admin
     .from("investment_agreements")
-    .select("id,accepted_at,agreement_version_id")
+    .select("id,accepted_at,agreement_version_id,investment_account_name")
     .eq("investment_id", investmentId)
     .single();
   if (!investment || !acceptance) throw new Error("AGREEMENT_DATA_MISSING");
@@ -707,7 +708,10 @@ async function generateAgreement(investmentId: string) {
     template: version.template_markdown,
     investorName: profile.legal_name,
     investorEmail: profile.email,
-    investmentAccountId: investment.account_id,
+    investmentAccountLabel:
+      acceptance.investment_account_name && investment.account_id
+        ? investmentAccountLabel(acceptance.investment_account_name, investment.account_id)
+        : null,
     units: Number(investment.units),
     principalUgx: Number(investment.principal_ugx),
     projectedReturnUgx: Number(investment.projected_return_ugx),
@@ -947,15 +951,9 @@ export async function deliverJobEmailWithOutcome(
       throw new Error("RECEIPT_NOT_READY");
     const baseUrl = getPublicEnv().NEXT_PUBLIC_APP_URL;
     actionUrl = payload.actionUrl ?? `${baseUrl}/investments/${job.entity_id}`;
-    const { data: activationInvestment, error: accountError } = await admin
-      .from("investments")
-      .select("investment_accounts(name)")
-      .eq("id", job.entity_id)
-      .maybeSingle();
-    if (accountError) throw new Error("INVESTMENT_ACCOUNT_LOOKUP_FAILED");
     if (receipt) {
       activationReceipt = {
-        accountName: activationInvestment?.investment_accounts?.name,
+        accountName: receipt.investment_account_name ?? undefined,
         partnerName: receipt.partner_name,
         amountUgx: formatUgxExact(receipt.amount_ugx),
         receiptNumber: receipt.receipt_number,

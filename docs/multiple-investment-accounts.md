@@ -1,8 +1,10 @@
 # Multiple investment accounts
 
 One verified partner and login can own multiple named investment accounts. The
-account switcher scopes the dashboard and investment list; All accounts combines
-those records. Investment detail pages always show the investment's actual account.
+account switcher scopes the dashboard and investment list; the default All accounts
+view combines those records so maturity actions in any account remain visible.
+Starting an investment from All accounts or an archived account presents direct
+links to the active accounts. Investment detail pages always show the investment's actual account.
 Profile, KYC, next of kin, verified email contacts and payout destinations remain
 shared by the legal owner.
 
@@ -30,7 +32,8 @@ shared by the legal owner.
   Archived history stays readable; archiving cannot remove financial records.
 - Staff activation, investment and maturity views identify the account. Reservation,
   activation and maturity emails include the name when available. New agreements
-  and receipts include a stable account ID; historic PDFs are not regenerated.
+  and receipts show the snapshotted account name with a short stable reference;
+  historic PDFs are not regenerated.
 
 ## Review and deployment order
 
@@ -79,3 +82,8 @@ The first checks simultaneous reservations across accounts and an archive versus
 reservation race. The second checks backfilling existing partners and investments
 without changing aggregate principal or projected values. Use synthetic test
 schema templates only.
+
+Document names are stored with each new agreement acceptance and receipt issuance.
+Subsequent account renames and PDF/email retries use that evidence snapshot. The
+account list is deduplicated per server render with React cache; no data is cached
+across authenticated requests.

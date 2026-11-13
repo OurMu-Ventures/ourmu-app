@@ -279,6 +279,7 @@ export function maturityNoticeDetail(input: MaturityNoticeInput): string {
       ? "The actual return for your cycle is pending. You will confirm any revised amounts before anything is paid or reinvested."
       : "The amount actually paid follows the return recorded by the fund, which may differ from this projection.";
   return (
+    (input.accountName ? `Investment account: ${input.accountName}. ` : "") +
     `Your OURMU investment of ${money(input.principalUgx)} matured on ${input.maturityDate} ` +
     `${standing} Payouts are scheduled for ${input.payoutDate}. ` +
     `Record your choice on the investment page: ${maturityChoiceLabel("withdraw_all")} ` +

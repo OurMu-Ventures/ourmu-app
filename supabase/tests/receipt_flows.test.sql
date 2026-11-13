@@ -104,7 +104,7 @@ select is(
   'Katabbi Town Council, Entebbe, Wakiso', 'bank receipt snapshots the company address');
 select is(
   (select account_description from public.investment_receipts where investment_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
-  'Accounts payable — Receipt Partner | Investment account: ' || (select account_id::text from public.investments where id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'), 'bank receipt includes its investment account');
+  'Accounts payable — Receipt Partner | Investment account: Main Account (ref ' || (select upper(left(replace(account_id::text, '-', ''), 8)) from public.investments where id = 'dddddddd-dddd-dddd-dddd-dddddddddddd') || ')', 'bank receipt includes its investment account');
 select is(
   (select amount_ugx::text from public.investment_receipts where investment_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
   '500000.00000000', 'bank receipt amount matches the recorded bank amount');

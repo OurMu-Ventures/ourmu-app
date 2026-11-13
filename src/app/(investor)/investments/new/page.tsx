@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { accountHref } from "@/lib/investment-account-context";
 import { resolveInvestmentAccount } from "@/lib/investment-accounts";
 import { InvestmentRequestForm } from "@/components/forms";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
@@ -5,11 +7,35 @@ import { requireInvestor } from "@/lib/auth";
 import { date, dateTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function NewInvestmentPage({ searchParams = Promise.resolve({}) }: { searchParams?: Promise<{ account?: string }> } = {}) {
+export default async function NewInvestmentPage({
+  searchParams = Promise.resolve({}),
+}: { searchParams?: Promise<{ account?: string }> } = {}) {
   const profile = await requireInvestor();
-  const { selected } = await resolveInvestmentAccount(profile.id, (await searchParams).account);
+  const { selected, accounts } = await resolveInvestmentAccount(
+    profile.id,
+    (await searchParams).account,
+  );
   const supabase = await createClient();
-  if (!selected || selected.archived_at) return <><h1>Choose an active account</h1><p>Select an account above before making an investment.</p></>;
+  if (!selected || selected.archived_at)
+    return (
+      <>
+        <h1>Choose an investment account</h1>
+        <p>Select the account for this investment.</p>
+        <div className="cycle-list">
+          {accounts
+            .filter((account) => !account.archived_at)
+            .map((account) => (
+              <Link
+                className="card"
+                key={account.id}
+                href={accountHref("/investments/new", account.id)}
+              >
+                Invest in {account.name}
+              </Link>
+            ))}
+        </div>
+      </>
+    );
   const now = new Date().toISOString();
   const [{ data: cycle }, { data: kin }, { data: bank }] = await Promise.all([
     supabase

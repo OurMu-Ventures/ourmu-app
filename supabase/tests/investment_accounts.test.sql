@@ -92,5 +92,14 @@ update public.maturity_instructions set proposed_actual_roi_ugx=0,confirmed_actu
 select ok((public.fulfill_maturity_instruction('11111111-1111-1111-1111-111111111111','aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa',0,'','FULFILL',true,gen_random_uuid(),false)->>'fulfilled')::boolean,'reinvest source principal');
 select is((select i.account_id from public.investments i join public.investment_receipts r on r.investment_id=i.id where r.original_investment_id='eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'),'12345678-1234-4234-8234-123456789012'::uuid,'reinvestment stays in School Fees');
 select ok(exists(select 1 from public.audit_events where action='investment_account.created'),'account creation is audited');
+-- Document names are snapshotted before any later account rename.
+select is((select investment_account_name from public.investment_receipts where original_investment_id='eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'), 'School Fees', 'receipt snapshots the account name');
+select is((select a.investment_account_name from public.investment_agreements a join public.investment_receipts r on r.investment_id=a.investment_id where r.original_investment_id='eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'), 'School Fees', 'agreement snapshots the account name');
+select ok(exists(select 1 from public.investment_receipts where account_description like '%Investment account: School Fees (ref 12345678)%'), 'receipt shows a readable name and short reference');
+select lives_ok($$select public.manage_investment_account('22222222-2222-2222-2222-222222222222','Education',gen_random_uuid(),'12345678-1234-4234-8234-123456789012')$$, 'rename account after document issuance');
+select is((select investment_account_name from public.investment_receipts where original_investment_id='eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'), 'School Fees', 'renaming cannot rewrite receipt evidence');
+select is((select a.investment_account_name from public.investment_agreements a join public.investment_receipts r on r.investment_id=a.investment_id where r.original_investment_id='eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'), 'School Fees', 'PDF retries retain the accepted account name');
+select throws_ok($$update public.investment_receipts set investment_account_name='Changed' where original_investment_id='eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'$$, '23514', null, 'receipt account snapshot is immutable');
+select throws_ok($$update public.investment_agreements set investment_account_name='Changed' where investment_id in (select investment_id from public.investment_receipts where original_investment_id='eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee')$$, '23514', null, 'agreement account snapshot is immutable');
 select * from finish();
 rollback;

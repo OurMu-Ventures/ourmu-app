@@ -601,17 +601,32 @@ end;
 $function$;
 
 notify pgrst, 'reload schema';
-create function private.receipt_investment_account() returns trigger language plpgsql security invoker set search_path = '' as $$
-declare v_account_id uuid;
+-- New evidence snapshots names at acceptance/issuance. Historical PDFs are untouched.
+alter table public.investment_agreements add column investment_account_name text;
+alter table public.investment_receipts add column investment_account_name text;
+
+create function private.snapshot_document_investment_account() returns trigger language plpgsql security invoker set search_path = '' as $$
+declare v_account_id uuid; v_name text;
 begin
-  select account_id into v_account_id from public.investments where id = new.investment_id;
-  if v_account_id is not null then
-    new.account_description := new.account_description || ' | Investment account: ' || v_account_id::text;
+  if TG_OP = 'UPDATE' then
+    if new.investment_account_name is distinct from old.investment_account_name then
+      raise exception using errcode = '23514', message = 'document investment account is immutable';
+    end if;
+    return new;
+  end if;
+  select a.id, a.name into v_account_id, v_name
+    from public.investments i join public.investment_accounts a on a.id = i.account_id
+    where i.id = new.investment_id for share of a;
+  new.investment_account_name := v_name;
+  if TG_TABLE_NAME = 'investment_receipts' and v_account_id is not null then
+    new.account_description := new.account_description || ' | Investment account: ' || v_name ||
+      ' (ref ' || upper(left(replace(v_account_id::text, '-', ''), 8)) || ')';
   end if;
   return new;
 end;
 $$;
-create trigger receipt_investment_account before insert on public.investment_receipts for each row execute function private.receipt_investment_account();
-revoke all on function private.ensure_main_investment_account(), private.assign_investment_account(), private.receipt_investment_account() from public, anon, authenticated;
-grant execute on function private.ensure_main_investment_account(), private.assign_investment_account(), private.receipt_investment_account() to service_role;
+create trigger receipt_investment_account before insert or update on public.investment_receipts for each row execute function private.snapshot_document_investment_account();
+create trigger agreement_investment_account before insert or update on public.investment_agreements for each row execute function private.snapshot_document_investment_account();
+revoke all on function private.ensure_main_investment_account(), private.assign_investment_account(), private.snapshot_document_investment_account() from public, anon, authenticated;
+grant execute on function private.ensure_main_investment_account(), private.assign_investment_account(), private.snapshot_document_investment_account() to service_role;
 commit;

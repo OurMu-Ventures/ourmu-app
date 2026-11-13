@@ -1,9 +1,10 @@
 import "server-only";
 
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-export async function getInvestmentAccounts(investorId: string) {
+export const getInvestmentAccounts = cache(async (investorId: string) => {
   const client = await createClient();
   const { data, error } = await client
     .from("investment_accounts")
@@ -12,7 +13,7 @@ export async function getInvestmentAccounts(investorId: string) {
     .order("created_at");
   if (error || !data) throw new Error("Could not load investment accounts.");
   return data;
-}
+});
 
 export async function resolveInvestmentAccount(
   investorId: string,
@@ -20,15 +21,11 @@ export async function resolveInvestmentAccount(
 ) {
   const accounts = await getInvestmentAccounts(investorId);
   const selected =
-    requested === "all"
+    !requested || requested === "all"
       ? null
-      : requested
-        ? accounts.find((account) => account.id === requested)
-        : accounts.find((account) => account.is_default);
+      : accounts.find((account) => account.id === requested);
   if (selected === undefined) notFound();
   return { accounts, selected };
 }
 
-export function accountHref(path: string, accountId: string | null) {
-  return `${path}?account=${encodeURIComponent(accountId ?? "all")}`;
-}
+export { accountHref } from "@/lib/investment-account-context";

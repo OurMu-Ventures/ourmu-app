@@ -34,24 +34,49 @@ export async function saveInvestmentAccount(
       ok: false,
       message: "Opening additional accounts is not available yet.",
     };
+  const operationId = requestId();
   const { data, error } = await createAdminClient().rpc(
     "manage_investment_account",
     {
       p_investor_id: profile.id,
       p_name: parsed.data.name,
-      p_request_id: requestId(),
+      p_request_id: operationId,
       p_account_id: parsed.data.accountId || undefined,
       p_archive: parsed.data.archive,
     },
   );
-  if (error || !data)
+  if (error || !data) {
+    const messages: Record<string, string> = {
+      "partner unavailable":
+        "Your partner access is unavailable. Refresh or contact support.",
+      "investment account unavailable":
+        "This account is unavailable or has been archived. Refresh and choose an active account.",
+      "Main Account cannot be archived":
+        "Main Account must stay open. You can rename it instead.",
+      "account has outstanding investments":
+        "Settle this account's pending reservations, active investments and maturity payouts before archiving it.",
+    };
+    const known =
+      error?.message && Object.hasOwn(messages, error.message)
+        ? messages[error.message]
+        : undefined;
+    console.error("investment_account.save_failed", {
+      requestId: operationId,
+      code:
+        error?.code && /^[A-Z0-9]{5}$/.test(error.code)
+          ? error.code
+          : "UNKNOWN",
+      recognized: Boolean(known || error?.code === "23505"),
+    });
     return {
       ok: false,
       message:
         error?.code === "23505"
           ? "You already have an active account with that name."
-          : "Could not save this account. Main Account cannot be archived, and other accounts must have no outstanding investments before archiving.",
+          : (known ??
+            `Could not save this account. Try again or contact support with reference ${operationId}.`),
     };
+  }
   revalidatePath("/", "layout");
   redirect(`/accounts?account=${data}`);
 }
