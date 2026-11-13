@@ -1,5 +1,6 @@
 import { ShellNav, type ShellLink } from "@/components/ShellNav";
 const partnerLinks: ShellLink[] = [
+  { href: "/accounts", label: "Accounts", status: "Opening accounts" },
   { href: "/dashboard", label: "Overview", status: "Opening overview" },
   { href: "/profile", label: "Profile", status: "Opening profile" },
   {

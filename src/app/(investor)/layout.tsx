@@ -1,3 +1,5 @@
+import { InvestmentAccountSwitcher } from "@/components/InvestmentAccounts";
+import { getInvestmentAccounts } from "@/lib/investment-accounts";
 import { AppShell } from "@/components/AppShell";
 import { requireInvestor } from "@/lib/auth";
 
@@ -7,6 +9,7 @@ export default async function PartnerLayout({
   children: React.ReactNode;
 }) {
   const profile = await requireInvestor();
+  const accounts = await getInvestmentAccounts(profile.id);
   return (
     <AppShell>
       <div className="page-head">
@@ -15,6 +18,7 @@ export default async function PartnerLayout({
           <strong>{profile.legal_name}</strong>
         </div>
       </div>
+      <InvestmentAccountSwitcher accounts={accounts} />
       {children}
     </AppShell>
   );

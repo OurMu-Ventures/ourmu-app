@@ -165,7 +165,7 @@ export function ShellNav({
           const active = current?.href === link.href;
           return (
             <Link
-              href={link.href}
+              href={searchParams.has("account") && ["/dashboard", "/investments", "/investments/new", "/accounts"].includes(link.href) ? `${link.href}?account=${encodeURIComponent(searchParams.get("account")!)}` : link.href}
               key={link.href}
               aria-current={active ? "page" : undefined}
               // Leave the drawer open during navigation so the LinkStatus

@@ -1,3 +1,5 @@
+import { InvestmentAccountSwitcher } from "@/components/InvestmentAccounts";
+import { getInvestmentAccounts } from "@/lib/investment-accounts";
 import { DepositSlips } from "@/components/DepositSlips";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import Link from "next/link";
@@ -47,6 +49,8 @@ export default async function InvestmentPage({
     .eq("investor_id", profile.id)
     .maybeSingle();
   if (!data) notFound();
+  const accounts = await getInvestmentAccounts(profile.id);
+  const account = accounts.find((account) => account.id === data.account_id);
   const agreement = Array.isArray(data.investment_agreements)
     ? data.investment_agreements[0]
     : data.investment_agreements;
@@ -141,6 +145,8 @@ export default async function InvestmentPage({
   );
   return (
     <>
+      <InvestmentAccountSwitcher accounts={accounts} accountId={data.account_id ?? undefined} />
+      <p className="notice">Investment account: <strong>{account?.name ?? "Main Account"}</strong>. Maturity payouts and reinvestment are recorded against this account.</p>
       {data.status === "reserved" && data.record_origin === "portal" && (
         <DepositSlips
           investmentId={id}

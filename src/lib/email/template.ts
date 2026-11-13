@@ -43,6 +43,7 @@ const subjects: Record<EmailTemplate, string> = {
 };
 
 export type ActivationReceiptInput = {
+  accountName?: string;
   partnerName?: string;
   amountUgx?: string;
   receiptNumber?: string;
@@ -177,7 +178,7 @@ function renderMaturityNoticeEmail(
     : "";
   return {
     subject: subjects.maturity_notice,
-    html: `<div style="background:#f4f7f6;padding:32px 16px;font-family:Arial,sans-serif;color:#18332f"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:36px"><p style="margin:0 0 24px;color:#2f766b;font-size:13px;font-weight:700;letter-spacing:.12em">OURMU VENTURES</p><h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#18332f">Hello Partner 👋</h1><p style="margin:0 0 24px;font-size:17px;line-height:1.6">Your OURMU investment matured on ${escapeHtml(notice.maturityDate)}. Here is your investment standing and the payout plan you can choose.</p><h2 style="margin:0 0 14px;font-size:18px;color:#18332f">Your investment standing</h2><div style="background:#f4f7f6;border-radius:12px;padding:20px 22px;margin:0 0 28px">${standing}</div><h2 style="margin:0 0 4px;font-size:18px;color:#18332f">The payout plan</h2>${plans}<p style="margin:8px 0 24px;font-size:15px;line-height:1.6">Payouts are scheduled for <strong>${escapeHtml(notice.payoutDate)}</strong>. ${escapeHtml(
+    html: `<div style="background:#f4f7f6;padding:32px 16px;font-family:Arial,sans-serif;color:#18332f"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:36px"><p style="margin:0 0 24px;color:#2f766b;font-size:13px;font-weight:700;letter-spacing:.12em">OURMU VENTURES</p><h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#18332f">Hello Partner 👋</h1><p style="margin:0 0 24px;font-size:17px;line-height:1.6">Your OURMU investment matured on ${escapeHtml(notice.maturityDate)}. Here is your investment standing and the payout plan you can choose.</p><h2 style="margin:0 0 14px;font-size:18px;color:#18332f">Your investment standing</h2><div style="background:#f4f7f6;border-radius:12px;padding:20px 22px;margin:0 0 28px">${notice.accountName ? `<p>Investment account: <strong>${escapeHtml(notice.accountName)}</strong></p>` : ""}${standing}</div><h2 style="margin:0 0 4px;font-size:18px;color:#18332f">The payout plan</h2>${plans}<p style="margin:8px 0 24px;font-size:15px;line-height:1.6">Payouts are scheduled for <strong>${escapeHtml(notice.payoutDate)}</strong>. ${escapeHtml(
       actual
         ? "These amounts use the actual return recorded for your cycle."
         : notice.actualPending
@@ -212,6 +213,7 @@ function renderInvestmentActivatedEmail(
     ? `<p style="margin:0 0 28px"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:#176b5b;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">View investment</a></p>`
     : "";
   const detailRows = [
+    receipt?.accountName ? `<p>Investment account: <strong>${escapeHtml(receipt.accountName)}</strong></p>` : "",
     amount
       ? `<p style="margin:0 0 10px;font-size:14px;color:#58706b">Amount<br><strong style="font-size:20px;color:#18332f">${escapeHtml(amount)}</strong></p>`
       : "",
@@ -224,6 +226,7 @@ function renderInvestmentActivatedEmail(
     html: `<div style="background:#f4f7f6;padding:32px 16px;font-family:'Open Sans',Arial,sans-serif;color:#18332f"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:36px"><p style="margin:0 0 24px;color:#2f766b;font-size:13px;font-weight:700;letter-spacing:.12em">OURMU VENTURES</p><h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#18332f">Hello ${escapeHtml(name)}</h1><p style="margin:0 0 16px;font-size:17px;line-height:1.6">${heading}. ${intro}</p><p style="margin:0 0 24px;font-size:15px;line-height:1.6">${receiptLine}</p>${detailRows ? `<div style="background:#f4f7f6;border-radius:12px;padding:20px 22px;margin:0 0 28px">${detailRows}</div>` : ""}${action}<hr style="border:0;border-top:1px solid #dce7e4;margin:0 0 22px"><p style="margin:0;color:#58706b;font-size:13px;line-height:1.6">Need help? Contact <a href="mailto:community@ourmu.org" style="color:#176b5b">community@ourmu.org</a>. Never forward private links. OURMU will never ask for your NIN or bank details by email.</p></div></div>`,
     text:
       `Hello ${name}, ${heading}. ` +
+      (receipt?.accountName ? `Investment account: ${receipt.accountName}. ` : "") +
       (fallback.detail ? `${fallback.detail} ` : "") +
       (receiptNo ? `Receipt ${receiptNo}. ` : "") +
       (actionUrl ? `View your investment: ${actionUrl}` : ""),

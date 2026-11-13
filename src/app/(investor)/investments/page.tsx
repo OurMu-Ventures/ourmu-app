@@ -1,3 +1,4 @@
+import { accountHref, resolveInvestmentAccount } from "@/lib/investment-accounts";
 import Link from "next/link";
 import { cancelInvestment } from "@/actions/investments";
 import { CancelInvestmentButton } from "@/components/CancelInvestmentButton";
@@ -15,8 +16,9 @@ import {
 } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function InvestmentsPage() {
+export default async function InvestmentsPage({ searchParams = Promise.resolve({}) }: { searchParams?: Promise<{ account?: string }> } = {}) {
   const profile = await requireInvestor();
+  const { selected, accounts } = await resolveInvestmentAccount(profile.id, (await searchParams).account);
   const supabase = await createClient();
   const { data } = await supabase
     .from("investments")
@@ -24,17 +26,18 @@ export default async function InvestmentsPage() {
       "*,investment_cycles(name,opens_at,actual_return_bps,legacy_settlement),investment_receipts!investment_receipts_investment_id_fkey(source,transaction_date),maturity_instructions!maturity_instructions_investment_id_fkey(status,choice,investment_cycles!maturity_instructions_target_cycle_id_fkey(name,maturity_date))",
     )
     .eq("investor_id", profile.id)
+        .in("account_id", selected ? [selected.id] : accounts.map((account) => account.id))
     .neq("status", "cancelled")
     .order("requested_at", { ascending: false });
   return (
     <>
       <div className="page-head">
         <div>
-          <p className="eyebrow">Portfolio records</p>
+          <p className="eyebrow">{selected?.name ?? "All accounts"}</p>
           <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Investments</h1>
         </div>
         <Button asChild>
-          <Link href="/investments/new">
+          <Link href={accountHref("/investments/new", selected?.id ?? null)}>
             Make an Investment <LinkStatus label="Opening investment form" />
           </Link>
         </Button>
@@ -60,6 +63,7 @@ export default async function InvestmentsPage() {
               }
               item={{
                 investmentId: item.id,
+                accountName: accounts.find((account) => account.id === item.account_id)?.name,
                 alias: item.alias,
                 defaultTitle,
                 name: investmentTitle(item.alias, defaultTitle),
@@ -86,7 +90,7 @@ export default async function InvestmentsPage() {
                   item.maturity_instructions,
                   item.maturity_instructions?.investment_cycles,
                 ),
-                detailHref: `/investments/${item.id}`,
+                detailHref: accountHref(`/investments/${item.id}`, item.account_id),
                 detailLabel: maturityAction
                   ? "Withdraw or Re-invest"
                   : "View details",

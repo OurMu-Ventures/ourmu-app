@@ -1,3 +1,4 @@
+import { accountHref, resolveInvestmentAccount } from "@/lib/investment-accounts";
 import Link from "next/link";
 import { investmentReturnView } from "@/lib/actual-returns";
 import { requireInvestor } from "@/lib/auth";
@@ -18,8 +19,9 @@ import {
 } from "@/lib/investments";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams = Promise.resolve({}) }: { searchParams?: Promise<{ account?: string }> } = {}) {
   const profile = await requireInvestor();
+  const { selected, accounts } = await resolveInvestmentAccount(profile.id, (await searchParams).account);
   const supabase = await createClient();
   const now = new Date().toISOString();
   const [{ data: investments }, { data: cycle }, { data: kin }] =
@@ -30,6 +32,7 @@ export default async function DashboardPage() {
           "*,investment_cycles(name,status,maturity_date,opens_at,actual_return_bps,legacy_settlement),investment_receipts!investment_receipts_investment_id_fkey(source,transaction_date),maturity_instructions!maturity_instructions_investment_id_fkey(status,choice,investment_cycles!maturity_instructions_target_cycle_id_fkey(name,maturity_date))",
         )
         .eq("investor_id", profile.id)
+        .in("account_id", selected ? [selected.id] : accounts.map((account) => account.id))
         .neq("status", "cancelled")
         .order("requested_at", { ascending: false }),
       supabase
@@ -65,7 +68,7 @@ export default async function DashboardPage() {
   const eligible = profile.kyc_status === "verified" && Boolean(kin);
   return (
     <>
-      <p className="eyebrow">Your portfolio</p>
+      <p className="eyebrow">{selected?.name ?? "All accounts"}</p>
       <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>
         Good day, {profile.legal_name.split(" ")[0]}.
       </h1>
@@ -100,7 +103,7 @@ export default async function DashboardPage() {
           </div>
           {cycle && eligible && (
             <Button asChild>
-              <Link href="/investments/new">
+              <Link href={accountHref("/investments/new", selected?.id ?? null)}>
                 Make an Investment{" "}
                 <LinkStatus label="Opening investment form" />
               </Link>
@@ -154,6 +157,7 @@ export default async function DashboardPage() {
                 }
                 item={{
                   investmentId: item.id,
+                  accountName: accounts.find((account) => account.id === item.account_id)?.name,
                   alias: item.alias,
                   defaultTitle,
                   name: investmentTitle(item.alias, defaultTitle),
@@ -181,7 +185,7 @@ export default async function DashboardPage() {
                     item.maturity_instructions,
                     item.maturity_instructions?.investment_cycles,
                   ),
-                  detailHref: `/investments/${item.id}`,
+                  detailHref: accountHref(`/investments/${item.id}`, item.account_id),
                   detailLabel: maturityAction
                     ? "Withdraw or Re-invest"
                     : "View details",

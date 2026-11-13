@@ -3,6 +3,7 @@ export type MaturityChoice =
   "withdraw_all" | "withdraw_roi_reinvest_principal" | "reinvest_all";
 
 export type MaturityNoticeInput = {
+  accountName?: string;
   principalUgx: number;
   projectedReturnUgx: number;
   projectedValueUgx: number;

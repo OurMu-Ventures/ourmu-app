@@ -26,7 +26,7 @@ export default async function AdminActivationsPage({
     ? await admin
         .from("investments")
         .select(
-          "id,principal_ugx,activated_at,profiles(legal_name),investment_cycles(name)",
+          "id,principal_ugx,activated_at,investment_accounts(name),profiles(legal_name),investment_cycles(name)",
         )
         .eq("id", activatedId.data)
         .eq("status", "active")
@@ -60,7 +60,7 @@ export default async function AdminActivationsPage({
   const { data, count, error } = await admin
     .from("investments")
     .select(
-      "id,status,principal_ugx,requested_at,maturity_date,is_test,policy_version,profiles(legal_name,email),investment_cycles(name)",
+      "id,status,principal_ugx,requested_at,maturity_date,is_test,policy_version,investment_accounts(name),profiles(legal_name,email),investment_cycles(name)",
       { count: "exact" },
     )
     .eq("status", "reserved")
@@ -148,6 +148,7 @@ export default async function AdminActivationsPage({
           <div className="page-head">
             <div>
               <h2>{item.profiles?.legal_name ?? "Partner"}</h2>
+              <p>Account: {item.investment_accounts?.name ?? "Main Account"}</p>
               <p className="muted">{item.profiles?.email}</p>
               <p>
                 {item.investment_cycles?.name ?? "Unknown cycle"} ·{" "}

@@ -1,12 +1,15 @@
+import { resolveInvestmentAccount } from "@/lib/investment-accounts";
 import { InvestmentRequestForm } from "@/components/forms";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
 import { requireInvestor } from "@/lib/auth";
 import { date, dateTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function NewInvestmentPage() {
+export default async function NewInvestmentPage({ searchParams = Promise.resolve({}) }: { searchParams?: Promise<{ account?: string }> } = {}) {
   const profile = await requireInvestor();
+  const { selected } = await resolveInvestmentAccount(profile.id, (await searchParams).account);
   const supabase = await createClient();
+  if (!selected || selected.archived_at) return <><h1>Choose an active account</h1><p>Select an account above before making an investment.</p></>;
   const now = new Date().toISOString();
   const [{ data: cycle }, { data: kin }, { data: bank }] = await Promise.all([
     supabase
@@ -69,7 +72,7 @@ export default async function NewInvestmentPage() {
         </article>
       </div>
       <section className="card" style={{ marginTop: "1rem" }}>
-        <h2>Request and accept</h2>
+        <h2>Invest in {selected.name}</h2>
         <p className="muted">
           Each request creates a separate investment placement. You may make
           multiple placements in this monthly cycle, subject to your cumulative
@@ -82,6 +85,8 @@ export default async function NewInvestmentPage() {
           contact our team if the cycle closes before you transfer.
         </p>
         <InvestmentRequestForm
+          accountId={selected.id}
+          accountName={selected.name}
           limitUgx={effectiveInvestmentLimit(profile.investment_limit_ugx)}
           cycleId={cycle.id}
           agreementId={agreement.id}

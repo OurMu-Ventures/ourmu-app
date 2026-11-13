@@ -99,7 +99,7 @@ export default async function AdminInvestmentsPage({
         let query = admin
           .from("investments")
           .select(
-            "id,investor_id,legacy_partner_id,cycle_id,record_origin,status,units,principal_ugx,projected_value_ugx,reported_payout_ugx,requested_at,maturity_date,profiles(legal_name,email),investment_cycles(name),legacy_partner_identities(canonical_name,normalized_email,profile_id),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status)",
+            "id,investor_id,legacy_partner_id,cycle_id,record_origin,status,units,principal_ugx,projected_value_ugx,reported_payout_ugx,requested_at,maturity_date,investment_accounts(name),profiles(legal_name,email),investment_cycles(name),legacy_partner_identities(canonical_name,normalized_email,profile_id),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status)",
             { count: "exact" },
           );
         if (selected) query = query.or(partnerInvestmentFilter(selected));
@@ -281,6 +281,7 @@ export default async function AdminInvestmentsPage({
                         identity?.canonical_name ??
                         "Unclaimed partner"}
                     </h3>
+                    <p>Account: {single(item.investment_accounts)?.name ?? "Unclaimed"}</p>
                     <p>
                       {single(item.investment_cycles)?.name ?? "Unknown cycle"}{" "}
                       · {units(item.units ?? 0)} units ·{" "}

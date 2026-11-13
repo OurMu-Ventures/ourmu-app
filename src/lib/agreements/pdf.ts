@@ -22,6 +22,7 @@ export async function buildAgreementPdf(input: {
   template: string;
   investorName: string;
   investorEmail: string;
+  investmentAccountId?: string | null;
   units: number;
   principalUgx: number;
   projectedReturnUgx: number;
@@ -51,6 +52,7 @@ export async function buildAgreementPdf(input: {
   y -= 8;
   line(`Investor: ${input.investorName}`);
   line(`Email: ${input.investorEmail}`);
+  if (input.investmentAccountId) line(`Investment account: ${input.investmentAccountId}`);
   line(`Units: ${input.units}`);
   line(`Principal: UGX ${input.principalUgx.toLocaleString("en-UG")}`);
   line(

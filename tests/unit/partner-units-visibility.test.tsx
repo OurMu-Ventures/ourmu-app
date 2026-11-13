@@ -30,6 +30,7 @@ import { requestInvestment } from "@/actions/investments";
 import { requireInvestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({ requireInvestor: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 // Cut the server-only import chain below the pages and the request form.
@@ -70,6 +71,7 @@ const profile = {
 
 const placement = {
   id: "inv-1",
+  account_id: "account-1",
   status: "active",
   principal_ugx: 250000,
   projected_value_ugx: 325000,
@@ -120,6 +122,13 @@ function queryFor(data: unknown) {
   const terminal = { data } as { data: unknown } & Record<string, (...args: unknown[]) => unknown>;
   terminal.select = () => terminal;
   terminal.eq = () => terminal;
+  terminal.in = (field, values) => {
+    if (typeof field === "string" && Array.isArray(selected) && Array.isArray(values)) {
+      selected = selected.filter((row) => values.includes(row[field]));
+      terminal.data = selected;
+    }
+    return terminal;
+  };
   terminal.neq = (field, value) => {
     if (typeof field === "string" && Array.isArray(selected)) {
       selected = selected.filter((row) => row[field] !== value);
@@ -144,7 +153,7 @@ function queryFor(data: unknown) {
 
 function mockClient(tables: Record<string, unknown>) {
   vi.mocked(createClient).mockResolvedValue({
-    from: (table: string) => queryFor(tables[table] ?? null),
+    from: (table: string) => queryFor(table === "investment_accounts" ? tables.investment_accounts ?? [{ id: "account-1", name: "Main Account", is_default: true, archived_at: null }] : tables[table] ?? null),
   } as unknown as SupabaseClient);
 }
 
@@ -274,7 +283,7 @@ describe("partner units visibility across pages", () => {
 
     const dashboard = cardItems(walk(await DashboardPage()));
     expect(dashboard[0]).toMatchObject({
-      detailHref: "/investments/inv-1",
+      detailHref: "/investments/inv-1?account=account-1",
       detailLabel: "Withdraw or Re-invest",
       detailAction: true,
     });
@@ -662,4 +671,24 @@ describe("receipt availability on investment details", () => {
       ).toBe(false);
     },
   );
+});
+
+
+describe("separate investment account balances", () => {
+  const accounts = [
+    { id: "account-1", name: "Main Account", is_default: true, archived_at: null },
+    { id: "account-2", name: "School Fees", is_default: false, archived_at: null },
+  ];
+  it.each([["dashboard", DashboardPage], ["investment list", InvestmentsPage]])("%s filters placements by the requested account", async (_, page) => {
+    mockClient({ investment_accounts: accounts, investments: [placement, { ...placement, id: "school-investment", account_id: "account-2", principal_ugx: 500000, projected_value_ugx: 650000 }], investment_cycles: cycle, next_of_kin: { id: "kin-1" } });
+    const tree = walk(await page({ searchParams: Promise.resolve({ account: "account-2" }) }));
+    expect(cardItems(tree).map((item) => item.investmentId)).toEqual(["school-investment"]);
+    if (page === DashboardPage) expect(tree.find((element) => element.type === PortfolioSummary)?.props).toMatchObject({ principal: 500000, projected: 650000 });
+  });
+  it("combines account balances only in the explicit All accounts overview", async () => {
+    mockClient({ investment_accounts: accounts, investments: [placement, { ...placement, id: "school-investment", account_id: "account-2", principal_ugx: 500000, projected_value_ugx: 650000 }], investment_cycles: cycle, next_of_kin: { id: "kin-1" } });
+    const tree = walk(await DashboardPage({ searchParams: Promise.resolve({ account: "all" }) }));
+    expect(cardItems(tree)).toHaveLength(2);
+    expect(tree.find((element) => element.type === PortfolioSummary)?.props).toMatchObject({ principal: 750000, projected: 975000 });
+  });
 });
