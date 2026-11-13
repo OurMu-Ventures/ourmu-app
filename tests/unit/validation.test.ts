@@ -19,14 +19,14 @@ describe("server input validation", () => {
     });
     expect(parsed.email).toBe("test@example.com");
   });
-  it("accepts a cash-first investment request with two decimal places", () => {
+  it("rejects a fractional investment request", () => {
     expect(
       investmentRequestSchema.safeParse({
         cycleId: "a1b2c3d4-e5f6-47a8-9123-abcdef123456",
         principalUgx: "125000.50",
         agreementAccepted: "yes",
       }).success,
-    ).toBe(true);
+    ).toBe(false);
   });
   it("accepts exactly UGX 50 million", () => {
     expect(

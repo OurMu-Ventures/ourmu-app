@@ -428,7 +428,7 @@ export function InvestmentRequestForm({
   const amountError = !principal
     ? ""
     : !INVESTMENT_AMOUNT_PATTERN.test(principal)
-      ? "Use digits only, with up to two decimal places."
+      ? "Enter a whole number of shillings."
       : Number(principal) < MIN_INVESTMENT_UGX || Number(principal) > limitUgx
         ? `Enter an amount between ${ugx(MIN_INVESTMENT_UGX)} and ${ugx(limitUgx)}.`
         : "";
@@ -451,7 +451,7 @@ export function InvestmentRequestForm({
         <input
           ref={amountInput}
           type="text"
-          inputMode="decimal"
+          inputMode="numeric"
           value={amount}
           aria-invalid={showAmountError || undefined}
           aria-describedby={
@@ -487,7 +487,7 @@ export function InvestmentRequestForm({
       <div aria-live="polite">
         {principal && !amountError && (
           <p className="muted">
-            Amount to reserve <strong>{ugx(principal)}</strong>
+            Amount to reserve <strong>{`UGX ${Number(principal).toLocaleString("en-UG")}`}</strong>
           </p>
         )}
       </div>

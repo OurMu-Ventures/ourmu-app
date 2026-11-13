@@ -525,14 +525,14 @@ describe("partner limit in the existing investment form", () => {
     const amount = screen.getByLabelText(/investment amount/i) as HTMLInputElement;
     const principal = () => new FormData(amount.form!).get("principalUgx");
 
-    fireEvent.change(amount, { target: { value: "125000.5" } });
+    fireEvent.change(amount, { target: { value: "125000" } });
     expect(amount.checkValidity()).toBe(true);
-    expect(principal()).toBe("125000.5");
+    expect(principal()).toBe("125000");
     expect(screen.getByText(/amount to reserve/i).textContent).toContain(
-      "125,000.50",
+      "125,000",
     );
 
-    fireEvent.change(amount, { target: { value: "125000.555" } });
+    fireEvent.change(amount, { target: { value: "125000.5" } });
     expect(amount.checkValidity()).toBe(false);
 
     fireEvent.change(amount, { target: { value: "124999" } });

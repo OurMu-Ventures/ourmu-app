@@ -63,8 +63,9 @@ describe("amountPrincipal", () => {
     },
   );
 
-  it("removes grouping and a trailing decimal point", () => {
-    expect(amountPrincipal("125,000.50")).toBe("125000.50");
-    expect(amountPrincipal("125,000.")).toBe("125000");
+  it("removes grouping from whole amounts and preserves decimal input for rejection", () => {
+    expect(amountPrincipal("125,000")).toBe("125000");
+    expect(amountPrincipal("125,000.50")).toBe("125,000.50");
+    expect(amountPrincipal("125,000.")).toBe("125,000.");
   });
 });

@@ -77,10 +77,9 @@ export function formatAmountInput(
   return { value, caret: position };
 }
 
-// The amount as the server expects it: no grouping commas, and a trailing
-// decimal point ("125,000.") read as the whole amount.
+// Remove grouping only from whole amounts. Preserve invalid input for validation.
 export function amountPrincipal(value: string) {
-  return GROUPED_AMOUNT.test(value)
-    ? value.replaceAll(",", "").replace(/\.$/, "")
+  return GROUPED_AMOUNT.test(value) && !value.includes(".")
+    ? value.replaceAll(",", "")
     : value;
 }
