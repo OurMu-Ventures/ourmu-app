@@ -6,6 +6,7 @@ import { useActionState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { saveInvestmentAccount } from "@/actions/investment-accounts";
 import { SubmitButton } from "@/components/SubmitButton";
+import { buttonVariants } from "@/components/ui/button";
 import { initialActionState } from "@/lib/validation";
 
 type Account = {
@@ -79,12 +80,17 @@ export function InvestmentAccountForm({ account }: { account?: Account }) {
         />
       </label>
       {!account?.archived_at && (
-        <div className="actions">
-          <SubmitButton pendingLabel="Saving…">
+        <div className="account-actions">
+          <SubmitButton className={buttonVariants()} pendingLabel="Saving…">
             {account ? "Save name" : "Open account"}
           </SubmitButton>
           {account && !account.is_default && (
-            <SubmitButton pendingLabel="Archiving…" name="archive" value="true">
+            <SubmitButton
+              className={buttonVariants({ variant: "secondary" })}
+              pendingLabel="Archiving…"
+              name="archive"
+              value="true"
+            >
               Archive account
             </SubmitButton>
           )}

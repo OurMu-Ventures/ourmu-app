@@ -1230,6 +1230,21 @@ th {
   justify-content: flex-end;
   gap: 0.75rem;
 }
+.account-card {
+  display: grid;
+  gap: 1rem;
+}
+.account-card h2 {
+  margin: 0;
+}
+.account-card > a {
+  justify-self: start;
+}
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
 
 /* Enrollment views use underlined navigation, distinct from decision actions. */
 .applications-workspace { min-width: 0; }

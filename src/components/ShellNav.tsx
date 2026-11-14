@@ -23,6 +23,7 @@ import {
   User,
   Users,
   Wallet,
+  WalletCards,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -43,6 +44,7 @@ const icons: Record<string, LucideIcon> = {
   "/profile": User,
   "/investments/new": TrendingUp,
   "/investments": Briefcase,
+  "/accounts": WalletCards,
   "/newsletters": Newspaper,
   "/admin": LayoutDashboard,
   "/admin/activations": CircleCheck,
