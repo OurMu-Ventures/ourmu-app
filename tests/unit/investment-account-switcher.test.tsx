@@ -66,6 +66,27 @@ describe("moving an investment", () => {
     { id: "school", name: "School Fees" },
     { id: "retirement", name: "Retirement" },
   ];
+  it("starts a fresh confirmation after the investment moves to another account", () => {
+    const { rerender } = render(
+      <MoveInvestmentForm investmentId="placement" from={accounts[0]} destinations={destinations} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Move investment" }));
+    const firstRequest = new FormData(screen.getByRole("button", { name: "Confirm move" }).closest("form")!).get("requestId");
+
+    // The server action redirects to this same page with the updated account.
+    rerender(
+      <MoveInvestmentForm investmentId="placement" from={accounts[1]} destinations={[accounts[0], destinations[1]]} />,
+    );
+    expect(screen.getByLabelText("Move to")).not.toBeDisabled();
+    expect(screen.getByLabelText("Move to")).toHaveValue("main");
+    expect(screen.queryByRole("button", { name: "Confirm move" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Move investment" }));
+    expect(screen.getByRole("group", { name: "Confirm move" })).toHaveTextContent("from School Fees to Main Account");
+    const secondData = new FormData(screen.getByRole("button", { name: "Confirm move" }).closest("form")!);
+    expect(secondData.get("fromAccountId")).toBe("school");
+    expect(secondData.get("toAccountId")).toBe("main");
+    expect(secondData.get("requestId")).not.toBe(firstRequest);
+  });
   it("asks for confirmation naming both accounts before submitting", () => {
     render(
       <MoveInvestmentForm

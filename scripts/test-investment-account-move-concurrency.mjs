@@ -17,6 +17,7 @@ const school = "12345678-1234-4234-8234-123456789012";
 const retirement = "12345678-1234-4234-8234-123456789013";
 const reserved = "dddddddd-dddd-dddd-dddd-dddddddddddd";
 const active = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+const secondReservation = "dddddddd-dddd-dddd-dddd-ddddddddddde";
 const main = `(select id from public.investment_accounts where investor_id='${partner}' and is_default)`;
 function run(args, input = "") {
   return new Promise((resolve, reject) => {
@@ -35,8 +36,8 @@ function run(args, input = "") {
 }
 const query = (sql) =>
   run(
-    ["psql", "-U", "postgres", "-d", database, "-At", "-v", "ON_ERROR_STOP=1"],
-    sql,
+    ["psql", "-U", "postgres", "-d", database, "-Atq", "-v", "ON_ERROR_STOP=1"],
+    `set statement_timeout = '10s'; ${sql}`,
   );
 async function successful(sql) {
   const result = await query(sql);
@@ -120,8 +121,28 @@ try {
     ),
     /investment cannot be moved/,
   );
+  // Use the production activation RPC and its auto-cycle profile lock, rather
+  // than a direct status UPDATE (which misses the investment/profile deadlock).
+  await successful(`
+    update public.investment_cycles set opens_at=now()-interval '1 day', closes_at=now()+interval '1 day',
+      maturity_date=(date_trunc('month',now()+interval '300 days')+interval '1 month - 1 day')::date, record_origin='portal';
+    update public.investments set policy_version='auto_cycle_v1' where id='${reserved}';
+    insert into public.investments(id,investor_id,cycle_id,unit_price_ugx,principal_ugx,
+      projected_return_bps,projected_return_ugx,projected_value_ugx,maturity_date,
+      reservation_expires_at,status,record_origin,policy_version)
+    select '${secondReservation}',investor_id,cycle_id,unit_price_ugx,principal_ugx,
+      projected_return_bps,projected_return_ugx,projected_value_ugx,maturity_date,
+      reservation_expires_at,'reserved',record_origin,policy_version
+    from public.investments where id='${reserved}';
+  `);
+  const activate = (investment) => `select public.activate_investment(
+    '11111111-1111-1111-1111-111111111111','${investment}','move-race-${investment}',
+    500000,(now() at time zone 'Africa/Kampala')::date,'ACTIVATE',true,gen_random_uuid());`;
   const both = await race(
-    `update public.investments set status='active' where id='${reserved}';`,
+    // Hold activation's first lock while the move starts, then run the real
+    // operation. The old profile-first move deadlocks with this transaction.
+    `select id from public.investments where id='${reserved}' for update;
+     select pg_sleep(0.4); ${activate(reserved)}`,
     move(reserved, main, `'${school}'`),
   );
   assert.ok(
@@ -135,8 +156,19 @@ try {
     `active ${school}`,
   );
   console.log(
-    "PASS: maturity blocks a waiting move; activation and move both apply in order",
+    "PASS: maturity blocks a waiting move; real activation and move both apply",
   );
+  assert.equal(await successful(`select investment_account_name from public.investment_receipts where investment_id='${reserved}';`),
+    'Main Account');
+  const moveFirst = await race(
+    move(secondReservation, main, `'${school}'`), activate(secondReservation),
+  );
+  assert.ok(moveFirst.every((result) => result.code === 0), JSON.stringify(moveFirst));
+  assert.equal(await successful(`select status || ' ' || account_id from public.investments where id='${secondReservation}';`),
+    `active ${school}`);
+  assert.equal(await successful(`select investment_account_name from public.investment_receipts where investment_id='${secondReservation}';`),
+    'School Fees');
+  console.log('PASS: move before real activation snapshots the destination account in its receipt');
 } finally {
   const dropped = await run(["dropdb", "-U", "supabase_admin", database]);
   assert.equal(dropped.code, 0, dropped.output);

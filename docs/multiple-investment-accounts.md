@@ -114,8 +114,9 @@ changes.
   investment is still in the account the form showed and is still eligible.
   Direct updates to `account_id` remain blocked; the function opens a
   transaction-local gate for the single investment it moves.
-- It locks the partner, then the investment, then the destination account, the
-  same order as account archiving and activation, so a simultaneous archive,
+- It locks the investment, then the partner, then the destination account.
+  Activation also locks the investment before the partner; archiving locks the
+  partner before the account and only reads investments. A simultaneous archive,
   activation, maturity update or second move waits and then sees the result.
   The browser's request ID makes a double submit or retry replay the original
   move instead of applying it twice.

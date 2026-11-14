@@ -43,9 +43,9 @@ begin
 end;
 $$;
 
--- Lock order matches account management (profile, then account) and
--- activation (investment, then account), so concurrent archive, activation,
--- maturity and move requests serialise instead of deadlocking.
+-- Lock investment, then profile, then destination account. Activation also
+-- locks investment before profile; account management locks profile before
+-- account and only reads investments, so it introduces no reverse row lock.
 create function public.move_investment_account(
   p_investor_id uuid,
   p_investment_id uuid,
@@ -57,6 +57,9 @@ declare
   v_existing public.investment_account_moves;
   v_investment public.investments;
 begin
+  select * into v_investment from public.investments where id = p_investment_id and investor_id = p_investor_id for update;
+  if not found then raise exception using errcode = '42501', message = 'investment unavailable'; end if;
+
   perform 1 from public.profiles where id = p_investor_id and access_status = 'active' for update;
   if not found then raise exception using errcode = '42501', message = 'partner unavailable'; end if;
 
@@ -71,8 +74,6 @@ begin
       'from_account_id', v_existing.from_account_id, 'to_account_id', v_existing.to_account_id, 'replayed', true);
   end if;
 
-  select * into v_investment from public.investments where id = p_investment_id and investor_id = p_investor_id for update;
-  if not found then raise exception using errcode = '42501', message = 'investment unavailable'; end if;
   if v_investment.account_id is distinct from p_expected_account_id then
     raise exception using errcode = '23514', message = 'investment already moved';
   end if;

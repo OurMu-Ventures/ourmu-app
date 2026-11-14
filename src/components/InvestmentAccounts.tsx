@@ -106,15 +106,28 @@ export function InvestmentAccountForm({ account }: { account?: Account }) {
   );
 }
 
-export function MoveInvestmentForm({
-  investmentId,
-  from,
-  destinations,
-}: {
+type MoveInvestmentFormProps = {
   investmentId: string;
   from: Pick<Account, "id" | "name">;
   destinations: Pick<Account, "id" | "name">[];
-}) {
+};
+
+export function MoveInvestmentForm(props: MoveInvestmentFormProps) {
+  // A successful move redirects to the same page. Reset confirmation and action
+  // state when its account changes so the partner can make a fresh move.
+  return (
+    <MoveInvestmentFields
+      key={`${props.investmentId}:${props.from.id}`}
+      {...props}
+    />
+  );
+}
+
+function MoveInvestmentFields({
+  investmentId,
+  from,
+  destinations,
+}: MoveInvestmentFormProps) {
   const [state, action] = useActionState(
     moveInvestmentAccount,
     initialActionState,
