@@ -1,4 +1,7 @@
-import { InvestmentAccountSwitcher } from "@/components/InvestmentAccounts";
+import {
+  InvestmentAccountSwitcher,
+  MoveInvestmentForm,
+} from "@/components/InvestmentAccounts";
 import { getInvestmentAccounts } from "@/lib/investment-accounts";
 import { DepositSlips } from "@/components/DepositSlips";
 import { effectiveInvestmentLimit } from "@/lib/investment-limits";
@@ -16,7 +19,7 @@ import { requireInvestor } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LinkStatus } from "@/components/ui/link-status";
 import { formatBpsPercent, investmentReturnView } from "@/lib/actual-returns";
-import { date, ugx } from "@/lib/format";
+import { date, dateTime, ugx } from "@/lib/format";
 import {
   safeFulfilledSplits,
   UNAVAILABLE_MATURITY_AMOUNTS,
@@ -34,11 +37,14 @@ import { createClient } from "@/lib/supabase/server";
 
 export default async function InvestmentPage({
   params,
+  searchParams = Promise.resolve({}),
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ moved?: string }>;
 }) {
   const profile = await requireInvestor();
   const { id } = await params;
+  const { moved } = await searchParams;
   const supabase = await createClient();
   const { data } = await supabase
     .from("investments")
@@ -49,8 +55,26 @@ export default async function InvestmentPage({
     .eq("investor_id", profile.id)
     .maybeSingle();
   if (!data) notFound();
-  const accounts = await getInvestmentAccounts(profile.id);
+  const [accounts, { data: moves }] = await Promise.all([
+    getInvestmentAccounts(profile.id),
+    supabase
+      .from("investment_account_moves")
+      .select("id,from_account_id,to_account_id,moved_at")
+      .eq("investment_id", id)
+      .order("moved_at"),
+  ]);
   const account = accounts.find((account) => account.id === data.account_id);
+  const accountName = (accountId: string) =>
+    accounts.find((account) => account.id === accountId)?.name ?? "Another account";
+  // Only whole reserved or active investments move, and only into open accounts.
+  const moveDestinations =
+    process.env.INVESTMENT_ACCOUNT_MOVES_ENABLED === "true" &&
+    account &&
+    (data.status === "reserved" || data.status === "active")
+      ? accounts.filter(
+          (option) => option.id !== account.id && !option.archived_at,
+        )
+      : [];
   const agreement = Array.isArray(data.investment_agreements)
     ? data.investment_agreements[0]
     : data.investment_agreements;
@@ -147,6 +171,12 @@ export default async function InvestmentPage({
     <>
       <InvestmentAccountSwitcher accounts={accounts} accountId={data.account_id ?? undefined} />
       <p className="notice">Investment account: <strong>{account?.name ?? "Main Account"}</strong>. Maturity payouts and reinvestment are recorded against this account.</p>
+      {moved === "1" && account && (
+        <p className="success" role="status">
+          Investment moved to <strong>{account.name}</strong>. Its amount,
+          returns and maturity date are unchanged.
+        </p>
+      )}
       {data.status === "reserved" && data.record_origin === "portal" && (
         <DepositSlips
           investmentId={id}
@@ -289,6 +319,45 @@ export default async function InvestmentPage({
           </p>
         )}
       </div>
+      {(moveDestinations.length > 0 || Boolean(moves?.length)) && (
+        <div className="card" style={{ marginTop: "1rem" }}>
+          <p className="eyebrow">Investment account</p>
+          <h2>
+            {moveDestinations.length > 0
+              ? "Move to another account"
+              : "Account moves"}
+          </h2>
+          {account && moveDestinations.length > 0 && (
+            <>
+              <p className="muted" style={{ marginBottom: "1rem" }}>
+                Move this whole investment to another of your open accounts.
+                Future reinvestment of it will use the new account.
+              </p>
+              <MoveInvestmentForm
+                investmentId={data.id}
+                from={account}
+                destinations={moveDestinations}
+              />
+            </>
+          )}
+          {Boolean(moves?.length) && (
+            <>
+              <h3 className="eyebrow" style={{ marginTop: "1.5rem" }}>
+                Account history
+              </h3>
+              <ul>
+                {moves!.map((entry) => (
+                  <li key={entry.id}>
+                    Moved from {accountName(entry.from_account_id)} to{" "}
+                    {accountName(entry.to_account_id)} on{" "}
+                    {dateTime(entry.moved_at)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
       {pendingCycle && (
         <p className="notice">
           Reinvestment pending — {investmentCycleTitle(pendingCycle.name)}.

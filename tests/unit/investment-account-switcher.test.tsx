@@ -13,8 +13,12 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/actions/investment-accounts", () => ({
   saveInvestmentAccount: vi.fn(),
+  moveInvestmentAccount: vi.fn(),
 }));
-import { InvestmentAccountSwitcher } from "@/components/InvestmentAccounts";
+import {
+  InvestmentAccountSwitcher,
+  MoveInvestmentForm,
+} from "@/components/InvestmentAccounts";
 const accounts = [
   { id: "main", name: "Main Account", is_default: true, archived_at: null },
   { id: "school", name: "School Fees", is_default: false, archived_at: null },
@@ -54,5 +58,47 @@ describe("account switching", () => {
       target: { value: "main" },
     });
     expect(navigation.push).toHaveBeenCalledWith("/dashboard?account=main");
+  });
+});
+
+describe("moving an investment", () => {
+  const destinations = [
+    { id: "school", name: "School Fees" },
+    { id: "retirement", name: "Retirement" },
+  ];
+  it("asks for confirmation naming both accounts before submitting", () => {
+    render(
+      <MoveInvestmentForm
+        investmentId="placement"
+        from={accounts[0]}
+        destinations={destinations}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Confirm move" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Move to"), {
+      target: { value: "retirement" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Move investment" }));
+    expect(screen.getByRole("group", { name: "Confirm move" })).toHaveTextContent(
+      "from Main Account to Retirement",
+    );
+    const form = screen.getByRole("button", { name: "Confirm move" }).closest("form")!;
+    const data = new FormData(form);
+    expect(data.get("toAccountId")).toBe("retirement");
+    expect(data.get("fromAccountId")).toBe("main");
+    expect(String(data.get("requestId"))).toMatch(/^[0-9a-f-]{36}$/);
+  });
+  it("lets the partner back out and choose again", () => {
+    render(
+      <MoveInvestmentForm
+        investmentId="placement"
+        from={accounts[0]}
+        destinations={destinations}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Move investment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("button", { name: "Confirm move" })).toBeNull();
+    expect(screen.getByLabelText("Move to")).not.toBeDisabled();
   });
 });

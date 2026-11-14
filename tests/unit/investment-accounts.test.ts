@@ -18,7 +18,10 @@ import {
   accountHref,
   resolveInvestmentAccount,
 } from "@/lib/investment-accounts";
-import { saveInvestmentAccount } from "@/actions/investment-accounts";
+import {
+  moveInvestmentAccount,
+  saveInvestmentAccount,
+} from "@/actions/investment-accounts";
 import { requireInvestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -178,5 +181,78 @@ describe("account failure reporting", () => {
     expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
       "private",
     );
+  });
+});
+
+describe("move investment action", () => {
+  const investmentId = "33333333-3333-4333-8333-333333333333";
+  const moveRequestId = "44444444-4444-4444-8444-444444444444";
+  function form() {
+    const data = new FormData();
+    data.set("investmentId", investmentId);
+    data.set("fromAccountId", main.id);
+    data.set("toAccountId", school.id);
+    data.set("requestId", moveRequestId);
+    data.set("investorId", "forged-owner");
+    return data;
+  }
+  beforeEach(() => vi.stubEnv("INVESTMENT_ACCOUNT_MOVES_ENABLED", "true"));
+  it("moves through the database as the signed-in owner with the browser's request ID", async () => {
+    rpc.mockResolvedValue({ data: {}, error: null });
+    await expect(
+      moveInvestmentAccount({ ok: false, message: "" }, form()),
+    ).rejects.toThrow(`REDIRECT:/investments/${investmentId}?moved=1`);
+    expect(rpc).toHaveBeenCalledWith("move_investment_account", {
+      p_investor_id: "owner-id",
+      p_investment_id: investmentId,
+      p_expected_account_id: main.id,
+      p_to_account_id: school.id,
+      p_request_id: moveRequestId,
+    });
+  });
+  it("stays off until its own rollout flag is enabled", async () => {
+    vi.stubEnv("INVESTMENT_ACCOUNT_MOVES_ENABLED", "false");
+    const result = await moveInvestmentAccount(
+      { ok: false, message: "" },
+      form(),
+    );
+    expect(result.ok).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("rejects malformed submissions before calling the database", async () => {
+    const data = form();
+    data.set("toAccountId", "not-an-id");
+    expect(
+      (await moveInvestmentAccount({ ok: false, message: "" }, data)).ok,
+    ).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("explains stale and ineligible moves", async () => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "23514", message: "investment already moved" },
+    });
+    expect(
+      (await moveInvestmentAccount({ ok: false, message: "" }, form())).message,
+    ).toContain("already moved");
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "55000", message: "investment cannot be moved" },
+    });
+    expect(
+      (await moveInvestmentAccount({ ok: false, message: "" }, form())).message,
+    ).toContain("Only reserved and active investments");
+  });
+  it("gives a support reference for unexpected failures without database details", async () => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "57014", message: "private timeout" },
+    });
+    const { message } = await moveInvestmentAccount(
+      { ok: false, message: "" },
+      form(),
+    );
+    expect(message).toContain(moveRequestId);
+    expect(message).not.toContain("private");
   });
 });

@@ -21,6 +21,7 @@ import NewInvestmentPage from "@/app/(investor)/investments/new/page";
 import { InvestmentRequestForm } from "@/components/forms";
 import { MaturityInstructionForm } from "@/components/maturity-forms";
 import { InvestmentCard } from "@/components/InvestmentCard";
+import { MoveInvestmentForm } from "@/components/InvestmentAccounts";
 import { DownloadReceiptButton } from "@/components/DownloadReceiptButton";
 import {
   CurrentOpportunityRate,
@@ -705,5 +706,44 @@ describe("new investment account selection", () => {
     expect(collectText(tree).replace(/\s+/g, " ")).toContain("Invest in Main Account");
     expect(collectText(tree).replace(/\s+/g, " ")).not.toContain("Invest in Old Savings");
     expect(walk(tree).some((node) => (node.props as { href?: string }).href === "/investments/new?account=account-1")).toBe(true);
+  });
+});
+
+
+describe("moving an investment between accounts", () => {
+  const accounts = [
+    { id: "account-1", name: "Main Account", is_default: true, archived_at: null },
+    { id: "account-2", name: "School Fees", is_default: false, archived_at: null },
+    { id: "account-3", name: "Old Savings", is_default: false, archived_at: "2026-01-01" },
+  ];
+  afterEach(() => vi.unstubAllEnvs());
+  const detail = async (investment = placement) => {
+    mockClient({ investment_accounts: accounts, investments: investment });
+    return InvestmentDetailPage({ params: Promise.resolve({ id: "inv-1" }) });
+  };
+  it("offers only the partner's other open accounts once enabled", async () => {
+    vi.stubEnv("INVESTMENT_ACCOUNT_MOVES_ENABLED", "true");
+    const form = walk(await detail()).find((element) => element.type === MoveInvestmentForm);
+    expect(form?.props).toMatchObject({
+      investmentId: "inv-1",
+      from: { id: "account-1" },
+      destinations: [{ id: "account-2", name: "School Fees" }],
+    });
+  });
+  it.each([
+    ["the rollout flag is off", "false", placement],
+    ["the investment has matured", "true", { ...placement, status: "matured" }],
+  ])("is hidden when %s", async (_, flag, investment) => {
+    vi.stubEnv("INVESTMENT_ACCOUNT_MOVES_ENABLED", flag);
+    expect(walk(await detail(investment)).some((element) => element.type === MoveInvestmentForm)).toBe(false);
+  });
+  it("shows the investment's move history with account names", async () => {
+    mockClient({
+      investment_accounts: accounts,
+      investments: placement,
+      investment_account_moves: [{ id: "move-1", from_account_id: "account-3", to_account_id: "account-1", moved_at: "2026-11-14T10:00:00.000Z" }],
+    });
+    const text = collectText(await InvestmentDetailPage({ params: Promise.resolve({ id: "inv-1" }) })).replace(/\s+/g, " ");
+    expect(text).toContain("Moved from Old Savings to Main Account on");
   });
 });
