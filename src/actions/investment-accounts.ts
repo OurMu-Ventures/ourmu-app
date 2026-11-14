@@ -80,3 +80,71 @@ export async function saveInvestmentAccount(
   revalidatePath("/", "layout");
   redirect(`/accounts?account=${data}`);
 }
+
+const moveSchema = z.object({
+  investmentId: z.uuid(),
+  fromAccountId: z.uuid(),
+  toAccountId: z.uuid(),
+  requestId: z.uuid(),
+});
+
+export async function moveInvestmentAccount(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profile = await requireInvestor();
+  if (process.env.INVESTMENT_ACCOUNT_MOVES_ENABLED !== "true")
+    return {
+      ok: false,
+      message: "Moving investments between accounts is not available yet.",
+    };
+  const parsed = moveSchema.safeParse({
+    investmentId: formData.get("investmentId"),
+    fromAccountId: formData.get("fromAccountId"),
+    toAccountId: formData.get("toAccountId"),
+    requestId: formData.get("requestId"),
+  });
+  if (!parsed.success)
+    return { ok: false, message: "Choose the account to move this investment to." };
+  // The browser's request ID makes a double submit or retry replay the
+  // original move instead of applying it twice.
+  const { error } = await createAdminClient().rpc("move_investment_account", {
+    p_investor_id: profile.id,
+    p_investment_id: parsed.data.investmentId,
+    p_expected_account_id: parsed.data.fromAccountId,
+    p_to_account_id: parsed.data.toAccountId,
+    p_request_id: parsed.data.requestId,
+  });
+  if (error) {
+    const messages: Record<string, string> = {
+      "partner unavailable":
+        "Your partner access is unavailable. Refresh or contact support.",
+      "investment unavailable":
+        "This investment is unavailable. Refresh and try again.",
+      "investment already moved":
+        "This investment has already moved to another account. Refresh to see where it is now.",
+      "investment cannot be moved":
+        "Only reserved and active investments can be moved. Matured and closed investments stay in their account.",
+      "investment already in account":
+        "This investment is already in that account.",
+      "investment account unavailable":
+        "That account is unavailable or has been archived. Refresh and choose an open account.",
+    };
+    const known = Object.hasOwn(messages, error.message)
+      ? messages[error.message]
+      : undefined;
+    console.error("investment_account.move_failed", {
+      requestId: parsed.data.requestId,
+      code: /^[A-Z0-9]{5}$/.test(error.code ?? "") ? error.code : "UNKNOWN",
+      recognized: Boolean(known),
+    });
+    return {
+      ok: false,
+      message:
+        known ??
+        `Could not move this investment. Try again or contact support with reference ${parsed.data.requestId}.`,
+    };
+  }
+  revalidatePath("/", "layout");
+  redirect(`/investments/${parsed.data.investmentId}?moved=1`);
+}

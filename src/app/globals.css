@@ -1245,6 +1245,9 @@ th {
   flex-wrap: wrap;
   gap: 0.75rem;
 }
+.notice > .account-actions {
+  margin-top: 0.75rem;
+}
 
 /* Enrollment views use underlined navigation, distinct from decision actions. */
 .applications-workspace { min-width: 0; }

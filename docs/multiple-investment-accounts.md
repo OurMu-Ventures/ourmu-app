@@ -24,8 +24,10 @@ shared by the legal owner.
 - A reservation submits an explicit account ID. Switching in another tab cannot
   change the account embedded in an already-open form. Server/database validation
   checks the selected account's owner and active status.
-- Investments cannot move between accounts. Reinvestment inherits its source
-  investment's account. Existing standing reinvestment permissions still apply
+- Partners can move a whole reserved or active investment to another of their
+  open accounts (see [Moving investments](#moving-investments-between-accounts)).
+  Reinvestment inherits the account holding the source investment when it is
+  reinvested. Existing standing reinvestment permissions still apply
   across the partner's portal investments; no new authorization is inferred.
 - Main Account cannot be archived. Additional accounts may archive only after
   reservations, active investments and unsettled maturities have been resolved.
@@ -87,3 +89,56 @@ Document names are stored with each new agreement acceptance and receipt issuanc
 Subsequent account renames and PDF/email retries use that evidence snapshot. The
 account list is deduplicated per server render with React cache; no data is cached
 across authenticated requests.
+
+## Moving investments between accounts
+
+From an investment's detail page, a partner can move the whole investment to
+another of their open accounts. The page shows the current account, a list of the
+partner's other open accounts and a confirmation naming both before anything
+changes.
+
+- Only `reserved` and `active` investments move. Matured, settled, cancelled,
+  rejected and expired records stay in their account. Partial, bulk and
+  partner-to-partner moves are not offered.
+- The investment keeps its ID, principal, returns, maturity date, payment records
+  and withdrawal terms. Only `investments.account_id` changes, so account
+  balances shift and the partner's combined total is unchanged.
+- Agreements and receipts already issued keep the account name they were issued
+  with. A reserved investment moved before activation gets a receipt naming its
+  new account; its earlier agreement still names the original account.
+- Each move is recorded in `investment_account_moves` (from, to, partner, time,
+  request ID) and in `audit_events` as `investment.account_moved`. The detail page
+  lists the investment's move history.
+- `public.move_investment_account` is backend-only. It checks the partner is
+  active, owns the investment and the destination, the destination is open, the
+  investment is still in the account the form showed and is still eligible.
+  Direct updates to `account_id` remain blocked; the function opens a
+  transaction-local gate for the single investment it moves.
+- It locks the investment, then the partner, then the destination account.
+  Activation also locks the investment before the partner; archiving locks the
+  partner before the account and only reads investments. A simultaneous archive,
+  activation, maturity update or second move waits and then sees the result.
+  The browser's request ID makes a double submit or retry replay the original
+  move instead of applying it twice.
+
+### Rollout
+
+Moving has its own server-only flag, `INVESTMENT_ACCOUNT_MOVES_ENABLED`
+(default `false`).
+
+1. Back up production and apply
+   `20261114134958_move_investments_between_accounts.sql`. It adds the history
+   table and function and relaxes the account trigger only for that function;
+   existing data is unchanged and the current app keeps working.
+2. Deploy the app with the flag off, then turn it on in a test environment and
+   move a synthetic investment there and back.
+3. Enable in production after approval. To pause, set the flag to `false` and
+   redeploy. Completed moves and their history stay.
+
+`supabase/tests/investment_account_moves.test.sql` covers grants, RLS, ownership,
+eligibility, stale forms, idempotent retries, archived destinations and history.
+A third Docker harness checks the races:
+
+```sh
+OURMU_TEST_CONTAINER=<test-container> OURMU_TEST_TEMPLATE_DB=<migrated-empty-db> node scripts/test-investment-account-move-concurrency.mjs
+```

@@ -806,6 +806,51 @@ export type Database = {
           },
         ]
       }
+      investment_account_moves: {
+        Row: {
+          from_account_id: string
+          id: string
+          investment_id: string
+          investor_id: string
+          moved_at: string
+          request_id: string
+          to_account_id: string
+        }
+        Insert: {
+          from_account_id: string
+          id?: string
+          investment_id: string
+          investor_id: string
+          moved_at?: string
+          request_id: string
+          to_account_id: string
+        }
+        Update: {
+          from_account_id?: string
+          id?: string
+          investment_id?: string
+          investor_id?: string
+          moved_at?: string
+          request_id?: string
+          to_account_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_account_moves_investment_id_fkey"
+            columns: ["investment_id"]
+            isOneToOne: false
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_account_moves_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       investment_accounts: {
         Row: {
           archived_at: string | null
@@ -2311,6 +2356,16 @@ export type Database = {
           p_request_id: string
         }
         Returns: string
+      }
+      move_investment_account: {
+        Args: {
+          p_expected_account_id: string
+          p_investment_id: string
+          p_investor_id: string
+          p_request_id: string
+          p_to_account_id: string
+        }
+        Returns: Json
       }
       record_offline_reinvestment: {
         Args: {
