@@ -57,6 +57,7 @@ const icons: Record<string, LucideIcon> = {
   "/admin/investments": BadgeCheck,
   "/admin/audit": ScrollText,
   "/admin/jobs": History,
+  "/admin/newsletters": Newspaper,
   "/admin/settings": Settings,
 };
 
