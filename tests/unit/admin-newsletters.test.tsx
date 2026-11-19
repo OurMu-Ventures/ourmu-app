@@ -16,6 +16,7 @@ vi.mock("@/components/NewsletterReadTracker", () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(requireAdmin).mockResolvedValue({} as Awaited<ReturnType<typeof requireAdmin>>);
 });
 
 describe("admin newsletters", () => {
@@ -24,8 +25,11 @@ describe("admin newsletters", () => {
   it("links to published issues in the admin console after admin authorization", async () => {
     const html = renderToStaticMarkup(await NewslettersPage());
 
+    // No options means the default AAL2 check applies.
     expect(requireAdmin).toHaveBeenCalledWith();
     expect(html).toContain('href="/admin/newsletters/october-2026"');
+    expect(html).toContain("not counted in partner reading analytics");
+    expect(html).not.toContain("WhatsApp");
   });
 
   it("renders the issue with a link back to the admin archive", async () => {

@@ -3,8 +3,10 @@ import Link from "next/link";
 import { LinkStatus } from "@/components/ui/link-status";
 import { listPublishedNewsletters } from "@/lib/newsletters";
 
-export function NewsletterArchive({ basePath }: {
+export function NewsletterArchive({ basePath, eyebrow, lead }: {
   basePath: string;
+  eyebrow: string;
+  lead: string;
 }) {
   const issues = listPublishedNewsletters();
 
@@ -12,12 +14,9 @@ export function NewsletterArchive({ basePath }: {
     <>
       <div className="page-head">
         <div>
-          <p className="eyebrow">Partner updates</p>
+          <p className="eyebrow">{eyebrow}</p>
           <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Newsletters</h1>
-          <p className="lead">
-            Monthly partner updates, newest first. Shared outside the portal
-            through WhatsApp.
-          </p>
+          <p className="lead">{lead}</p>
         </div>
       </div>
 

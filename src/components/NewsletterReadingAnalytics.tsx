@@ -27,7 +27,7 @@ export async function NewsletterReadingAnalytics() {
         <div className="newsletter-analytics-list">
           {issues.map((issue) => (
             <article key={issue.slug} className="card">
-              <h3><Link href={`/newsletters/${issue.slug}`}>{issue.title}</Link></h3>
+              <h3><Link href={`/admin/newsletters/${issue.slug}`}>{issue.title}</Link></h3>
               <div className="newsletter-analytics-metrics">
                 <div><p className="muted">Unique readers</p><p className="stat">{issue.readers} / {issue.audience}</p></div>
                 <div><p className="muted">Partner reach</p><p className="stat">{issue.audience ? `${Math.round(issue.readers / issue.audience * 100)}%` : "—"}</p></div>
