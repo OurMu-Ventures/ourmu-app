@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import type { Tables } from "@/lib/database.types";
@@ -23,7 +24,8 @@ type CurrentProfile = Pick<
   | "onboarding_completed_at"
 >;
 
-export async function getCurrentProfile(): Promise<CurrentProfile | null> {
+// Layouts and pages both check access, so dedupe the lookups within a render.
+export const getCurrentProfile = cache(async (): Promise<CurrentProfile | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -38,7 +40,13 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     .maybeSingle();
   if (error || !data) return null;
   return data;
-}
+});
+
+const getAssuranceLevel = cache(async () => {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  return data?.currentLevel;
+});
 
 export async function requireInvestor() {
   const profile = await getCurrentProfile();
@@ -52,10 +60,8 @@ export async function requireAdmin(
 ) {
   const profile = await requireInvestor();
   if (profile.role !== "admin") redirect("/dashboard");
-  if (options.aal2 !== false) {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (data?.currentLevel !== "aal2") redirect("/admin/mfa");
+  if (options.aal2 !== false && (await getAssuranceLevel()) !== "aal2") {
+    redirect("/admin/mfa");
   }
   return profile;
 }

@@ -32,6 +32,7 @@ describe("admin newsletter analytics", () => {
     expect(html).toContain("Synthetic Unread");
     expect(html).toContain("Not opened");
     expect(html).toContain("50%");
+    expect(html).toContain('href="/admin/newsletters/october-2026"');
   });
   it("shows unavailable, rather than zero reads, when the query fails", async () => {
     mocks.rpc.mockResolvedValue({ data: null, error: { message: "offline" } });

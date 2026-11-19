@@ -1,0 +1,46 @@
+import Link from "next/link";
+
+import { LinkStatus } from "@/components/ui/link-status";
+import { listPublishedNewsletters } from "@/lib/newsletters";
+
+export function NewsletterArchive({ basePath, eyebrow, lead }: {
+  basePath: string;
+  eyebrow: string;
+  lead: string;
+}) {
+  const issues = listPublishedNewsletters();
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h1 style={{ fontSize: "clamp(2.2rem,5vw,4rem)" }}>Newsletters</h1>
+          <p className="lead">{lead}</p>
+        </div>
+      </div>
+
+      {issues.length === 0 ? (
+        <p className="muted">
+          No newsletters have been published yet. Check back soon.
+        </p>
+      ) : (
+        <div className="nl-list">
+          {issues.map((issue) => (
+            <article key={issue.slug} className="nl-card">
+              <p className="nl-card-meta">{issue.issueMonth}</p>
+              <h2>{issue.title}</h2>
+              <p className="muted">{issue.summary}</p>
+              <p style={{ marginTop: "0.9rem" }}>
+                <Link href={`${basePath}/${issue.slug}`}>
+                  Read newsletter{" "}
+                  <LinkStatus label={`Opening ${issue.title}`} />
+                </Link>
+              </p>
+            </article>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
