@@ -564,6 +564,110 @@ export type Database = {
         }
         Relationships: []
       }
+      bank_deposits: {
+        Row: {
+          agreement_accepted_offline: boolean
+          allocation_count: number
+          authorization_method: string
+          authorized_on: string
+          bank_reference: string
+          cycle_id: string
+          evidence_reference: string
+          id: string
+          identity_verified: boolean
+          investor_id: string
+          is_test: boolean
+          placement_agreement_hash: string | null
+          placement_agreement_version_id: string | null
+          posted_at: string
+          posted_by: string
+          received_amount_ugx: number
+          received_at: string | null
+          received_date: string
+          request_fingerprint: string
+          request_id: string
+          split_verified: boolean
+          verification_notes: string
+        }
+        Insert: {
+          agreement_accepted_offline: boolean
+          allocation_count: number
+          authorization_method: string
+          authorized_on: string
+          bank_reference: string
+          cycle_id: string
+          evidence_reference: string
+          id?: string
+          identity_verified: boolean
+          investor_id: string
+          is_test: boolean
+          placement_agreement_hash?: string | null
+          placement_agreement_version_id?: string | null
+          posted_at?: string
+          posted_by: string
+          received_amount_ugx: number
+          received_at?: string | null
+          received_date: string
+          request_fingerprint: string
+          request_id: string
+          split_verified: boolean
+          verification_notes: string
+        }
+        Update: {
+          agreement_accepted_offline?: boolean
+          allocation_count?: number
+          authorization_method?: string
+          authorized_on?: string
+          bank_reference?: string
+          cycle_id?: string
+          evidence_reference?: string
+          id?: string
+          identity_verified?: boolean
+          investor_id?: string
+          is_test?: boolean
+          placement_agreement_hash?: string | null
+          placement_agreement_version_id?: string | null
+          posted_at?: string
+          posted_by?: string
+          received_amount_ugx?: number
+          received_at?: string | null
+          received_date?: string
+          request_fingerprint?: string
+          request_id?: string
+          split_verified?: boolean
+          verification_notes?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_deposits_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "investment_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_deposits_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_deposits_placement_agreement_version_id_fkey"
+            columns: ["placement_agreement_version_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_deposits_posted_by_fkey"
+            columns: ["posted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bank_instructions: {
         Row: {
           account_name: string
@@ -616,6 +720,9 @@ export type Database = {
       }
       bank_receipts: {
         Row: {
+          allocation_kind: string | null
+          deposit_id: string | null
+          deposit_line: number | null
           activated_at: string
           bank_reference: string
           created_at: string
@@ -627,6 +734,9 @@ export type Database = {
           recorded_by: string
         }
         Insert: {
+          allocation_kind?: string | null
+          deposit_id?: string | null
+          deposit_line?: number | null
           activated_at: string
           bank_reference: string
           created_at?: string
@@ -638,6 +748,9 @@ export type Database = {
           recorded_by: string
         }
         Update: {
+          allocation_kind?: string | null
+          deposit_id?: string | null
+          deposit_line?: number | null
           activated_at?: string
           bank_reference?: string
           created_at?: string
@@ -649,6 +762,13 @@ export type Database = {
           recorded_by?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "bank_receipts_deposit_id_fkey"
+            columns: ["deposit_id"]
+            isOneToOne: false
+            referencedRelation: "bank_deposits"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bank_receipts_investment_id_fkey"
             columns: ["investment_id"]
@@ -1068,6 +1188,10 @@ export type Database = {
       }
       investment_receipts: {
         Row: {
+          bank_deposit_id: string | null
+          deposit_allocation_count: number | null
+          deposit_amount_ugx: number | null
+          payment_reference: string | null
           investment_account_name: string | null
           offline_authorization_id: string | null
           account_description: string
@@ -1096,6 +1220,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bank_deposit_id?: string | null
+          deposit_allocation_count?: number | null
+          deposit_amount_ugx?: number | null
+          payment_reference?: string | null
           investment_account_name?: string | null
           offline_authorization_id?: string | null
           account_description: string
@@ -1124,6 +1252,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bank_deposit_id?: string | null
+          deposit_allocation_count?: number | null
+          deposit_amount_ugx?: number | null
+          payment_reference?: string | null
           investment_account_name?: string | null
           offline_authorization_id?: string | null
           account_description?: string
@@ -1152,6 +1284,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "investment_receipts_bank_deposit_id_fkey"
+            columns: ["bank_deposit_id"]
+            isOneToOne: false
+            referencedRelation: "bank_deposits"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "investment_receipts_bank_receipt_id_fkey"
             columns: ["bank_receipt_id"]
@@ -2331,9 +2470,48 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      bank_payment_reconciliation: {
+        Row: {
+          bank_reference: string | null
+          investment_count: number | null
+          investor_id: string | null
+          is_test: boolean | null
+          payment_id: string | null
+          payment_kind: string | null
+          posted_at: string | null
+          posted_by: string | null
+          received_amount_ugx: number | null
+          received_at: string | null
+          received_date: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      allocate_bank_deposit: {
+        Args: {
+          p_admin_aal2: boolean
+          p_admin_id: string
+          p_agreement_accepted_offline: boolean
+          p_allocations: Json
+          p_authorization_method: string
+          p_authorized_on: string
+          p_bank_reference: string
+          p_confirmation: string
+          p_evidence_reference: string
+          p_expected_agreement_hash: string
+          p_expected_cycle_id: string
+          p_identity_verified: boolean
+          p_investor_id: string
+          p_received_amount_ugx: number
+          p_received_at?: string
+          p_received_date: string
+          p_request_id: string
+          p_split_verified: boolean
+          p_verification_notes: string
+        }
+        Returns: Json
+      }
       request_account_investment: {
         Args: {
           p_account_id: string

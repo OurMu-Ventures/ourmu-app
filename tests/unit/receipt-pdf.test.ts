@@ -41,3 +41,34 @@ describe("receipt PDF rendering", () => {
     await writeFile("tmp/receipts/reinvest-sample.pdf", reinvest.bytes);
   });
 });
+
+describe("shared deposit receipts", () => {
+  it("renders an allocation with the shared reference", async () => {
+    const plain = await buildReceiptPdf({
+      title: "Investment Receipt",
+      receiptNumber: "TEST-OURMU-2026-000002",
+      partnerName: "Synthetic Partner",
+      companyName: "OURMU Ventures",
+      companyAddress: "Kampala, Uganda",
+      accountDescription: "Accounts payable — Synthetic Partner",
+      amountUgx: "500000",
+      transactionDate: "20 Nov 2026",
+      isTest: true,
+    });
+    const shared = await buildReceiptPdf({
+      title: "Investment Receipt",
+      receiptNumber: "TEST-OURMU-2026-000002",
+      partnerName: "Synthetic Partner",
+      companyName: "OURMU Ventures",
+      companyAddress: "Kampala, Uganda",
+      accountDescription: "Accounts payable — Synthetic Partner",
+      amountUgx: "500000",
+      transactionDate: "20 Nov 2026",
+      sharedDeposit: { bankReference: "DEP-SYNTH-1", depositAmountUgx: "3000000", allocationCount: 3 },
+      isTest: true,
+    });
+    expect(shared.hash).not.toBe(plain.hash);
+    await mkdir("tmp/receipts", { recursive: true });
+    await writeFile("tmp/receipts/shared-deposit-sample.pdf", shared.bytes);
+  });
+});

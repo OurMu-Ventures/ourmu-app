@@ -46,6 +46,12 @@ export type ReceiptPdfInput = {
   transactionDate: string; // already formatted display date
   originalInvestmentRef?: string | null;
   transferNote?: string | null;
+  // Set only for one allocation of a shared bank deposit.
+  sharedDeposit?: {
+    bankReference: string;
+    depositAmountUgx: string | number;
+    allocationCount: number;
+  } | null;
   isTest: boolean;
 };
 
@@ -207,6 +213,30 @@ export async function buildReceiptPdf(input: ReceiptPdfInput) {
       3,
     );
   }
+  if (input.sharedDeposit) {
+    drawLines(
+      wrapMeasured(
+        `Bank reference: ${input.sharedDeposit.bankReference}`,
+        regular,
+        10,
+        maxWidth,
+      ),
+      regular,
+      10,
+      3,
+    );
+    drawLines(
+      wrapMeasured(
+        `Part of one bank deposit of ${formatUgxExact(input.sharedDeposit.depositAmountUgx)} split across ${input.sharedDeposit.allocationCount} investments. This receipt covers this investment's share only.`,
+        regular,
+        10,
+        maxWidth,
+      ),
+      regular,
+      10,
+      3,
+    );
+  }
   y -= 6;
   ensureSpace(2);
   page.drawLine({
@@ -217,7 +247,12 @@ export async function buildReceiptPdf(input: ReceiptPdfInput) {
   });
   y -= 14;
 
-  drawLines(["Total received"], bold, 11, 4);
+  drawLines(
+    [input.sharedDeposit ? "Amount for this investment" : "Total received"],
+    bold,
+    11,
+    4,
+  );
   const total = formatUgxExact(input.amountUgx);
   drawLines(wrapMeasured(total, bold, 18, maxWidth), bold, 18, 6, ACCENT);
   y -= 6;

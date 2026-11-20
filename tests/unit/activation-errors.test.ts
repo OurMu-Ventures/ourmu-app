@@ -63,7 +63,12 @@ describe("activation error messages", () => {
         message:
           'duplicate key value violates unique constraint "private_other_key"',
       }),
-    ).toBeNull();
+    ).toBeNull();    expect(
+      activationErrorMessage({
+        code: "23505",
+        message: "bank reference is already recorded",
+      }),
+    ).toContain("split bank deposit");
   });
   it("does not expose unknown errors or permissive message prefixes", () => {
     for (const error of [

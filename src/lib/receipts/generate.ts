@@ -19,6 +19,9 @@ export type ReceiptRow = {
   transaction_date: string;
   account_description: string;
   investment_account_name?: string | null;
+  payment_reference?: string | null;
+  deposit_amount_ugx?: string | number | null;
+  deposit_allocation_count?: number | null;
   original_investment_id: string | null;
   pdf_status: string;
   pdf_path: string | null;
@@ -68,6 +71,14 @@ export async function ensureReceiptPdf(
       amountUgx: String(receipt.amount_ugx),
       transactionDate: receiptDisplayDate(receipt.transaction_date),
       originalInvestmentRef: receipt.original_investment_id,
+      sharedDeposit:
+        receipt.payment_reference && receipt.deposit_amount_ugx != null
+          ? {
+              bankReference: receipt.payment_reference,
+              depositAmountUgx: String(receipt.deposit_amount_ugx),
+              allocationCount: receipt.deposit_allocation_count ?? 1,
+            }
+          : null,
       transferNote:
         receipt.source === "reinvestment"
           ? "This amount was transferred from the matured investment listed above."

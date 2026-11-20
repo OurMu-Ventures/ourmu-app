@@ -58,6 +58,9 @@ export function activationErrorMessage(error: unknown): string | null {
       'duplicate key value violates unique constraint "bank_receipts_bank_reference_key"'
   )
     return "This payment reference is already recorded. Check the existing receipt before trying again; do not invent a different reference.";
+  // Raised by the bank_receipts reference guard when a split deposit uses it.
+  if (code === "23505" && message === "bank reference is already recorded")
+    return "This payment reference is already recorded for a split bank deposit. Check Deposits before trying again; do not invent a different reference.";
   if (code === "40001" || code === "40P01")
     return "Another update conflicted with this activation. Refresh the reservation and try again.";
   return null;
