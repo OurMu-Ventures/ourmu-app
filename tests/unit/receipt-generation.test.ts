@@ -178,3 +178,33 @@ describe("shared receipt PDF generation", () => {
     expect(neq).toHaveBeenCalledWith("pdf_status", "ready");
   });
 });
+
+describe("shared deposit receipt generation", () => {
+  it("passes the shared reference and deposit total to the PDF", async () => {
+    await ensureReceiptPdf(admin, {
+      ...receipt,
+      source: "bank_activation",
+      amount_ugx: "500000.00000000",
+      payment_reference: "DEP-SYNTH-1",
+      deposit_amount_ugx: "3000000.00000000",
+      deposit_allocation_count: 3,
+    });
+    expect(buildReceiptPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountUgx: "500000.00000000",
+        sharedDeposit: {
+          bankReference: "DEP-SYNTH-1",
+          depositAmountUgx: "3000000.00000000",
+          allocationCount: 3,
+        },
+      }),
+    );
+  });
+
+  it("leaves single-payment receipts unchanged", async () => {
+    await ensureReceiptPdf(admin, { ...receipt, source: "bank_activation" });
+    expect(buildReceiptPdf).toHaveBeenCalledWith(
+      expect.objectContaining({ sharedDeposit: null }),
+    );
+  });
+});

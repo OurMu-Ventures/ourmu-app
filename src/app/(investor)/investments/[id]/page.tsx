@@ -49,7 +49,7 @@ export default async function InvestmentPage({
   const { data } = await supabase
     .from("investments")
     .select(
-      "*,investment_agreements(id,pdf_status),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status,source,transaction_date),investment_cycles(name,opens_at,closes_at,actual_return_bps,legacy_settlement)",
+      "*,investment_agreements(id,pdf_status),bank_receipts!bank_receipts_investment_id_fkey(allocation_kind),investment_receipts!investment_receipts_investment_id_fkey(id,receipt_number,pdf_status,source,transaction_date),investment_cycles(name,opens_at,closes_at,actual_return_bps,legacy_settlement)",
     )
     .eq("id", id)
     .eq("investor_id", profile.id)
@@ -78,6 +78,11 @@ export default async function InvestmentPage({
   const agreement = Array.isArray(data.investment_agreements)
     ? data.investment_agreements[0]
     : data.investment_agreements;
+  // Placements a partner instructed offline (with a bank deposit) have no
+  // electronic acceptance; their agreement evidence is held by OURMU staff.
+  const acceptedOffline = (
+    Array.isArray(data.bank_receipts) ? data.bank_receipts : [data.bank_receipts]
+  ).some((payment) => payment?.allocation_kind === "offline_placement");
   const receiptRaw = (data as unknown as { investment_receipts?: unknown })
     .investment_receipts;
   const receipt = (Array.isArray(receiptRaw) ? receiptRaw[0] : receiptRaw) as
@@ -268,9 +273,19 @@ export default async function InvestmentPage({
         <p>
           Agreement status:{" "}
           <span className="badge">
-            {agreement?.pdf_status ?? "legacy agreement not digitized"}
+            {agreement?.pdf_status ??
+              (acceptedOffline
+                ? "accepted offline"
+                : "legacy agreement not digitized")}
           </span>
         </p>
+        {!agreement && acceptedOffline && (
+          <p className="muted">
+            You accepted this cycle’s agreement with your instructions to OURMU
+            staff, outside the portal. There is no electronic agreement
+            document for this investment.
+          </p>
+        )}
         {agreement && (
           <Button asChild variant="secondary">
             <Link href={`/agreements/${agreement.id}`}>
