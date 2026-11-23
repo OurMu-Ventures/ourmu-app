@@ -83,3 +83,32 @@ export function amountPrincipal(value: string) {
     ? value.replaceAll(",", "")
     : value;
 }
+
+// Remove grouping from any well-formed amount, decimals included. Malformed
+// input passes through unchanged so server validation still rejects it.
+export function amountValue(value: string) {
+  return GROUPED_AMOUNT.test(value) ? value.replaceAll(",", "") : value;
+}
+
+// Group a stored amount for display in an input, e.g. "1250000" -> "1,250,000".
+export function groupAmount(value: string) {
+  return formatAmountInput("", value, value.length).value;
+}
+
+// Mirror a server amount rule in the browser: up to `decimals` places and at
+// least `min` (strictly above it when `aboveMin`). Empty input is left to
+// `required`; anything else invalid gets the field's message.
+export function amountRuleError(
+  amount: string,
+  rule: { decimals: number; min: number; aboveMin?: boolean },
+  message: string,
+) {
+  if (!amount) return "";
+  const pattern = new RegExp(`^\\d+(?:\\.\\d{1,${rule.decimals}})?$`);
+  const value = Number(amount);
+  const valid =
+    pattern.test(amount) &&
+    Number.isFinite(value) &&
+    (rule.aboveMin ? value > rule.min : value >= rule.min);
+  return valid ? "" : message;
+}

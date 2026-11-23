@@ -15,8 +15,10 @@ import {
   submitMaturityInstruction,
 } from "@/actions/maturity";
 import { ActionButton } from "@/components/ActionButton";
+import { AmountInput } from "@/components/AmountInput";
 import { StateMessage } from "@/components/StateMessage";
 import { formatBpsPercent } from "@/lib/actual-returns";
+import { amountRuleError, amountValue, groupAmount } from "@/lib/amount-input";
 import { ugx } from "@/lib/format";
 import {
   MATURITY_CHOICES,
@@ -114,26 +116,23 @@ export function MaturityInstructionForm({
     existingChoice ?? "",
   );
   const [withdrawal, setWithdrawal] = useState(
-    existingWithdrawalUgx == null ? "" : String(existingWithdrawalUgx),
+    existingWithdrawalUgx == null ? "" : groupAmount(String(existingWithdrawalUgx)),
   );
+  const withdrawalAmount = amountValue(withdrawal);
   const basisLabel = returnBasis === "actual" ? "Actual" : "Projected";
   const total = principalUgx + returnUgx;
   const withdrawalError = [principalUgx, returnUgx].some(
     (amount) => !Number.isFinite(amount) || amount < 0,
   )
     ? "This investment total is unavailable. Please reload."
-    : customWithdrawalError(withdrawal, total, limitUgx);
-  const withdrawalInput = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    withdrawalInput.current?.setCustomValidity(withdrawalError ?? "");
-  }, [choice, withdrawalError]);
+    : customWithdrawalError(withdrawalAmount, total, limitUgx);
   const customSplit = withdrawalError
     ? null
     : maturitySplits(
         principalUgx,
         returnUgx,
         "withdraw_roi_reinvest_principal",
-        Number(withdrawal),
+        Number(withdrawalAmount),
       );
   const [useSaved, setUseSaved] = useState(savedDestinations.length > 0);
   const legacyCycles = openCycles ?? [];
@@ -233,13 +232,11 @@ export function MaturityInstructionForm({
             )}
           <label>
             Amount to withdraw (UGX)
-            <input
+            <AmountInput
               name="requestedWithdrawalUgx"
-              type="text"
-              inputMode="decimal"
-              ref={withdrawalInput}
               value={withdrawal}
-              onChange={(event) => setWithdrawal(event.target.value)}
+              onValueChange={setWithdrawal}
+              error={withdrawalError ?? ""}
               required
               aria-describedby="withdrawal-help withdrawal-preview"
               aria-invalid={withdrawal !== "" && !!withdrawalError}
@@ -457,7 +454,7 @@ export function MaturityFulfillmentForm({
   const roi =
     actualReturn.kind === "cycle"
       ? String(actualReturn.actualRoiUgx)
-      : legacyRoi;
+      : amountValue(legacyRoi);
   const split =
     roi.trim() === ""
       ? null
@@ -538,14 +535,16 @@ export function MaturityFulfillmentForm({
           ) : (
             <label>
               Actual ROI (UGX)
-              <input
+              <AmountInput
                 name="actualRoiUgx"
-                type="number"
-                min="0"
-                step="0.01"
                 required
                 value={legacyRoi}
-                onChange={(event) => setLegacyRoi(event.target.value)}
+                onValueChange={setLegacyRoi}
+                error={amountRuleError(
+                  amountValue(legacyRoi),
+                  { decimals: 2, min: 0 },
+                  "Enter an amount of zero or more with at most two decimal places.",
+                )}
               />
               <small className="muted">
                 Legacy per-investment settlement: this cycle started settling

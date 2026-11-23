@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { amountPrincipal, formatAmountInput } from "@/lib/amount-input";
+import {
+  amountPrincipal,
+  amountRuleError,
+  amountValue,
+  formatAmountInput,
+  groupAmount,
+} from "@/lib/amount-input";
 
 describe("formatAmountInput", () => {
   it("groups digits and keeps the caret after the typed digit", () => {
@@ -67,5 +73,47 @@ describe("amountPrincipal", () => {
     expect(amountPrincipal("125,000")).toBe("125000");
     expect(amountPrincipal("125,000.50")).toBe("125,000.50");
     expect(amountPrincipal("125,000.")).toBe("125,000.");
+  });
+});
+
+describe("amountValue", () => {
+  it("removes grouping from whole and decimal amounts", () => {
+    expect(amountValue("3,000,000")).toBe("3000000");
+    expect(amountValue("1,250,000.50")).toBe("1250000.50");
+    expect(amountValue("125000")).toBe("125000");
+  });
+
+  it("keeps malformed input for server validation to reject", () => {
+    expect(amountValue("1,00,000")).toBe("1,00,000");
+    expect(amountValue("12a")).toBe("12a");
+  });
+});
+
+describe("groupAmount", () => {
+  it("groups stored amounts for display", () => {
+    expect(groupAmount("1250000")).toBe("1,250,000");
+    expect(groupAmount("125000.00")).toBe("125,000.00");
+    expect(groupAmount("")).toBe("");
+  });
+});
+
+describe("amountRuleError", () => {
+  const capacity = { decimals: 2, min: 125_000 };
+  it("accepts amounts that meet the rule and leaves blanks to required", () => {
+    expect(amountRuleError("125000", capacity, "bad")).toBe("");
+    expect(amountRuleError("125000.25", capacity, "bad")).toBe("");
+    expect(amountRuleError("", capacity, "bad")).toBe("");
+  });
+
+  it("rejects amounts below the minimum, too precise, or malformed", () => {
+    expect(amountRuleError("124999.99", capacity, "bad")).toBe("bad");
+    expect(amountRuleError("125000.255", capacity, "bad")).toBe("bad");
+    expect(amountRuleError("1,00,000", capacity, "bad")).toBe("bad");
+  });
+
+  it("can require an amount above the minimum", () => {
+    const positive = { decimals: 8, min: 0, aboveMin: true };
+    expect(amountRuleError("0", positive, "bad")).toBe("bad");
+    expect(amountRuleError("0.00000001", positive, "bad")).toBe("");
   });
 });

@@ -49,7 +49,7 @@ describe("activation form retries", () => {
     );
     await screen.findByText("The payment date is before the reservation date.");
     expect(reference).toHaveValue("REAL-REF-123");
-    expect(amount).toHaveValue(1200000);
+    expect(amount).toHaveValue("1,200,000");
     expect(date).toHaveValue("2026-10-14");
     expect(confirmation).toHaveValue("ACTIVATE");
     fireEvent.change(date, { target: { value: "2026-10-15" } });
@@ -62,5 +62,6 @@ describe("activation form retries", () => {
     const submitted = vi.mocked(activateInvestment).mock.calls[1][1];
     expect(submitted.get("receivedDate")).toBe("2026-10-15");
     expect(submitted.get("bankReference")).toBe("REAL-REF-123");
+    expect(submitted.get("receivedAmountUgx")).toBe("1200000");
   });
 });
