@@ -28,6 +28,16 @@ describe("formatAmountInput", () => {
     ).toEqual({ value: "12,000", caret: 2 });
   });
 
+  it("keeps the amount when a selected comma is deleted", () => {
+    // "1[,]234" selected, then Backspace or Delete -> amount unchanged.
+    for (const inputType of ["deleteContentBackward", "deleteContentForward"]) {
+      expect(formatAmountInput("1,234", "1234", 1, inputType, true)).toEqual({
+        value: "1,234",
+        caret: 1,
+      });
+    }
+  });
+
   it("deletes the digit after a comma on Delete", () => {
     // "125|,000" -> Delete removes the comma -> "125|000".
     expect(
@@ -109,6 +119,15 @@ describe("amountRuleError", () => {
     expect(amountRuleError("124999.99", capacity, "bad")).toBe("bad");
     expect(amountRuleError("125000.255", capacity, "bad")).toBe("bad");
     expect(amountRuleError("1,00,000", capacity, "bad")).toBe("bad");
+  });
+
+  it("accepts trailing zeros beyond the significant places, as a native step did", () => {
+    const roi = { decimals: 2, places: 8, min: 0 };
+    expect(amountRuleError("10.500", roi, "bad")).toBe("");
+    expect(amountRuleError("10.50000000", roi, "bad")).toBe("");
+    expect(amountRuleError("10.505", roi, "bad")).toBe("bad");
+    expect(amountRuleError("10.500000000", roi, "bad")).toBe("bad");
+    expect(amountRuleError("125000.500", capacity, "bad")).toBe("bad");
   });
 
   it("can require an amount above the minimum", () => {

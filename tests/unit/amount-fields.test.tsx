@@ -133,6 +133,21 @@ describe("UGX amount fields", () => {
     expect(roi).toHaveValue("300,000.005");
     expect(roi.checkValidity()).toBe(false);
 
+    fireEvent.change(roi, { target: { value: "10.500" } });
+    expect(roi.checkValidity()).toBe(true);
+
+    // Deleting only a selected comma must not delete a digit.
+    fireEvent.change(roi, { target: { value: "1234" } });
+    expect(roi).toHaveValue("1,234");
+    roi.setSelectionRange(1, 2);
+    roi.dispatchEvent(new InputEvent("beforeinput", { bubbles: true }));
+    roi.setSelectionRange(1, 1);
+    fireEvent.input(roi, {
+      target: { value: "1234" },
+      inputType: "deleteContentBackward",
+    });
+    expect(roi).toHaveValue("1,234");
+
     fireEvent.change(roi, { target: { value: "300000" } });
     expect(roi).toHaveValue("300,000");
     expect(roi.checkValidity()).toBe(true);

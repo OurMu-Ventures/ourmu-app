@@ -17,6 +17,8 @@ export function formatAmountInput(
   entered: string,
   caret: number,
   inputType?: string,
+  // True when the deletion removed a selection rather than one character.
+  deletedSelection = false,
 ): AmountEdit {
   // Pasted amounts often carry spaces or a currency prefix ("UGX 125 000").
   const supplied = entered.trim().replace(/^ugx\s*/i, "");
@@ -37,8 +39,10 @@ export function formatAmountInput(
   let digitsBeforeCaret = significant(entered.slice(0, caret)).length;
 
   // Deleting a grouping comma alone would be undone by regrouping, so delete
-  // the digit beside it instead, in the direction the key deletes.
+  // the digit beside it instead, in the direction the key deletes. A selected
+  // comma is different: deleting it leaves the amount unchanged.
   if (
+    !deletedSelection &&
     (inputType === "deleteContentBackward" || inputType === "deleteContentForward") &&
     entered.length < previous.length &&
     significant(previous) === raw
@@ -95,19 +99,23 @@ export function groupAmount(value: string) {
   return formatAmountInput("", value, value.length).value;
 }
 
-// Mirror a server amount rule in the browser: up to `decimals` places and at
-// least `min` (strictly above it when `aboveMin`). Empty input is left to
-// `required`; anything else invalid gets the field's message.
+// Mirror a server amount rule in the browser: up to `decimals` significant
+// places, written with up to `places` digits (trailing zeros, as a native
+// step allows), and at least `min` (strictly above it when `aboveMin`).
+// Empty input is left to `required`; anything else invalid gets the message.
 export function amountRuleError(
   amount: string,
-  rule: { decimals: number; min: number; aboveMin?: boolean },
+  rule: { decimals: number; places?: number; min: number; aboveMin?: boolean },
   message: string,
 ) {
   if (!amount) return "";
-  const pattern = new RegExp(`^\\d+(?:\\.\\d{1,${rule.decimals}})?$`);
+  const places = rule.places ?? rule.decimals;
+  const pattern = new RegExp(`^\\d+(?:\\.\\d{1,${places}})?$`);
+  const fraction = amount.split(".")[1] ?? "";
   const value = Number(amount);
   const valid =
     pattern.test(amount) &&
+    fraction.replace(/0+$/, "").length <= rule.decimals &&
     Number.isFinite(value) &&
     (rule.aboveMin ? value > rule.min : value >= rule.min);
   return valid ? "" : message;

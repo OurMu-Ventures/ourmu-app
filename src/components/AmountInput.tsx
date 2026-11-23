@@ -27,9 +27,21 @@ export function AmountInput({
   ...props
 }: AmountInputProps) {
   const input = useRef<HTMLInputElement>(null);
+  // Change events no longer know whether a selection was deleted, so note it
+  // before each edit.
+  const selectionBeforeInput = useRef(false);
   useEffect(() => {
     input.current?.setCustomValidity(error);
   }, [error]);
+  useEffect(() => {
+    const field = input.current;
+    if (!field) return;
+    const noteSelection = () => {
+      selectionBeforeInput.current = field.selectionStart !== field.selectionEnd;
+    };
+    field.addEventListener("beforeinput", noteSelection);
+    return () => field.removeEventListener("beforeinput", noteSelection);
+  }, []);
   return (
     <>
       <input
@@ -47,7 +59,9 @@ export function AmountInput({
             field.value,
             field.selectionStart ?? field.value.length,
             inputType,
+            selectionBeforeInput.current,
           );
+          selectionBeforeInput.current = false;
           field.value = edit.value;
           field.setSelectionRange(edit.caret, edit.caret);
           onValueChange(edit.value);

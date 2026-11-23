@@ -542,7 +542,7 @@ export function MaturityFulfillmentForm({
                 onValueChange={setLegacyRoi}
                 error={amountRuleError(
                   amountValue(legacyRoi),
-                  { decimals: 2, min: 0 },
+                  { decimals: 2, places: 8, min: 0 },
                   "Enter an amount of zero or more with at most two decimal places.",
                 )}
               />
