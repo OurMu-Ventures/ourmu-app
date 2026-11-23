@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 
 import { allocateBankDeposit } from "@/actions/bank-deposits";
 import { ActionButton } from "@/components/ActionButton";
+import { AmountInput } from "@/components/AmountInput";
 import { StateMessage } from "@/components/StateMessage";
 import {
   AUTHORIZATION_METHODS,
@@ -109,12 +110,10 @@ export function DepositAllocationForm({
       </label>
       <label>
         Exact amount received (UGX)
-        <input
+        <AmountInput
           name="receivedAmountUgx"
-          inputMode="decimal"
-          autoComplete="off"
           value={received}
-          onChange={(event) => setReceived(event.target.value)}
+          onValueChange={setReceived}
           required
         />
       </label>
@@ -173,12 +172,10 @@ export function DepositAllocationForm({
             </label>
             <label>
               Amount (UGX)
-              <input
+              <AmountInput
                 name={`placementAmount.${index}`}
-                inputMode="decimal"
-                autoComplete="off"
                 value={row.amount}
-                onChange={(event) => updatePlacement(index, { amount: event.target.value })}
+                onValueChange={(amount) => updatePlacement(index, { amount })}
               />
             </label>
           </div>

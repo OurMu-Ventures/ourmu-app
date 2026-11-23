@@ -31,6 +31,7 @@ import {
   saveNextOfKin,
 } from "@/actions/profile";
 import { ActionButton } from "@/components/ActionButton";
+import { AmountInput } from "@/components/AmountInput";
 import { StateMessage } from "@/components/StateMessage";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_INVESTMENT_LIMIT_UGX } from "@/lib/investment-limits";
@@ -40,7 +41,12 @@ import {
   AGREEMENT_TITLE,
   LEGAL_CONTENT_VERSION,
 } from "@/content/legal";
-import { amountPrincipal, formatAmountInput } from "@/lib/amount-input";
+import {
+  amountPrincipal,
+  amountRuleError,
+  amountValue,
+  groupAmount,
+} from "@/lib/amount-input";
 import {
   INVESTMENT_AMOUNT_PATTERN,
   MIN_INVESTMENT_UGX,
@@ -425,7 +431,6 @@ export function InvestmentRequestForm({
       setAmountTouched(false);
     }
   }
-  const amountInput = useRef<HTMLInputElement>(null);
   const amountHintId = useId();
   const amountErrorId = useId();
   const principal = amountPrincipal(amount);
@@ -437,9 +442,6 @@ export function InvestmentRequestForm({
         ? `Enter an amount between ${ugx(MIN_INVESTMENT_UGX)} and ${ugx(limitUgx)}.`
         : "";
   const showAmountError = amountTouched && Boolean(amountError);
-  useEffect(() => {
-    amountInput.current?.setCustomValidity(amountError);
-  }, [amountError]);
   const agreementAcceptance = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (agreementAcceptance.current)
@@ -454,30 +456,17 @@ export function InvestmentRequestForm({
       <input type="hidden" name="principalUgx" value={principal} />
       <label>
         Investment amount (UGX)
-        <input
-          ref={amountInput}
-          type="text"
+        <AmountInput
           inputMode="numeric"
           value={amount}
+          onValueChange={setAmount}
+          error={amountError}
           aria-invalid={showAmountError || undefined}
           aria-describedby={
             showAmountError ? `${amountHintId} ${amountErrorId}` : amountHintId
           }
           onBlur={() => setAmountTouched(true)}
           onInvalid={() => setAmountTouched(true)}
-          onChange={(event) => {
-            const input = event.currentTarget;
-            const inputType = (event.nativeEvent as InputEvent).inputType;
-            const { value, caret } = formatAmountInput(
-              amount,
-              input.value,
-              input.selectionStart ?? input.value.length,
-              inputType,
-            );
-            input.value = value;
-            input.setSelectionRange(caret, caret);
-            setAmount(value);
-          }}
           required
         />
         {showAmountError && (
@@ -544,7 +533,7 @@ export function ActivationForm({
   );
   const [values, setValues] = useState({
     bankReference: "",
-    receivedAmountUgx: String(expectedAmount),
+    receivedAmountUgx: groupAmount(String(expectedAmount)),
     receivedDate: "",
     confirmation: "",
   });
@@ -565,14 +554,15 @@ export function ActivationForm({
       </label>
       <label>
         Exact amount received (UGX)
-        <input
+        <AmountInput
           name="receivedAmountUgx"
-          type="number"
-          step="0.00000001"
           value={values.receivedAmountUgx}
-          onChange={(event) =>
-            changeValue("receivedAmountUgx", event.target.value)
-          }
+          onValueChange={(value) => changeValue("receivedAmountUgx", value)}
+          error={amountRuleError(
+            amountValue(values.receivedAmountUgx),
+            { decimals: 8, min: 0, aboveMin: true },
+            "Enter an amount above zero with at most eight decimal places.",
+          )}
           required
         />
       </label>
@@ -731,8 +721,23 @@ export function AgreementVersionForm() {
   );
 }
 
+const capacityError = (capacity: string) =>
+  amountRuleError(
+    amountValue(capacity),
+    { decimals: 2, min: 125_000 },
+    "Enter a capacity of at least UGX 125,000 with at most two decimal places.",
+  );
+
 export function CycleForm() {
   const [state, action] = useActionState(createCycle, initialActionState);
+  const [capacity, setCapacity] = useState("");
+  // Controlled fields survive the automatic form reset, so clear capacity
+  // with the rest of the form after a cycle is created.
+  const [handledState, setHandledState] = useState(state);
+  if (state !== handledState) {
+    setHandledState(state);
+    if (state.ok) setCapacity("");
+  }
   return (
     <form className="form" action={action}>
       <label>
@@ -758,11 +763,11 @@ export function CycleForm() {
         </label>
         <label>
           Capacity (UGX)
-          <input
+          <AmountInput
             name="capacityUgx"
-            type="number"
-            min="125000"
-            step="0.01"
+            value={capacity}
+            onValueChange={setCapacity}
+            error={capacityError(capacity)}
             required
           />
         </label>
@@ -786,6 +791,9 @@ export function CycleEditForm({
   };
 }) {
   const [state, action] = useActionState(updateCycle, initialActionState);
+  const [capacity, setCapacity] = useState(
+    groupAmount(String(cycle.capacity_ugx ?? "")),
+  );
   const local = (value: string) =>
     new Intl.DateTimeFormat("sv-SE", {
       timeZone: "Africa/Kampala",
@@ -834,12 +842,11 @@ export function CycleEditForm({
         </label>
         <label>
           Capacity (UGX)
-          <input
+          <AmountInput
             name="capacityUgx"
-            type="number"
-            min="125000"
-            step="0.01"
-            defaultValue={cycle.capacity_ugx ?? ""}
+            value={capacity}
+            onValueChange={setCapacity}
+            error={capacityError(capacity)}
             required
           />
         </label>

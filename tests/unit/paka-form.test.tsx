@@ -77,14 +77,14 @@ describe("Paka Paka withdrawal form", () => {
       />,
     );
     expect(screen.getByLabelText("Amount to withdraw (UGX)")).toHaveValue(
-      "5000000",
+      "5,000,000",
     );
     fireEvent.click(screen.getByRole("radio", { name: /C. Dobolo/ }));
     expect(screen.queryByLabelText("Amount to withdraw (UGX)")).toBeNull();
     expect(screen.queryByText("Where should the payout go?")).toBeNull();
     selectPaka();
     expect(screen.getByLabelText("Amount to withdraw (UGX)")).toHaveValue(
-      "5000000",
+      "5,000,000",
     );
   });
   it("shows a reload message for unavailable investment figures", () => {
